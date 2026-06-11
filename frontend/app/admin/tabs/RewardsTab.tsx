@@ -1,0 +1,311 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
+
+const CATEGORY_LABELS: Record<string, string> = { line: "隠しセリフ", title: "称号", wallpaper: "壁紙" };
+const TRIGGER_LABELS: Record<string, string> = { intimacy: "親密度レベル", article_count: "記事依頼回数" };
+
+const emptyForm = {
+  category: "line",
+  trigger_type: "intimacy",
+  threshold: 1,
+  text_content: "",
+  icon: "",
+  sort_order: 0,
+  official_only: false,
+};
+
+export function RewardsTab() {
+  const [characters, setCharacters] = useState<any[]>([]);
+  const [characterId, setCharacterId] = useState<number | null>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [form, setForm] = useState<any>(emptyForm);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFor, setUploadingFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.adminGetCharacters().then((cs: any[]) => {
+      setCharacters(cs);
+      if (cs.length > 0) setCharacterId(cs[0].id);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const reload = () => {
+    if (characterId == null) return Promise.resolve();
+    return api.adminListRewardItems(characterId).then(setItems);
+  };
+
+  useEffect(() => {
+    if (characterId != null) {
+      setLoading(true);
+      reload().finally(() => setLoading(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [characterId]);
+
+  function cancelForm() { setShowForm(false); setEditingItem(null); setForm(emptyForm); }
+
+  function startEdit(item: any) {
+    setEditingItem(item);
+    setForm({
+      category: item.category,
+      trigger_type: item.trigger_type,
+      threshold: item.threshold,
+      text_content: item.text_content ?? "",
+      icon: item.icon ?? "",
+      sort_order: item.sort_order,
+      official_only: !!item.official_only,
+    });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (characterId == null) return;
+    const payload: any = {
+      category: form.category,
+      trigger_type: form.trigger_type,
+      threshold: Number(form.threshold) || 0,
+      text_content: form.text_content.trim() ? form.text_content.trim() : null,
+      icon: form.icon.trim() ? form.icon.trim() : null,
+      sort_order: Number(form.sort_order) || 0,
+      official_only: !!form.official_only,
+    };
+    try {
+      if (editingItem) {
+        await api.adminUpdateRewardItem(editingItem.id, payload);
+        toast("報酬を更新しました", "success");
+      } else {
+        await api.adminCreateRewardItem({ ...payload, character_id: characterId });
+        toast("報酬を追加しました", "success");
+      }
+      await reload();
+      cancelForm();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    }
+  }
+
+  async function deleteItem(item: any) {
+    if (!confirm(`この報酬（${CATEGORY_LABELS[item.category]}）を削除しますか？`)) return;
+    try {
+      await api.adminDeleteRewardItem(item.id);
+      await reload();
+      toast("削除しました", "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    }
+  }
+
+  function triggerImageUpload(itemId: number) {
+    setUploadingFor(itemId);
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || uploadingFor == null) return;
+    try {
+      await api.adminUploadRewardImage(uploadingFor, file);
+      await reload();
+      toast("壁紙画像をアップロードしました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "アップロードに失敗しました", "error");
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  if (loading && characters.length === 0) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
+
+  // intimacy / article_count ごとにグルーピング
+  const intimacyItems = items.filter(i => i.trigger_type === "intimacy").sort((a, b) => a.threshold - b.threshold);
+  const articleItems = items.filter(i => i.trigger_type === "article_count").sort((a, b) => a.threshold - b.threshold);
+  const currentCharacter = characters.find(c => c.id === characterId);
+  const lineItemCount = items.filter(i => i.category === "line").length;
+  const lineItemLimit = currentCharacter?.is_preset ? 15 : 5;
+
+  const formFields = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>カテゴリ *</label>
+        <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+          <option value="line">隠しセリフ</option>
+          <option value="title">称号</option>
+          <option value="wallpaper">壁紙</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>解放トリガー *</label>
+        <select value={form.trigger_type} onChange={e => setForm({ ...form, trigger_type: e.target.value })}>
+          <option value="intimacy">親密度レベル到達</option>
+          <option value="article_count">記事依頼回数到達</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+          {form.trigger_type === "intimacy" ? "到達レベル（1〜5） *" : "記事依頼回数（累計） *"}
+        </label>
+        <input type="number" min={1} max={form.trigger_type === "intimacy" ? 5 : undefined}
+          value={form.threshold} onChange={e => setForm({ ...form, threshold: e.target.value })} required />
+      </div>
+      <div>
+        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>表示順</label>
+        <input type="number" value={form.sort_order} onChange={e => setForm({ ...form, sort_order: e.target.value })} />
+      </div>
+      <div className="flex items-end sm:col-span-2">
+        <label className="flex items-center gap-2 text-sm font-medium pb-1" style={{ color: "var(--text)" }}>
+          <input type="checkbox" checked={form.official_only}
+            onChange={e => setForm({ ...form, official_only: e.target.checked })} />
+          公式キャラクター限定の報酬にする（公式キャラを選んだ顧客のみ解放可能）
+        </label>
+      </div>
+      {form.category === "line" && (
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>隠しセリフ本文 *</label>
+          <textarea rows={3} value={form.text_content} onChange={e => setForm({ ...form, text_content: e.target.value })}
+            placeholder="解放時にキャラクターから届く特別なセリフ" required />
+          {!editingItem && (
+            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+              現在 {lineItemCount} / {lineItemLimit} 件登録済み
+              {currentCharacter?.is_preset ? "（公式キャラは最大15件まで登録できます）" : "（オリジナルキャラは最大5件まで登録できます）"}
+            </p>
+          )}
+        </div>
+      )}
+      {form.category === "title" && (
+        <>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>称号名 *</label>
+            <input value={form.text_content} onChange={e => setForm({ ...form, text_content: e.target.value })}
+              placeholder="例：相棒" required />
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>アイコン（絵文字など）</label>
+            <input value={form.icon} onChange={e => setForm({ ...form, icon: e.target.value })} placeholder="例：🏅" />
+          </div>
+        </>
+      )}
+      {form.category === "wallpaper" && (
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>壁紙名（任意・管理用）</label>
+          <input value={form.text_content} onChange={e => setForm({ ...form, text_content: e.target.value })} placeholder="例：桜の小道" />
+          <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>画像は保存後、一覧の「画像をアップロード」から登録してください。</p>
+        </div>
+      )}
+    </div>
+  );
+
+  function renderTable(title: string, list: any[], thresholdLabel: (t: number) => string) {
+    return (
+      <div className="card mb-4">
+        <h3 className="font-bold mb-2" style={{ color: "var(--primary)" }}>{title}</h3>
+        {list.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>登録されている報酬はありません。</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <th className="text-left py-2 font-medium" style={{ color: "var(--muted)" }}>条件</th>
+                <th className="text-left py-2 font-medium" style={{ color: "var(--muted)" }}>カテゴリ</th>
+                <th className="text-left py-2 font-medium" style={{ color: "var(--muted)" }}>内容</th>
+                <th className="text-right py-2 font-medium" style={{ color: "var(--muted)" }}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map(item => (
+                <tr key={item.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td className="py-2 font-medium" style={{ color: "var(--primary)" }}>{thresholdLabel(item.threshold)}</td>
+                  <td className="py-2 text-xs">
+                    {CATEGORY_LABELS[item.category]}
+                    {item.official_only && (
+                      <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold text-white" style={{ background: "var(--accent)" }}>
+                        公式限定
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 text-xs" style={{ color: "var(--muted)" }}>
+                    {item.category === "wallpaper" ? (
+                      item.image_url ? (
+                        <span className="inline-flex items-center gap-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost/api"}${item.image_url}`}
+                            alt="" className="w-10 h-10 object-cover rounded" />
+                          {item.text_content || "（画像登録済み）"}
+                        </span>
+                      ) : (item.text_content || "（画像未登録）")
+                    ) : item.category === "title" ? (
+                      `${item.icon ? item.icon + " " : ""}${item.text_content || "（未設定）"}`
+                    ) : (
+                      item.text_content ? (item.text_content.length > 30 ? item.text_content.slice(0, 30) + "…" : item.text_content) : "（未設定）"
+                    )}
+                  </td>
+                  <td className="py-2 text-right whitespace-nowrap">
+                    {item.category === "wallpaper" && (
+                      <button className="text-xs px-2 py-0.5 rounded mr-1" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}
+                        onClick={() => triggerImageUpload(item.id)}>画像を{item.image_url ? "変更" : "アップロード"}</button>
+                    )}
+                    <button className="text-xs px-2 py-0.5 rounded mr-1" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}
+                      onClick={() => startEdit(item)}>編集</button>
+                    <button className="text-xs px-2 py-0.5 rounded" style={{ color: "#c0392b" }}
+                      onClick={() => deleteItem(item)}>削除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleFileChange} />
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>🎁 成長ループ・報酬管理</h2>
+        <button className="btn-accent" onClick={() => showForm ? cancelForm() : setShowForm(true)} disabled={characterId == null}>
+          {showForm ? "キャンセル" : "+ 報酬を追加"}
+        </button>
+      </div>
+      <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
+        親密度レベル到達（Lv1→2: 隠しセリフ／Lv2→3: 称号／Lv3→4: 壁紙／Lv4→5: ミックス）と、
+        記事依頼回数到達の2系統で報酬を自動解放します。解放前は顧客にカテゴリ名のみ表示され、内容は伏せられます。
+        ポイント自動加算（メッセージ送信・ログイン・演習提出）の設定は「料金・メニュー」タブで行えます。
+      </p>
+
+      <div className="mb-4">
+        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター</label>
+        <select value={characterId ?? ""} onChange={e => setCharacterId(Number(e.target.value))}>
+          {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="card mb-6 flex flex-col gap-3">
+          <h3 className="font-bold" style={{ color: "var(--primary)" }}>
+            {editingItem ? "✏️ 報酬を編集" : "新しい報酬を追加"}
+          </h3>
+          {formFields}
+          <div className="flex gap-3">
+            <button type="submit" className="btn-primary flex-1 text-center">{editingItem ? "保存する" : "追加する"}</button>
+            <button type="button" className="btn-ghost px-6" onClick={cancelForm}>キャンセル</button>
+          </div>
+        </form>
+      )}
+
+      {loading ? <p style={{ color: "var(--muted)" }}>読み込み中…</p> : (
+        <>
+          {renderTable("親密度レベル到達報酬", intimacyItems, t => `Lv.${t - 1} → Lv.${t}`)}
+          {renderTable("記事依頼回数到達報酬", articleItems, t => `累計 ${t} 件到達`)}
+        </>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,532 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { clearToken, getToken } from "@/lib/auth";
+import {
+  resolveTheme, fillTemplate,
+  DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE, DEFAULT_CHAT_ERROR_MESSAGE,
+  INTIMACY_INFO_TEXT, REWARD_INFO_TEXT,
+  type CharacterTheme,
+} from "@/lib/theme";
+import { useDarkMode } from "@/lib/darkMode";
+import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { toast } from "@/components/Toast";
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
+
+type Msg = {
+  id: number;
+  sender: "customer" | "character";
+  content: string | null;
+  image_url: string | null;
+  is_request: boolean;
+  grammar_topic: string | null;
+  request_status: string | null;
+  is_reward: boolean;
+  created_at: string;
+};
+
+type Intimacy = {
+  points: number;
+  level: number;
+  max_level: number;
+  stage_label: string;
+  stage_hint: string;
+  current_level_threshold: number;
+  next_level_threshold: number | null;
+  points_to_next_level: number;
+};
+
+type RewardStatus = {
+  published_articles: number;
+  reward_interval: number;
+  earned_milestones: number;
+  sent_rewards: number;
+  pending_rewards: number;
+  articles_until_next_reward: number;
+  next_reward_target: number;
+};
+
+type Me = { username: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null; theme_config?: { wallpaper_url?: string } | null };
+
+function formatTime(iso: string) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return ""; }
+}
+
+export default function ChatPage() {
+  const router = useRouter();
+  const [me, setMe] = useState<Me | null>(null);
+  const [theme, setTheme] = useState<CharacterTheme | null>(null);
+  const [charInfo, setCharInfo] = useState<{ id: number; name: string; image_url?: string } | null>(null);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [reward, setReward] = useState<RewardStatus | null>(null);
+  const [intimacy, setIntimacy] = useState<Intimacy | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [text, setText] = useState("");
+  const [requestMode, setRequestMode] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [showRequestConfirm, setShowRequestConfirm] = useState(false);
+  const [mode, toggleMode] = useDarkMode();
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const prependingRef = useRef(false);
+
+  async function load() {
+    const thread = await api.getMyThread();
+    setCharInfo(thread.character);
+    setMessages(thread.messages);
+    setHasMore(!!thread.has_more);
+    setReward(thread.reward_status);
+    setIntimacy(thread.intimacy ?? null);
+  }
+
+  async function loadOlder() {
+    if (loadingMore || messages.length === 0) return;
+    setLoadingMore(true);
+    prependingRef.current = true;
+    try {
+      const thread = await api.getMyThread({ beforeId: messages[0].id });
+      setMessages(prev => [...thread.messages, ...prev]);
+      setHasMore(!!thread.has_more);
+    } catch {
+      toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+    } finally { setLoadingMore(false); }
+  }
+
+  useEffect(() => {
+    if (!getToken()) { router.replace("/login"); return; }
+    (async () => {
+      try {
+        const user = await api.me();
+        if (user.is_password_reset_required) { router.replace("/change-password"); return; }
+        if (user.is_admin) { router.replace("/admin"); return; }
+        setMe(user);
+        const charTheme = user.character_id ? await api.getCharacterTheme(user.character_id) : null;
+        setTheme(charTheme);
+        await load();
+      } catch {
+        clearToken();
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
+  // 過去ログ読み込み（loadOlder）で先頭にメッセージが追加されたときは
+  // 一番下までスクロールしない（読んでいる位置が大きくジャンプしてしまうため）
+  useEffect(() => {
+    if (prependingRef.current) { prependingRef.current = false; return; }
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, loading]);
+
+  const t = resolveTheme(theme, mode);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (sending) return;
+    if (requestMode) {
+      if (!topic.trim()) return;
+      setShowRequestConfirm(true);
+      return;
+    }
+    if (!text.trim()) return;
+    setSending(true);
+    try {
+      await api.sendMyMessage({ content: text.trim() });
+      setText("");
+      await load();
+    } catch {
+      toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+    } finally { setSending(false); }
+  }
+
+  async function sendRequest() {
+    setShowRequestConfirm(false);
+    setSending(true);
+    try {
+      await api.sendMyMessage({ content: text.trim() || undefined, grammar_topic: topic.trim() });
+      setText(""); setTopic(""); setRequestMode(false);
+      await load();
+      toast("記事をリクエストしました", "success");
+    } catch {
+      toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+    } finally { setSending(false); }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: t.bg }}>
+        <p style={{ color: t.primary }}>読み込み中...</p>
+      </div>
+    );
+  }
+
+  const charName = charInfo?.name || theme?.name || "キャラクター";
+  const charImage = charInfo?.image_url || theme?.image_url;
+
+  const wallpaperUrl = me?.theme_config?.wallpaper_url;
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{
+      background: wallpaperUrl
+        ? `linear-gradient(rgba(255,255,255,0.82), rgba(255,255,255,0.82)), url(${API_ORIGIN}${wallpaperUrl})`
+        : t.bg,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundAttachment: "fixed",
+      fontFamily: t.fontFamily,
+    }}>
+      {/* ヘッダー */}
+      <header className="sticky top-0 z-20 shadow-md flex-shrink-0" style={{ background: t.primary }}>
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => router.push("/shelf")} aria-label="本棚へ戻る"
+              className="text-white/70 hover:text-white text-sm flex-shrink-0">← 本棚</button>
+            {charImage ? (
+              <img src={`${API_ORIGIN}${charImage}`} alt={charName}
+                className="w-9 h-9 rounded-full object-cover border-2 border-white/40 flex-shrink-0" />
+            ) : (
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black text-white flex-shrink-0"
+                style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.primary})`, border: "2px solid rgba(255,255,255,0.4)" }}>
+                {charName.charAt(0)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-white font-black text-sm truncate">{charName}</p>
+              <p className="text-white/60 text-[11px]">チャット・記事リクエスト</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
+              className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0">🎁 ご褒美</button>
+            <button onClick={() => router.push("/pricing")} aria-label="料金"
+              className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0">💴 料金</button>
+            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+            <button onClick={() => { clearToken(); router.push("/login"); }}
+              className="text-xs text-white/50 hover:text-white transition-colors flex-shrink-0">ログアウト</button>
+          </div>
+        </div>
+        <div className="h-1" style={{ background: t.accent }} />
+      </header>
+
+      {!me?.character_id ? (
+        /* キャラ作成完了前：チャットはまだ利用できない */
+        <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-16 flex items-center justify-center">
+          <div className="text-center rounded-2xl px-6 py-10" style={{ background: t.card, border: `1px dashed ${t.border}` }}>
+            <p className="text-4xl mb-3">🛠️</p>
+            <p className="font-bold mb-2" style={{ color: t.primary, fontFamily: t.fontFamily }}>キャラクター準備中です</p>
+            <p className="text-sm" style={{ color: t.accent }}>
+              あなたの先生を準備しています。完成しましたらメールでお知らせしますので、もうしばらくお待ちください。
+            </p>
+            <button onClick={() => router.push("/shelf")}
+              className="mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
+              style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+              ← 本棚に戻る
+            </button>
+          </div>
+        </main>
+      ) : (
+      <>
+      {/* ご褒美プログレス */}
+      {reward && (
+        <div className="max-w-3xl mx-auto w-full px-4 pt-3">
+          <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 text-xs"
+            style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
+            <span className="text-lg flex-shrink-0">🎁</span>
+            {reward.pending_rewards > 0 ? (
+              <p className="font-bold flex-1" style={{ color: t.accent }}>
+                ご褒美が届いています！メッセージをチェックしてみてね 🎉
+              </p>
+            ) : (
+              <div className="flex-1">
+                <p>
+                  {(() => {
+                    const tmpl = theme?.reward_progress_template || DEFAULT_REWARD_PROGRESS_TEMPLATE;
+                    const filled = fillTemplate(tmpl, {
+                      character: charName,
+                      published: reward.published_articles,
+                      remaining: reward.articles_until_next_reward,
+                      target: reward.next_reward_target,
+                    });
+                    // 数字部分を強調表示するため、テンプレート内の数値だけを太字スタンプに置き換える
+                    const parts = filled.split(new RegExp(`(${reward.published_articles}|${reward.articles_until_next_reward})`));
+                    return parts.map((part, i) => {
+                      if (part === String(reward.published_articles)) {
+                        return <span key={i} className="font-black" style={{ color: t.primary }}>{part}</span>;
+                      }
+                      if (part === String(reward.articles_until_next_reward)) {
+                        return <span key={i} className="font-black" style={{ color: t.accent }}>{part}</span>;
+                      }
+                      return <span key={i}>{part}</span>;
+                    });
+                  })()}
+                </p>
+                <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: t.border }}>
+                  <div className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, ((reward.reward_interval - reward.articles_until_next_reward) / reward.reward_interval) * 100)}%`,
+                      background: `linear-gradient(90deg, ${t.primary}, ${t.accent})`,
+                    }} />
+                </div>
+              </div>
+            )}
+            <InfoTooltip text={REWARD_INFO_TEXT} theme={t} />
+          </div>
+        </div>
+      )}
+
+      {/* 親密度（キャラクターとの距離感） */}
+      {intimacy && (
+        <div className="max-w-3xl mx-auto w-full px-4 pt-2">
+          <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 text-xs"
+            style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
+            <span className="text-lg flex-shrink-0">💗</span>
+            <div className="flex-1">
+              <p>
+                <span className="font-black" style={{ color: t.accent }}>{charName}</span>
+                {"との関係：　"}
+                <span className="font-black" style={{ color: t.primary }}>Lv.{intimacy.level}　{intimacy.stage_label}</span>
+              </p>
+              <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: t.border }}>
+                <div className="h-full rounded-full transition-all"
+                  style={{
+                    width: intimacy.next_level_threshold != null
+                      ? `${Math.min(100, Math.round(((intimacy.points - intimacy.current_level_threshold) / Math.max(1, intimacy.next_level_threshold - intimacy.current_level_threshold)) * 100))}%`
+                      : "100%",
+                    background: `linear-gradient(90deg, ${t.primary}, ${t.accent})`,
+                  }} />
+              </div>
+              {intimacy.next_level_threshold != null && (
+                <p className="mt-1" style={{ color: t.accent, opacity: 0.85 }}>
+                  たくさんお話しすると、もっと仲良くなれるよ。
+                </p>
+              )}
+            </div>
+            <InfoTooltip text={INTIMACY_INFO_TEXT} theme={t} />
+          </div>
+        </div>
+      )}
+
+      {/* 公式キャラクターのInstagramアカウント案内 */}
+      {theme?.is_preset && theme?.instagram_account && (
+        <div className="max-w-3xl mx-auto w-full px-4 pt-2">
+          <a href={`https://www.instagram.com/${theme.instagram_account}`} target="_blank" rel="noopener noreferrer"
+            className="rounded-xl px-4 py-2.5 flex items-center gap-3 text-xs transition-colors"
+            style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
+            <span className="text-lg flex-shrink-0">📷</span>
+            <span className="flex-1">
+              <span className="font-bold" style={{ color: t.accent }}>{charName}</span>
+              の公式Instagramをフォローしよう！
+            </span>
+            <span style={{ color: t.accent }}>→</span>
+          </a>
+        </div>
+      )}
+
+      {/* メッセージスレッド */}
+      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-4 overflow-y-auto">
+        {messages.length === 0 && (
+          <div className="text-center py-16">
+            <p className="text-4xl mb-3">💬</p>
+            <p className="text-sm" style={{ color: t.accent }}>
+              {charName}に話しかけてみよう。記事のリクエストもここからできるよ！
+            </p>
+          </div>
+        )}
+        {hasMore && (
+          <div className="text-center mb-3">
+            <button onClick={loadOlder} disabled={loadingMore}
+              className="text-xs px-3 py-1.5 rounded-full font-bold transition-all disabled:opacity-50"
+              style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.accent }}>
+              {loadingMore ? "読み込み中..." : "過去のメッセージを読み込む"}
+            </button>
+          </div>
+        )}
+        <div className="flex flex-col gap-3">
+          {messages.map((m) => (
+            <MessageBubble key={m.id} m={m} theme={t} charName={charName} charImage={charImage} />
+          ))}
+        </div>
+        <div ref={bottomRef} />
+      </main>
+
+      {/* 入力エリア */}
+      <footer className="flex-shrink-0 border-t transition-colors"
+        style={{ background: requestMode ? t.tips_bg : t.card, borderColor: requestMode ? t.accent : t.border }}>
+        <div className="max-w-3xl mx-auto w-full px-4 py-3">
+          {requestMode && (
+            <div className="mb-2 rounded-lg px-3 py-2 flex items-center justify-between gap-2"
+              style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+              <span className="text-xs font-black text-white">📋 記事リクエストモード中</span>
+              <button type="button" onClick={() => { setRequestMode(false); setTopic(""); }}
+                className="text-xs font-bold text-white/90 hover:text-white underline flex-shrink-0">
+                キャンセル
+              </button>
+            </div>
+          )}
+          {requestMode && (
+            <div className="mb-2 rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: t.card, border: `1px dashed ${t.border}` }}>
+              <span className="text-sm flex-shrink-0">📝</span>
+              <input
+                value={topic}
+                onChange={e => setTopic(e.target.value)}
+                placeholder="リクエストしたい文法トピック（例：仮定法過去）"
+                className="flex-1 text-sm bg-transparent outline-none"
+                style={{ color: t.text }}
+              />
+            </div>
+          )}
+          <form onSubmit={handleSend} className="flex items-end gap-2">
+            <button type="button"
+              onClick={() => setRequestMode(v => !v)}
+              className="text-xs px-3 py-2 rounded-xl font-bold flex-shrink-0 transition-all"
+              style={{
+                background: requestMode ? t.accent : "transparent",
+                color: requestMode ? "white" : t.accent,
+                border: `1.5px solid ${t.accent}`,
+              }}>
+              📋 記事をリクエスト
+            </button>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as any); } }}
+              placeholder={requestMode ? "（任意）伝えたいことがあれば添えてね" : `${charName}にメッセージを送る...`}
+              rows={1}
+              className="flex-1 text-sm rounded-xl px-3 py-2 outline-none resize-none"
+              style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text, fontFamily: t.fontFamily, maxHeight: "6rem" }}
+            />
+            <button type="submit" disabled={sending || (requestMode ? !topic.trim() : !text.trim())}
+              className="text-sm px-4 py-2 rounded-xl font-bold flex-shrink-0 transition-all disabled:opacity-40"
+              style={{ background: t.primary, color: "white" }}>
+              {sending ? "..." : (requestMode ? "リクエストする" : "送信")}
+            </button>
+          </form>
+          <p className="text-[11px] mt-1.5" style={{ color: t.accent }}>
+            {theme?.chat_footer_note || DEFAULT_CHAT_FOOTER_NOTE}
+          </p>
+        </div>
+      </footer>
+
+      {/* 記事リクエスト送信前の確認ダイアログ */}
+      {showRequestConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="rounded-2xl p-5 max-w-sm w-full shadow-xl" style={{ background: t.card, border: `1px solid ${t.border}` }}>
+            <p className="font-black mb-2" style={{ color: t.primary, fontFamily: t.fontFamily }}>📋 記事リクエストを送信しますか？</p>
+            <p className="text-sm mb-4" style={{ color: t.text }}>
+              トピック：<span className="font-bold">{topic.trim()}</span>
+              {text.trim() && (
+                <>
+                  <br />メッセージ：{text.trim()}
+                </>
+              )}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowRequestConfirm(false)}
+                className="text-sm px-4 py-2 rounded-xl font-bold transition-all"
+                style={{ border: `1px solid ${t.border}`, color: t.text }}>
+                キャンセル
+              </button>
+              <button type="button" onClick={sendRequest} disabled={sending}
+                className="text-sm px-4 py-2 rounded-xl font-bold text-white transition-all disabled:opacity-50"
+                style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+                {sending ? "送信中..." : "リクエストする"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>
+      )}
+    </div>
+  );
+}
+
+function MessageBubble({ m, theme: t, charName, charImage }: {
+  m: Msg; theme: ReturnType<typeof resolveTheme>; charName: string; charImage?: string;
+}) {
+  const isCustomer = m.sender === "customer";
+
+  const requestStatusLabel: Record<string, string> = {
+    pending: "⏳ 確認中", accepted: "✅ 受付済み", completed: "📚 完成して届きました",
+  };
+
+  return (
+    <div className={`flex items-end gap-2 ${isCustomer ? "flex-row-reverse" : "flex-row"}`}>
+      {!isCustomer && (
+        charImage ? (
+          <img src={`${API_ORIGIN}${charImage}`} alt={charName} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0"
+            style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+            {charName.charAt(0)}
+          </div>
+        )
+      )}
+      <div className={`flex flex-col max-w-[75%] ${isCustomer ? "items-end" : "items-start"}`}>
+        {m.is_reward && m.image_url && (
+          <div className="mb-1 rounded-2xl overflow-hidden shadow-md" style={{ border: `2px solid ${t.accent}` }}>
+            <div className="px-3 py-1.5 text-xs font-black text-white" style={{ background: `linear-gradient(90deg, ${t.primary}, ${t.accent})` }}>
+              🎁 {charName}からのご褒美
+            </div>
+            <img src={`${API_ORIGIN}${m.image_url}`} alt="ご褒美" className="block max-w-full" style={{ maxHeight: "320px" }} />
+          </div>
+        )}
+        {m.content && (
+          <div className="rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words"
+            style={{
+              background: isCustomer ? t.primary : t.card,
+              color: isCustomer ? "white" : t.text,
+              border: isCustomer ? "none" : `1px solid ${t.border}`,
+            }}>
+            {m.content}
+          </div>
+        )}
+        {m.is_request && (
+          <div className="mt-1 rounded-xl px-3 py-1.5 text-xs flex items-center gap-2"
+            style={{ background: t.tips_bg, border: `1px dashed ${t.border}`, color: t.text }}>
+            <span>📋 記事リクエスト：<span className="font-bold">{m.grammar_topic}</span></span>
+            {m.request_status && (
+              <span className="font-bold flex-shrink-0" style={{ color: t.accent }}>
+                {requestStatusLabel[m.request_status] || m.request_status}
+              </span>
+            )}
+          </div>
+        )}
+        <p className="text-[10px] mt-1 px-1" style={{ color: t.accent, opacity: 0.7 }}>{formatTime(m.created_at)}</p>
+      </div>
+    </div>
+  );
+}
+
+/** 進捗バーの説明を表示するインフォアイコン（タップ/クリックで開閉） */
+function InfoTooltip({ text, theme: t }: { text: string; theme: ReturnType<typeof resolveTheme> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative flex-shrink-0 self-start">
+      <button type="button"
+        onClick={() => setOpen(v => !v)}
+        onBlur={() => setTimeout(() => setOpen(false), 100)}
+        aria-label="説明を表示"
+        className="flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold leading-none"
+        style={{ background: t.border, color: t.accent }}>
+        i
+      </button>
+      {open && (
+        <div className="absolute right-0 top-6 z-30 w-60 max-w-[70vw] rounded-lg px-3 py-2 text-[11px] leading-relaxed shadow-lg whitespace-pre-wrap"
+          style={{ background: t.card, border: `1px solid ${t.border}`, color: t.text }}>
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}

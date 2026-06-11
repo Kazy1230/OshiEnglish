@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/kazut/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/a39196f3-76a0-4d7e-a9ca-c28efdea26c7/6b19d285-ef4b-4bd5-85ca-83741d2427a9/skills/docx/**)",
+      "Bash(npm list *)",
+      "Bash(npm install *)",
+      "PowerShell(cd C:\\\\YourTeacher; \\(Get-Content create_doc_v3.js\\) -replace 'PostgreSQL', 'MySQL' -replace 'postgres:16', 'mysql:8' -replace 'SQLAlchemy \\\\+ Alembic', 'SQLAlchemy + Alembic（MySQLドライバ: PyMySQL）' | Set-Content create_doc_v4.js)",
+      "PowerShell(docker --version)",
+      "PowerShell(docker compose version)",
+      "PowerShell(node --version)",
+      "PowerShell(python --version 2>&1)",
+      "PowerShell(cd C:\\\\YourTeacher; Get-ChildItem -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules|\\\\.next|\\\\.git' } | Select-Object @{N='Path';E={$_.FullName.Replace\\('C:\\\\YourTeacher\\\\',''\\)}} | Format-Table -AutoSize)"
+    ]
+  }
+}
