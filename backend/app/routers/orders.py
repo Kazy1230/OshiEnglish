@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user
-from app.core.config import settings
 from app.core.receipt import generate_receipt_pdf, format_amount
 from app.models.order import Order
 from app.models.customer import Customer
@@ -14,8 +13,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["受注管理"])
-
-DEFAULT_SECRET = "your-webhook-secret-change-me"
 
 def serialize_order(o: Order, customer_username: Optional[str] = None) -> dict:
     return {
@@ -33,14 +30,6 @@ def serialize_order(o: Order, customer_username: Optional[str] = None) -> dict:
         "updated_at": o.updated_at.isoformat() if o.updated_at else None,
     }
 
-class WebhookPayload(BaseModel):
-    """Google Forms / GAS からのWebhookデータ"""
-    customer_name: str
-    contact: Optional[str] = None
-    character_name: Optional[str] = None
-    grammar_topic: Optional[str] = None
-    form_submitted_at: Optional[str] = None
-
 class OrderUpdate(BaseModel):
     status: Optional[str] = None  # new / in_progress / delivered
     notes: Optional[str] = None
@@ -54,42 +43,6 @@ class OrderCreate(BaseModel):
     grammar_topic: Optional[str] = None
     status: str = "new"  # new / in_progress / delivered
     notes: Optional[str] = None
-
-# ===== Google Forms Webhook（GAS から呼ばれる） =====
-@router.post("/webhook")
-def receive_order_webhook(
-    payload: WebhookPayload,
-    db: Session = Depends(get_db),
-    x_webhook_secret: Optional[str] = Header(None)
-):
-    """GASからの受注自動連携エンドポイント"""
-    # デフォルトシークレットのまま運用している場合は警告ログ
-    if settings.WEBHOOK_SECRET == DEFAULT_SECRET:
-        logger.warning("WEBHOOK_SECRET がデフォルト値のままです。本番環境では必ず変更してください。")
-
-    if x_webhook_secret != settings.WEBHOOK_SECRET:
-        raise HTTPException(status_code=401, detail="不正なリクエストです")
-
-    submitted_at = None
-    if payload.form_submitted_at:
-        try:
-            submitted_at = datetime.fromisoformat(payload.form_submitted_at)
-        except (ValueError, TypeError):
-            logger.warning(f"form_submitted_at のパースに失敗: {payload.form_submitted_at}")
-
-    order = Order(
-        customer_name=payload.customer_name,
-        contact=payload.contact,
-        character_name=payload.character_name,
-        grammar_topic=payload.grammar_topic,
-        form_submitted_at=submitted_at,
-        status="new",
-    )
-    db.add(order)
-    db.commit()
-    db.refresh(order)
-    logger.info(f"新規受注を受け付けました: order_id={order.id}, customer={order.customer_name}")
-    return {"message": "受注を受け付けました", "order_id": order.id}
 
 # ===== 管理者向け =====
 @router.get("/")

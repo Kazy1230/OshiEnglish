@@ -105,7 +105,7 @@ export function OrdersTab() {
         <form onSubmit={handleAddOrder} className="card mb-6 flex flex-col gap-3">
           <h3 className="font-bold" style={{ color: "var(--primary)" }}>受注を手動で追加</h3>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            ※ フォーム経由（Webhook連携）以外で受けた注文（電話・対面・LINEなど）を記録するための機能です。
+            ※ 申し込みフォーム経由以外で受けた注文（電話・対面・LINEなど）を記録するための機能です。
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
