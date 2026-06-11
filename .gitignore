@@ -51,8 +51,6 @@ desktop.ini
 # ドキュメント生成スクリプト（本番不要）
 # ============================================================
 create_doc*.js
-package.json
-package-lock.json
 YourTeacher_*.docx
 plan/
 
