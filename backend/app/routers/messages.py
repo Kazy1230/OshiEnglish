@@ -579,6 +579,22 @@ def update_request_status(message_id: int, status: str, admin=Depends(get_curren
     return serialize_message(msg)
 
 
+@router.get("/admin/requests/{customer_id}")
+def get_customer_open_requests(customer_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """指定顧客の対応中（pending/accepted）の記事リクエスト一覧を取得する（依頼記事作成時の紐付け選択用）"""
+    msgs = (
+        db.query(Message)
+        .filter(
+            Message.customer_id == customer_id,
+            Message.is_request == True,  # noqa: E712
+            Message.request_status != "completed",
+        )
+        .order_by(Message.created_at.desc())
+        .all()
+    )
+    return [serialize_message(m) for m in msgs]
+
+
 @router.post("/admin/{customer_id}/reward")
 def send_reward(
     customer_id: int,

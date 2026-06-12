@@ -141,6 +141,12 @@ _ensure_column("orders", "stripe_receipt_url", "VARCHAR(500) NULL")
 # 簡易マイグレーション⑱: チャット送信失敗時のキャラ口調エラー文言
 _ensure_column("characters", "chat_error_message", "VARCHAR(300) NULL")
 
+# 簡易マイグレーション⑲: 依頼記事と元のリクエストメッセージの紐付け
+# - 記事を「公開」にした際、対応するリクエスト（messages.request_status）を
+#   自動で completed に更新できるようにする（手動更新漏れの防止）
+_ensure_column("articles", "request_message_id", "INT NULL")
+_ensure_index("articles", "ix_articles_request_message_id", "(request_message_id)")
+
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
 ACCESS_LOG_RETENTION_DAYS = 180

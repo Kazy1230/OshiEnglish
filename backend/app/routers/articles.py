@@ -396,6 +396,7 @@ class ArticleCreate(BaseModel):
     exercise_format: Optional[str] = None
     exercise_category: Optional[str] = None
     exercise_data: Optional[dict] = None
+    request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
 
     @model_validator(mode="after")
     def _validate_by_type(self):
@@ -458,6 +459,7 @@ class ArticleUpdate(BaseModel):
     exercise_format: Optional[str] = None
     exercise_category: Optional[str] = None
     exercise_data: Optional[dict] = None
+    request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
 
     @model_validator(mode="after")
     def _validate_exercise_on_update(self):
@@ -693,8 +695,25 @@ def admin_update_article(
             ),
         )
         db.add(notification_msg)
-        db.commit()
         notification_sent = True
+
+    # 記事が「公開」に切り替わった瞬間、紐付けられた記事リクエストのステータスを
+    # 自動で completed にする（手動更新漏れの防止）。
+    if (
+        data.status == "published"
+        and prev_status != "published"
+        and article.request_message_id is not None
+    ):
+        req_msg = db.query(Message).filter(Message.id == article.request_message_id).first()
+        if req_msg and req_msg.request_status != "completed":
+            req_msg.request_status = "completed"
+
+    if notification_sent or (
+        data.status == "published"
+        and prev_status != "published"
+        and article.request_message_id is not None
+    ):
+        db.commit()
 
     return {
         "id": article.id,

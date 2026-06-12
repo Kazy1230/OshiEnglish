@@ -17,6 +17,8 @@ const emptyArticleForm = {
   article_type: "request", customer_id: "", character_id: "", grammar_master_id: "", title: "", content: "", tips: "", example_sentences: "", status: "draft",
   // ----- 演習問題（exercise）専用 -----
   exercise_format: "multiple_choice", exercise_category: "", exercise_data_text: "",
+  // 依頼記事：元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
+  request_message_id: "",
 };
 
 export function ArticlesTab() {
@@ -40,11 +42,22 @@ export function ArticlesTab() {
   const [genLevel, setGenLevel] = useState("normal");
   const [generating, setGenerating] = useState(false);
   const [isLlmDrafted, setIsLlmDrafted] = useState(false);
+  // 依頼記事：選択中の顧客の対応中リクエスト一覧（紐付け選択用）
+  const [openRequests, setOpenRequests] = useState<any[]>([]);
 
   const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters()])
     .then(([a, c, ch, g]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); });
 
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+
+  // 依頼記事フォームで顧客が選択されたら、その顧客の対応中リクエスト一覧を取得する
+  useEffect(() => {
+    if (form.article_type === "request" && form.customer_id) {
+      api.adminGetCustomerRequests(Number(form.customer_id)).then(setOpenRequests).catch(() => setOpenRequests([]));
+    } else {
+      setOpenRequests([]);
+    }
+  }, [form.article_type, form.customer_id]);
 
   function startEdit(a: any) {
     setEditingArticle(a);
@@ -61,6 +74,7 @@ export function ArticlesTab() {
       exercise_format: a.exercise_format ?? "multiple_choice",
       exercise_category: a.exercise_category ?? "",
       exercise_data_text: a.exercise_data ? JSON.stringify(a.exercise_data, null, 2) : "",
+      request_message_id: a.request_message_id ? String(a.request_message_id) : "",
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -110,6 +124,7 @@ export function ArticlesTab() {
     } else if (!isBlog) {
       payload.customer_id = Number(form.customer_id);
       payload.grammar_master_id = Number(form.grammar_master_id);
+      payload.request_message_id = form.request_message_id ? Number(form.request_message_id) : null;
     }
     try {
       if (editingArticle) {
@@ -470,6 +485,25 @@ export function ArticlesTab() {
                     <option value="">選択してください</option>
                     {grammars.map(g => <option key={g.id} value={g.id}>[{g.exam_category}] {g.topic_name}</option>)}
                   </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                    対応するリクエスト（公開時にステータスを自動で「対応済み」にします／任意）
+                  </label>
+                  <select value={form.request_message_id} onChange={e => setForm({ ...form, request_message_id: e.target.value })}>
+                    <option value="">紐付けない</option>
+                    {openRequests.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.grammar_topic ? `[${r.grammar_topic}] ` : ""}{r.content}
+                      </option>
+                    ))}
+                  </select>
+                  {!form.customer_id && (
+                    <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>※顧客を選択するとリクエスト一覧が表示されます</p>
+                  )}
+                  {form.customer_id && openRequests.length === 0 && (
+                    <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>この顧客の対応中リクエストはありません</p>
+                  )}
                 </div>
               </>
             )}

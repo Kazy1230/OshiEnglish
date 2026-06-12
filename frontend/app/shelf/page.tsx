@@ -295,6 +295,7 @@ export default function ShelfPage() {
                 <BookCard key={article.id} article={article} index={i} theme={t}
                   onClick={() => router.push(`/articles/${article.id}`)} />
               ))}
+              <RequestCard theme={t} onClick={() => router.push("/chat?request=1")} />
             </div>
           </>
         )}
@@ -382,6 +383,26 @@ function BookCard({ article, index, theme: t, onClick }: {
           </span>
         </div>
       </div>
+    </button>
+  );
+}
+
+function RequestCard({ theme: t, onClick }: {
+  theme: ReturnType<typeof resolveTheme>;
+  onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick}
+      aria-label="次の記事・問題・添削をリクエストする"
+      className="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-2 text-center w-full p-4"
+      style={{ minHeight: "200px", borderColor: t.border, background: t.example_bg }}>
+      <p className="text-3xl mb-2">＋</p>
+      <p className="font-bold text-sm leading-snug" style={{ color: t.primary, fontFamily: t.fontFamily }}>
+        次の記事・問題・添削を<br />リクエストする
+      </p>
+      <p className="text-xs mt-2" style={{ color: t.accent }}>
+        気になるテーマがあれば伝えてみよう
+      </p>
     </button>
   );
 }

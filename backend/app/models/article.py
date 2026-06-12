@@ -14,6 +14,9 @@ class Article(Base):
     character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
     grammar_master_id = Column(Integer, ForeignKey("grammar_masters.id"), nullable=True)
     article_type = Column(String(20), nullable=False, default="request")  # request / blog / exercise
+    # この記事の元になった「記事リクエスト」メッセージ（messages.is_request=True）への参照。
+    # 公開時にこのメッセージの request_status を自動で completed にするために使う。
+    request_message_id = Column(Integer, ForeignKey("messages.id"), nullable=True, index=True)
     # ----- 演習問題（exercise）専用フィールド -----
     # exercise_format: "multiple_choice"（選択式：リーディング・リスニング等の自動採点問題）
     #                  "written_response"（記述式：ライティング・スピーキング等のキャラフィードバック前提の問題）

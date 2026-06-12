@@ -6,6 +6,10 @@ import { buildSuggestedQuestions, buildQuestionIdeaPrompt, type SuggestedQuestio
 
 const API_ORIGIN_M = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
 
+const ARTICLE_REQUEST_PROMPT_TEMPLATE =
+  "そろそろ次の記事はどう？気になる文法や試験パート、添削してほしいものがあったら、" +
+  "📋「記事をリクエスト」ボタンから教えてね！";
+
 export function MessagesTab() {
   const [threads, setThreads] = useState<any[]>([]);
   const [operators, setOperators] = useState<{ id: number; username: string }[]>([]);
@@ -559,11 +563,19 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
           <p className="text-xs" style={{ color: "var(--muted)" }}>
             {data.customer.character_name || "キャラクター"}になりきって返信する
           </p>
-          <button type="button" onClick={handleDraftReply} disabled={draftingReply}
-            className="text-xs px-2.5 py-1 rounded-lg font-bold transition-all disabled:opacity-50"
-            style={{ color: cAccent, border: `1px solid ${cAccent}` }}>
-            {draftingReply ? "✨ 生成中..." : "✨ 下書き生成"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button"
+              onClick={() => setReply(prev => prev ? `${prev}\n${ARTICLE_REQUEST_PROMPT_TEMPLATE}` : ARTICLE_REQUEST_PROMPT_TEMPLATE)}
+              className="text-xs px-2.5 py-1 rounded-lg font-bold transition-all"
+              style={{ color: cPrimary, border: `1px solid ${cPrimary}` }}>
+              📋 記事リクエストを促す
+            </button>
+            <button type="button" onClick={handleDraftReply} disabled={draftingReply}
+              className="text-xs px-2.5 py-1 rounded-lg font-bold transition-all disabled:opacity-50"
+              style={{ color: cAccent, border: `1px solid ${cAccent}` }}>
+              {draftingReply ? "✨ 生成中..." : "✨ 下書き生成"}
+            </button>
+          </div>
         </div>
         <div className="flex items-end gap-2">
           <textarea value={reply} onChange={e => setReply(e.target.value)}

@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
 import {
@@ -57,8 +57,22 @@ function formatTime(iso: string) {
   } catch { return ""; }
 }
 
+const TOPIC_SUGGESTIONS = [
+  "TOEIC Part5", "TOEIC Part7", "仮定法", "関係代名詞", "現在完了形",
+  "ライティング添削", "スピーキング添削",
+];
+
 export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatPageInner />
+    </Suspense>
+  );
+}
+
+function ChatPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [me, setMe] = useState<Me | null>(null);
   const [theme, setTheme] = useState<CharacterTheme | null>(null);
   const [charInfo, setCharInfo] = useState<{ id: number; name: string; image_url?: string } | null>(null);
@@ -119,6 +133,14 @@ export default function ChatPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  // 本棚の「次の記事をリクエストする」から遷移してきた場合は、自動でリクエストモードを開く
+  useEffect(() => {
+    if (searchParams.get("request") === "1") {
+      setRequestMode(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 過去ログ読み込み（loadOlder）で先頭にメッセージが追加されたときは
   // 一番下までスクロールしない（読んでいる位置が大きくジャンプしてしまうため）
@@ -379,10 +401,23 @@ export default function ChatPage() {
               <input
                 value={topic}
                 onChange={e => setTopic(e.target.value)}
-                placeholder="リクエストしたい文法トピック（例：仮定法過去）"
+                placeholder="リクエストしたい記事・問題・添削のテーマ（例：仮定法過去）"
                 className="flex-1 text-sm bg-transparent outline-none"
                 style={{ color: t.text }}
               />
+            </div>
+          )}
+          {requestMode && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {TOPIC_SUGGESTIONS.map(s => (
+                <button key={s} type="button" onClick={() => setTopic(s)}
+                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                  style={topic === s
+                    ? { background: t.accent, color: "white" }
+                    : { background: t.card, color: t.accent, border: `1px solid ${t.border}` }}>
+                  {s}
+                </button>
+              ))}
             </div>
           )}
           <form onSubmit={handleSend} className="flex items-end gap-2">

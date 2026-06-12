@@ -193,6 +193,8 @@ export const api = {
     apiFetch(`/messages/admin/exercise-submissions/${messageId}/draft-feedback`, { method: "POST" }),
   adminUpdateRequestStatus: (messageId: number, status: string) =>
     apiFetch(`/messages/admin/request/${messageId}?status=${encodeURIComponent(status)}`, { method: "PATCH" }),
+  adminGetCustomerRequests: (customerId: number) =>
+    apiFetch(`/messages/admin/requests/${customerId}`),
   adminAdjustIntimacy: (customerId: number, delta: number, reason?: string) =>
     apiFetch(`/messages/admin/${customerId}/intimacy/adjust`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
   adminEditMessage: (messageId: number, content: string) =>
