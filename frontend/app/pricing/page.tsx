@@ -93,27 +93,17 @@ export default function PricingPage() {
         {/* プラン */}
         <section className="mb-8">
           <h3 className="text-lg font-black mb-3" style={{ color: t.primary }}>プラン</h3>
-          <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${t.border}` }}>
-            <table className="w-full text-sm" style={{ background: t.card }}>
-              <thead>
-                <tr style={{ background: t.example_bg }}>
-                  <Th t={t}>プラン</Th>
-                  <Th t={t}>内容</Th>
-                  <Th t={t}>価格</Th>
-                  <Th t={t}>備考</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {PLAN_ROWS.map(row => (
-                  <tr key={row.plan} style={{ borderTop: `1px solid ${t.border}` }}>
-                    <Td t={t} bold>{row.plan}</Td>
-                    <Td t={t}>{row.content}</Td>
-                    <Td t={t} accent>{row.price}</Td>
-                    <Td t={t}>{row.note}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-col gap-3">
+            {PLAN_ROWS.map(row => (
+              <div key={row.plan} className="rounded-xl p-4" style={{ background: t.card, border: `1px solid ${t.border}` }}>
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <p className="text-sm font-black" style={{ color: t.primary }}>{row.plan}</p>
+                  <p className="text-lg font-black whitespace-nowrap" style={{ color: t.accent }}>{row.price}</p>
+                </div>
+                <p className="text-sm mb-1" style={{ color: t.text }}>{row.content}</p>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>{row.note}</p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -134,24 +124,11 @@ export default function PricingPage() {
 
           {examTab === "TOEIC" && (
             <>
-              <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>各¥500・約10分</p>
-              <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${t.border}` }}>
-                <table className="w-full text-sm" style={{ background: t.card }}>
-                  <thead>
-                    <tr style={{ background: t.example_bg }}>
-                      <Th t={t}>パート</Th>
-                      <Th t={t}>内容</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TOEIC_ROWS.map(row => (
-                      <tr key={row.part} style={{ borderTop: `1px solid ${t.border}` }}>
-                        <Td t={t} bold>{row.part}</Td>
-                        <Td t={t}>{row.content}</Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>各¥500・約10分</p>
+              <div className="flex flex-col gap-3">
+                {TOEIC_ROWS.map(row => (
+                  <InfoRow key={row.part} t={t} label={row.part} value={row.content} />
+                ))}
               </div>
             </>
           )}
@@ -246,7 +223,7 @@ export default function PricingPage() {
 
 function Th({ t, children }: { t: ReturnType<typeof resolveTheme>; children: React.ReactNode }) {
   return (
-    <th className="text-left px-3 py-2 font-bold text-xs sm:text-sm" style={{ color: t.primary }}>
+    <th className="text-left px-3 py-2 font-bold text-sm" style={{ color: t.primary }}>
       {children}
     </th>
   );
@@ -254,7 +231,7 @@ function Th({ t, children }: { t: ReturnType<typeof resolveTheme>; children: Rea
 
 function Td({ t, children, bold, accent }: { t: ReturnType<typeof resolveTheme>; children: React.ReactNode; bold?: boolean; accent?: boolean }) {
   return (
-    <td className={`px-3 py-2 text-xs sm:text-sm ${bold ? "font-bold" : ""}`}
+    <td className={`px-3 py-2 text-sm ${bold ? "font-bold" : ""}`}
       style={{ color: accent ? t.accent : t.text, fontWeight: accent ? 800 : undefined }}>
       {children}
     </td>
