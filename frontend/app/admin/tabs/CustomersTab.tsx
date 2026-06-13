@@ -27,6 +27,9 @@ export function CustomersTab() {
   const [refundResult, setRefundResult] = useState<{ message: string } | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [creditDelta, setCreditDelta] = useState<string>("");
+  const [creditReason, setCreditReason] = useState<string>("");
+  const [adjustingCreditId, setAdjustingCreditId] = useState<number | null>(null);
 
   const reload = () => Promise.all([api.adminGetCustomers(), api.adminGetCharacters()])
     .then(([c, ch]) => { setCustomers(c); setCharacters(ch); });
@@ -80,6 +83,26 @@ export function CustomersTab() {
       toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function handleAdjustCredits(c: any) {
+    const delta = Number(creditDelta);
+    if (!delta) {
+      toast("増減量を入力してください", "error");
+      return;
+    }
+    setAdjustingCreditId(c.id);
+    try {
+      await api.adminAdjustCredits(c.id, delta, creditReason.trim() || undefined);
+      await reload();
+      setCreditDelta("");
+      setCreditReason("");
+      toast("クレジット残高を調整しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "調整に失敗しました", "error");
+    } finally {
+      setAdjustingCreditId(null);
     }
   }
 
@@ -227,6 +250,7 @@ export function CustomersTab() {
                     {c.email && `　✉ ${c.email}`}
                     　📝 記事: {c.published_count ?? 0}公開 / {c.article_count ?? 0}件
                     {(c.exercise_count ?? 0) > 0 && `　🧩 演習: ${c.exercise_count}件`}
+                    　💰 クレジット: {c.credit_balance ?? 0}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
@@ -301,6 +325,26 @@ export function CustomersTab() {
                         <option value="active">✅ 有効</option>
                         <option value="inactive">⛔ 無効化（ログイン不可）</option>
                       </select>
+                    </div>
+                  </div>
+
+                  {/* クレジット残高の手動調整 */}
+                  <div className="rounded-xl p-3 flex flex-col gap-2" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                      💰 クレジット残高調整（現在: {c.credit_balance ?? 0}）
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                      <div>
+                        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>増減量（マイナスで減算）</label>
+                        <input type="number" value={creditDelta} onChange={e => setCreditDelta(e.target.value)} placeholder="例: 100 / -50" />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>理由（任意）</label>
+                        <input value={creditReason} onChange={e => setCreditReason(e.target.value)} placeholder="例: 問い合わせ補填" />
+                      </div>
+                      <button className="btn-ghost text-xs py-2 px-4 disabled:opacity-50" disabled={adjustingCreditId === c.id} onClick={() => handleAdjustCredits(c)}>
+                        {adjustingCreditId === c.id ? "処理中…" : "調整する"}
+                      </button>
                     </div>
                   </div>
 

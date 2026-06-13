@@ -24,48 +24,48 @@ type EikenGrade = typeof EIKEN_GRADES[number];
 
 function eikenRows(grade: EikenGrade) {
   const base = [
-    { part: "リーディング（短文穴埋め・長文穴埋め・長文読解）", price: "各¥500" },
-    { part: "リスニング", price: "¥500" },
+    { part: "リーディング（短文穴埋め・長文穴埋め・長文読解）", price: "各200クレジット" },
+    { part: "リスニング", price: "200クレジット" },
   ];
   if (grade === "4級" || grade === "5級") return base;
   return [
     ...base,
-    { part: "ライティング", price: "¥1,000" },
-    { part: "スピーキング", price: "¥1,000" },
+    { part: "ライティング", price: "400クレジット" },
+    { part: "スピーキング", price: "400クレジット" },
   ];
 }
 
 const IELTS_ROWS = [
-  { part: "Reading Academic / General", price: "¥500" },
-  { part: "Listening Section 1〜4", price: "各¥500" },
-  { part: "Writing Task 1", price: "¥500" },
-  { part: "Writing Task 2", price: "¥1,000" },
-  { part: "Speaking Part 1〜3", price: "¥1,000" },
+  { part: "Reading Academic / General", price: "200クレジット" },
+  { part: "Listening Section 1〜4", price: "各200クレジット" },
+  { part: "Writing Task 1", price: "200クレジット" },
+  { part: "Writing Task 2", price: "400クレジット" },
+  { part: "Speaking Part 1〜3", price: "400クレジット" },
 ];
 
 const TOEFL_TYPES = ["iBT", "ITP"] as const;
 type ToeflType = typeof TOEFL_TYPES[number];
 
 const TOEFL_IBT_ROWS = [
-  { part: "Reading", price: "¥500" },
-  { part: "Listening", price: "¥500" },
-  { part: "Writing Integrated Task", price: "¥1,000" },
-  { part: "Writing Academic Discussion", price: "¥500" },
-  { part: "Speaking Task 1〜4", price: "¥1,000" },
+  { part: "Reading", price: "200クレジット" },
+  { part: "Listening", price: "200クレジット" },
+  { part: "Writing Integrated Task", price: "400クレジット" },
+  { part: "Writing Academic Discussion", price: "200クレジット" },
+  { part: "Speaking Task 1〜4", price: "400クレジット" },
 ];
 
 const TOEFL_ITP_ROWS = [
-  { part: "Listening", price: "¥500" },
-  { part: "Structure and Written Expression", price: "¥500" },
-  { part: "Reading", price: "¥500" },
+  { part: "Listening", price: "200クレジット" },
+  { part: "Structure and Written Expression", price: "200クレジット" },
+  { part: "Reading", price: "200クレジット" },
 ];
 
 const PLAN_ROWS = [
-  { plan: "スタータープラン", content: "オリジナルキャラクターの作成", price: "¥1,500", note: "初回のみ（公式キャラクターを選ぶと無料）" },
-  { plan: "追加ユニット（記事）", content: "1本", price: "¥500〜", note: "種別により変動" },
-  { plan: "文法記事", content: "1項目・2,500〜3,000文字", price: "¥500", note: "" },
-  { plan: "ライティング添削", content: "1回・マニュアル評価＋キャラフィードバック", price: "¥1,000", note: "全試験共通" },
-  { plan: "スピーキング評価", content: "1回・マニュアル評価＋キャラフィードバック", price: "¥1,000", note: "全試験共通" },
+  { plan: "スタータープラン", content: "オリジナルキャラクターの作成", price: "¥500", note: "初回のみ・購入時に500クレジット付与（公式キャラクターを選ぶと無料＋20クレジット付与）" },
+  { plan: "追加ユニット（記事）", content: "1本", price: "200クレジット〜", note: "種別により変動" },
+  { plan: "文法記事", content: "1項目・2,500〜3,000文字", price: "200クレジット", note: "" },
+  { plan: "ライティング添削", content: "1回・マニュアル評価＋キャラフィードバック", price: "400クレジット", note: "全試験共通" },
+  { plan: "スピーキング評価", content: "1回・マニュアル評価＋キャラフィードバック", price: "400クレジット", note: "全試験共通" },
 ];
 
 export default function PricingPage() {
@@ -110,7 +110,7 @@ export default function PricingPage() {
             お申し込み時に「白河雪菜」または「蒼井零」を選択すると、以下の特典がすべて付いてきます。
           </p>
           <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
-            <li><strong>キャラ作成費無料</strong>：オリジナルキャラ作成費（¥1,500）が0円になります</li>
+            <li><strong>キャラ作成費無料</strong>：オリジナルキャラ作成費（¥500）が0円になり、さらに20クレジットが付与されます（オリジナルキャラ作成の場合は500クレジット付与）</li>
             <li><strong>すぐにチャット開始</strong>：ログイン直後からすぐにチャットできます</li>
             <li><strong>限定称号・壁紙あり</strong>：公式キャラを選んだ方だけが解放できる称号・壁紙が用意されています</li>
             <li><strong>隠しセリフ多数</strong>：オリジナルキャラより多くの隠しセリフが用意されています</li>
@@ -152,7 +152,7 @@ export default function PricingPage() {
 
           {examTab === "TOEIC" && (
             <>
-              <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>各¥500・約10分</p>
+              <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>各200クレジット・約10分</p>
               <div className="flex flex-col gap-3">
                 {TOEIC_ROWS.map(row => (
                   <InfoRow key={row.part} t={t} label={row.part} value={row.content} />

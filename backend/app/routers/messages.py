@@ -11,8 +11,11 @@ from app.models.message import Message
 from app.models.customer import Customer
 from app.models.character import Character
 from app.models.article import Article
+from app.models.credit_transaction import CreditTransaction
+from app.models.order import Order
 from app.core.intimacy import intimacy_info, POINTS_PER_CHARACTER_REPLY, get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
+from app.core.credits import grant_credits, consume_credits
 from app.core.llm import generate_text, LLMError
 from app.core.character_voice import (
     build_dm_reply_system_prompt,
@@ -109,6 +112,7 @@ def _reward_status(db: Session, customer_id: int) -> dict:
 class MessageCreate(BaseModel):
     content: Optional[str] = None
     grammar_topic: Optional[str] = None  # 入力されると「記事リクエスト」として扱われる
+    credit_cost: Optional[int] = None  # 記事・問題リクエスト時の消費クレジット数（200/400）
 
 
 @router.get("/me")
@@ -147,6 +151,7 @@ def get_my_thread(
         "has_more": has_more,
         "reward_status": _reward_status(db, current_user.id),
         "intimacy": intimacy_info(current_user.intimacy_points),
+        "credit_balance": current_user.credit_balance,
     }
 
 
@@ -160,11 +165,20 @@ def send_my_message(
 
     会話のやり取りは「親密度」に少しずつ反映される
     （送るたびに大きく増えるものではなく、コツコツ続けることで関係が育っていく設計）。
+
+    DM送信は1クレジット、記事・問題リクエストはcredit_cost（200/400）を消費する。
+    残高不足の場合は402を返す。
     """
     if not data.content and not data.grammar_topic:
         raise HTTPException(status_code=400, detail="メッセージ内容を入力してください")
 
     is_request = bool(data.grammar_topic)
+    cost = data.credit_cost if (is_request and data.credit_cost) else 1
+    consume_credits(
+        db, current_user, cost,
+        reason="article_request" if is_request else "dm_send",
+    )
+
     msg = Message(
         customer_id=current_user.id,
         character_id=current_user.character_id,
@@ -172,9 +186,34 @@ def send_my_message(
         content=data.content,
         is_request=is_request,
         grammar_topic=data.grammar_topic,
-        request_status="pending" if is_request else None,
+        request_status="accepted" if is_request else None,
     )
     db.add(msg)
+    db.flush()
+
+    last_tx = (
+        db.query(CreditTransaction)
+        .filter(CreditTransaction.customer_id == current_user.id)
+        .order_by(CreditTransaction.id.desc())
+        .first()
+    )
+    if last_tx:
+        last_tx.related_message_id = msg.id
+
+    if is_request:
+        # 受注リストに自動反映: 既に紐づく受注がなければ、この依頼を新規受注として追加する
+        existing_order = db.query(Order).filter(Order.customer_id == current_user.id).first()
+        if not existing_order:
+            character = db.query(Character).filter(Character.id == current_user.character_id).first()
+            db.add(Order(
+                customer_name=current_user.username,
+                character_name=character.name if character else None,
+                grammar_topic=data.grammar_topic,
+                status="in_progress",
+                customer_id=current_user.id,
+                email=current_user.email,
+            ))
+
     settings_row = get_intimacy_settings(db)
     current_user.intimacy_points = (current_user.intimacy_points or 0) + settings_row.points_per_message
     check_and_unlock_rewards(db, current_user)
@@ -436,6 +475,38 @@ def adjust_intimacy(customer_id: int, data: IntimacyAdjust, admin=Depends(get_cu
     return {
         "intimacy": intimacy_info(customer.intimacy_points),
         "before_points": before,
+    }
+
+
+class CreditAdjust(BaseModel):
+    delta: int          # 増減量（マイナス値で減少）
+    reason: Optional[str] = None  # 調整理由（ログ・将来の振り返り用、任意）
+
+
+@router.post("/admin/{customer_id}/credits/adjust")
+def adjust_credits(customer_id: int, data: CreditAdjust, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """管理者が手動でクレジット残高を増減する（問い合わせ対応・補填など）"""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="顧客が見つかりません")
+    if data.delta == 0:
+        raise HTTPException(status_code=400, detail="増減量を指定してください")
+
+    before = customer.credit_balance or 0
+    if data.delta > 0:
+        grant_credits(db, customer, data.delta, reason="admin_adjust")
+    else:
+        consume_credits(db, customer, -data.delta, reason="admin_adjust")
+    db.commit()
+    db.refresh(customer)
+
+    logger.info(
+        f"管理者がクレジット残高を調整しました: customer_id={customer_id} "
+        f"{before} -> {customer.credit_balance} (delta={data.delta}, reason={data.reason!r})"
+    )
+    return {
+        "credit_balance": customer.credit_balance,
+        "before_balance": before,
     }
 
 

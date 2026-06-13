@@ -97,10 +97,14 @@ export const api = {
     const q = qs.toString();
     return apiFetch(`/messages/me${q ? `?${q}` : ""}`);
   },
-  sendMyMessage: (data: { content?: string; grammar_topic?: string }) =>
+  sendMyMessage: (data: { content?: string; grammar_topic?: string; credit_cost?: number }) =>
     apiFetch("/messages/me", { method: "POST", body: JSON.stringify(data) }),
   getMyRewardStatus: () => apiFetch("/messages/me/reward-status"),
   getMyUnreadCount: () => apiFetch("/messages/me/unread-count"),
+
+  // 顧客：クレジット購入
+  purchaseCredits: (credits: number) =>
+    apiFetch("/payments/credits/checkout-session", { method: "POST", body: JSON.stringify({ credits }) }),
 
   // 顧客：添削リクエスト（お題のない自由提出のライティング/スピーキング）
   submitCorrectionText: (data: { correction_type: "writing" | "speaking"; text_content?: string; note?: string }) =>
@@ -220,6 +224,8 @@ export const api = {
     apiFetch(`/messages/admin/requests/${customerId}`),
   adminAdjustIntimacy: (customerId: number, delta: number, reason?: string) =>
     apiFetch(`/messages/admin/${customerId}/intimacy/adjust`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
+  adminAdjustCredits: (customerId: number, delta: number, reason?: string) =>
+    apiFetch(`/messages/admin/${customerId}/credits/adjust`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
   adminEditMessage: (messageId: number, content: string) =>
     apiFetch(`/messages/admin/message/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
   adminDeleteMessage: (messageId: number) =>

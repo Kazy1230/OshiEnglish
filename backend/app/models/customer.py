@@ -41,6 +41,9 @@ class Customer(Base):
     # 本棚で一度表示したらTrueに戻す（一人一回限りの演出）。
     character_ready_announced = Column(Boolean, default=True, nullable=False)
     subscription_plan = Column(String(50), default="buy_once")  # buy_once / monthly
+    # クレジット残高（1クレジット=1円）。DM送信や記事・問題リクエストの消費、
+    # Stripeでのクレジット購入・キャラ作成特典で増減する。
+    credit_balance = Column(Integer, nullable=False, default=0)
     # サポート担当の割り当て（管理者・オペレーター複数人での分担運用のため）。
     # is_admin=True の customers.id を指す。未割り当ての場合は NULL。
     assigned_admin_id = Column(Integer, ForeignKey("customers.id"), nullable=True)

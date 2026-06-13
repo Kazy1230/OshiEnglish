@@ -90,6 +90,7 @@ function ChatPageInner() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [reward, setReward] = useState<RewardStatus | null>(null);
   const [intimacy, setIntimacy] = useState<Intimacy | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
@@ -117,6 +118,7 @@ function ChatPageInner() {
     setHasMore(!!thread.has_more);
     setReward(thread.reward_status);
     setIntimacy(thread.intimacy ?? null);
+    setCreditBalance(thread.credit_balance ?? null);
 
     if (thread.intimacy) {
       if (prevLevelRef.current !== null && thread.intimacy.level > prevLevelRef.current) {
@@ -201,8 +203,12 @@ function ChatPageInner() {
       await api.sendMyMessage({ content: text.trim() });
       setText("");
       await load();
-    } catch {
-      toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes("クレジットが不足")) {
+        toast("クレジットが不足しています。クレジットを購入してください", "error");
+      } else {
+        toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+      }
     } finally { setSending(false); }
   }
 
@@ -374,6 +380,18 @@ function ChatPageInner() {
             </div>
             <InfoTooltip text={INTIMACY_INFO_TEXT} theme={t} />
           </div>
+        </div>
+      )}
+
+      {/* クレジット残高 */}
+      {creditBalance !== null && (
+        <div className="max-w-3xl mx-auto w-full px-4 pt-2">
+          <button type="button" onClick={() => router.push("/credits")}
+            className="w-full rounded-xl px-4 py-2 flex items-center justify-between gap-3 text-xs font-bold transition-all"
+            style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
+            <span>💰 クレジット残高：<span className="font-black" style={{ color: t.primary }}>{creditBalance}</span></span>
+            <span style={{ color: t.accent }}>購入する →</span>
+          </button>
         </div>
       )}
 

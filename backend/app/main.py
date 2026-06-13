@@ -176,6 +176,11 @@ _ensure_column("articles", "correction_request_id", "INT NULL")
 _ensure_index("articles", "ix_articles_correction_request_id", "(correction_request_id)")
 _ensure_column("messages", "suggested_action", "VARCHAR(50) NULL")
 
+# 簡易マイグレーション㉕: クレジット制決済システム
+# - customers.credit_balance: クレジット残高（1クレジット=1円）
+# - credit_transactionsテーブル自体はcreate_all()で自動作成される
+_ensure_column("customers", "credit_balance", "INT NOT NULL DEFAULT 0")
+
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
 ACCESS_LOG_RETENTION_DAYS = 180

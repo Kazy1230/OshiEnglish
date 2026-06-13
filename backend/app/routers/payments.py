@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.security import hash_password, get_current_admin
+from app.core.security import hash_password, get_current_admin, get_current_user
 from app.core.credentials import generate_temp_password, generate_username
 from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
@@ -18,6 +18,8 @@ from app.core.welcome_articles import claim_welcome_article_for_customer
 from app.models.order import Order
 from app.models.customer import Customer
 from app.models.character import Character
+from app.models.credit_transaction import CreditTransaction
+from app.core.credits import grant_credits
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,55 @@ def _get_stripe():
 
 class CreateCheckoutSessionRequest(BaseModel):
     order_id: int
+
+
+class CreditCheckoutSessionRequest(BaseModel):
+    credits: int
+
+
+@router.post("/credits/checkout-session")
+def create_credit_checkout_session(
+    data: CreditCheckoutSessionRequest,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """ログイン中の顧客がクレジットを購入するためのStripe Checkoutセッションを発行する。
+
+    クレジットは1クレジット=1円・500クレジット単位でのみ購入できる。
+    """
+    if data.credits <= 0 or data.credits % 500 != 0:
+        raise HTTPException(status_code=400, detail="クレジットは500単位で指定してください")
+
+    if not _stripe_configured():
+        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
+
+    stripe = _get_stripe()
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[{
+                "price_data": {
+                    "currency": "jpy",
+                    "product_data": {"name": f"クレジット {data.credits}"},
+                    "unit_amount": data.credits,
+                },
+                "quantity": 1,
+            }],
+            customer_email=current_user.email or None,
+            invoice_creation={"enabled": True},
+            success_url=f"{settings.FRONTEND_URL}/credits?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{settings.FRONTEND_URL}/credits",
+            metadata={
+                "type": "credit_purchase",
+                "customer_id": str(current_user.id),
+                "credits": str(data.credits),
+            },
+        )
+    except Exception as e:
+        logger.exception("[Stripe] クレジット購入用Checkout Sessionの作成に失敗しました")
+        raise HTTPException(status_code=502, detail="決済画面の作成に失敗しました") from e
+
+    return {"checkout_url": session.url}
 
 
 def _get_preset_character(db: Session, order: Order):
@@ -128,7 +179,9 @@ def _issue_account(db: Session, order: Order):
     if preset_character:
         # 公式キャラクターを選択した場合は、即日チャット開始できるようそのキャラクターを直接割り当てる
         customer.character_id = preset_character.id
+        grant_credits(db, customer, 20, reason="signup_bonus_preset")
     else:
+        grant_credits(db, customer, 500, reason="signup_bonus_original")
         # 公式キャラ以外（オーダーメイド）の場合は character_id を割り当てない。
         # 顧客専用のキャラクターは後ほど運営者がLLM下書き＋承認のうえ作成し、
         # customers.character_id を更新して案内メールを送る（PATCH /customers/{id}）。
@@ -220,6 +273,32 @@ def _handle_checkout_completed(db: Session, session: dict):
     _issue_account(db, order)
 
 
+def _handle_credit_purchase_completed(db: Session, session: dict):
+    """クレジット購入のcheckout.session.completedを処理し、残高に加算する（冪等）"""
+    session_id = session.get("id")
+
+    existing = db.query(CreditTransaction).filter(CreditTransaction.stripe_session_id == session_id).first()
+    if existing:
+        # Webhook再送対策
+        return
+
+    metadata = session.get("metadata") or {}
+    customer_id = metadata.get("customer_id")
+    credits = metadata.get("credits")
+    if not customer_id or not credits:
+        logger.warning(f"[Stripe] クレジット購入のmetadataが不正です: session_id={session_id}")
+        return
+
+    customer = db.query(Customer).filter(Customer.id == int(customer_id)).first()
+    if not customer:
+        logger.warning(f"[Stripe] クレジット購入対象の顧客が見つかりません: customer_id={customer_id}")
+        return
+
+    grant_credits(db, customer, int(credits), reason="purchase", stripe_session_id=session_id)
+    db.commit()
+    logger.info(f"[Stripe] クレジットを付与しました: customer_id={customer_id}, credits={credits}")
+
+
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     if not _stripe_configured() or not settings.STRIPE_WEBHOOK_SECRET:
@@ -236,7 +315,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="不正なWebhookです")
 
     if event["type"] == "checkout.session.completed":
-        _handle_checkout_completed(db, event["data"]["object"])
+        session = event["data"]["object"]
+        if (session.get("metadata") or {}).get("type") == "credit_purchase":
+            _handle_credit_purchase_completed(db, session)
+        else:
+            _handle_checkout_completed(db, session)
 
     return {"received": True}
 

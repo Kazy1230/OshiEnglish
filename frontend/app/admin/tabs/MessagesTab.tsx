@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { buildSuggestedQuestions, buildQuestionIdeaPrompt, buildRewardImagePrompt, type SuggestedQuestion } from "../lib/promptBuilders";
@@ -148,6 +148,14 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
   const [draftingReply, setDraftingReply] = useState(false);
   const [memo, setMemo] = useState("");
   const [savingMemo, setSavingMemo] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => {
+      const el = messagesContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -155,6 +163,7 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
       const d = await api.adminGetThread(customerId);
       setData(d);
       setMemo(d.customer.admin_memo || "");
+      scrollToBottom();
     } catch (err: any) {
       toast(err.message || "読み込みに失敗しました", "error");
     } finally { setLoading(false); }
@@ -310,6 +319,18 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
           </p>
         </div>
         <div className="text-xs flex items-center gap-3">
+          <span className="flex items-center gap-1.5" style={{ color: "var(--muted)" }}>
+            👤 担当者
+            <select
+              value={data.customer.assigned_admin_id ?? ""}
+              disabled={savingAssignment}
+              onChange={e => handleAssignmentChange({ assigned_admin_id: e.target.value === "" ? null : Number(e.target.value) })}
+              className="px-2 py-1 rounded-lg border"
+              style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
+              <option value="">未割当</option>
+              {operators.map(o => <option key={o.id} value={o.id}>{o.username}</option>)}
+            </select>
+          </span>
           <span style={{ color: "var(--muted)" }}>
             公開記事 <span className="font-black" style={{ color: cPrimary }}>{reward.published_articles}</span> 冊 ／
             送付済みご褒美 <span className="font-black" style={{ color: cPrimary }}>{reward.sent_rewards}</span> 件
@@ -320,30 +341,6 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
             </span>
           )}
         </div>
-      </div>
-
-      {/* 担当割り当て・優先度（複数オペレーターでの分担運用のため） */}
-      <div className="card flex items-center gap-3 flex-wrap text-xs" style={{ borderLeft: `4px solid ${cBorder}` }}>
-        <span style={{ color: "var(--muted)" }}>👤 担当者</span>
-        <select
-          value={data.customer.assigned_admin_id ?? ""}
-          disabled={savingAssignment}
-          onChange={e => handleAssignmentChange({ assigned_admin_id: e.target.value === "" ? null : Number(e.target.value) })}
-          className="px-2 py-1 rounded-lg border"
-          style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
-          <option value="">未割当</option>
-          {operators.map(o => <option key={o.id} value={o.id}>{o.username}</option>)}
-        </select>
-        <span style={{ color: "var(--muted)" }}>優先度</span>
-        <select
-          value={data.customer.priority ?? "normal"}
-          disabled={savingAssignment}
-          onChange={e => handleAssignmentChange({ priority: e.target.value })}
-          className="px-2 py-1 rounded-lg border"
-          style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
-          <option value="normal">通常</option>
-          <option value="high">🔴 優先</option>
-        </select>
       </div>
 
       {/* 重要メモ：誕生日・苦手分野への不安など、DM返信下書き生成に反映させたい情報を記録する */}
@@ -412,9 +409,6 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
 
       {/* ご褒美送付パネル（達成時のみ強調表示） */}
       <div className="card flex flex-col gap-2" style={reward.pending_rewards > 0 ? { border: `2px solid ${cAccent}`, background: cExampleBg } : { borderLeft: `4px solid ${cAccent}` }}>
-        <p className="text-sm font-bold" style={{ color: cPrimary }}>
-          🎁 ご褒美写真を送る {reward.pending_rewards > 0 ? `（${reward.reward_interval}記事達成 — 送付できます！）` : `（次は ${reward.next_reward_target} 冊達成時）`}
-        </p>
         <p className="text-xs" style={{ color: "var(--muted)" }}>
           運営者が用意した画像をアップロードすると、キャラクターからのご褒美メッセージとして顧客のチャットに届きます。
         </p>
@@ -447,7 +441,7 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
       </div>
 
       {/* メッセージスレッド */}
-      <div className="card flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: "48vh" }}>
+      <div ref={messagesContainerRef} className="card flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: "48vh" }}>
         {data.has_more && (
           <div className="text-center">
             <button onClick={loadOlder} disabled={loadingMore} className="btn-ghost text-xs disabled:opacity-50">
@@ -585,16 +579,13 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
                 </button>
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {picks.map((q, i) => (
-                <button key={i} type="button"
-                  className="text-left text-xs rounded-lg px-3 py-2 transition-all hover:opacity-80"
-                  style={{ background: cExampleBg, border: `1px solid ${cBorder}`, color: "var(--text)" }}
+                <button key={i} type="button" title={q.text}
+                  className="text-xs rounded-full px-2.5 py-1 font-bold text-white transition-all hover:opacity-80"
+                  style={{ background: cAccent }}
                   onClick={() => setReply(prev => prev ? `${prev}\n${q.text}` : q.text)}>
-                  <span className="inline-block px-1.5 py-0.5 rounded-full mr-1.5 font-bold text-white text-[10px]" style={{ background: cAccent }}>
-                    {q.icon} {q.category}
-                  </span>
-                  {q.text}
+                  {q.icon} {q.category}
                 </button>
               ))}
             </div>

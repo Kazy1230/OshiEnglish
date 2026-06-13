@@ -21,6 +21,12 @@ export const TOPIC_PRICES: Record<string, string> = {
 
 type PartOption = { label: string; content: string; price: string };
 
+// 価格表記（¥500/¥1,000）に対応する消費クレジット数
+const CREDIT_COST_BY_PRICE: Record<string, number> = {
+  "¥500": 200,
+  "¥1,000": 400,
+};
+
 // 料金プランページ（/pricing）の価格表に基づくパート別ラインナップ（演習問題数も明記）
 const TOEIC_PARTS: PartOption[] = [
   { label: "Part 1（写真描写）", content: "6問＋解説", price: "¥500" },
@@ -120,6 +126,7 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
 
   // 「文法」は ¥500 固定・トピック自由入力。それ以外はパート選択で価格が決まる
   const selectedPrice = category === "文法" ? "¥500" : part?.price ?? null;
+  const creditCost = selectedPrice ? CREDIT_COST_BY_PRICE[selectedPrice] ?? null : null;
   const canSubmit = category === "文法" ? grammarDetail.trim().length > 0 : !!part;
 
   // 級・試験種別の選択が必要かどうか
@@ -141,12 +148,16 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
       const content = message.trim()
         ? `新しい記事・問題・添削をリクエストしました！\n\n${message.trim()}`
         : "新しい記事・問題・添削をリクエストしました！";
-      await api.sendMyMessage({ content, grammar_topic: topic });
+      await api.sendMyMessage({ content, grammar_topic: topic, credit_cost: creditCost ?? undefined });
       toast("記事をリクエストしました", "success");
       onSent?.();
       onClose();
-    } catch {
-      toast("リクエストの送信に失敗しました", "error");
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes("クレジットが不足")) {
+        toast("クレジットが不足しています。クレジットを購入してください", "error");
+      } else {
+        toast("リクエストの送信に失敗しました", "error");
+      }
     } finally {
       setSending(false);
     }
@@ -304,7 +315,7 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
           📋 {headLabel}の記事・問題をリクエスト
         </p>
         <p className="text-[11px] mb-3" style={{ color: t.accent }}>
-          {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}（{selectedPrice}）
+          {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}（{selectedPrice} ／ {creditCost}クレジット）
         </p>
 
         {category === "文法" && (
