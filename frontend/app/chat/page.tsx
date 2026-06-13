@@ -274,16 +274,14 @@ function ChatPageInner() {
               <p className="text-white font-black text-sm truncate">{charName}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {creditBalance !== null && (
               <button onClick={() => router.push("/credits")} aria-label="クレジット残高"
-                className="text-xs font-bold px-2.5 py-1 rounded-full text-white transition-colors flex-shrink-0"
+                className="text-[11px] font-bold px-2 py-1 rounded-full text-white transition-colors flex-shrink-0 whitespace-nowrap"
                 style={{ background: "rgba(255,255,255,0.15)" }}>
-                💰 {creditBalance}
+                🔶 {creditBalance.toLocaleString()}
               </button>
             )}
-            <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
-              className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0">🎁 ご褒美</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <button onClick={() => { clearToken(); router.push("/login"); }}
               className="text-xs text-white/50 hover:text-white transition-colors flex-shrink-0">ログアウト</button>
@@ -315,7 +313,8 @@ function ChatPageInner() {
         <div className="max-w-3xl mx-auto w-full px-4 pt-3">
           <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 text-xs"
             style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
-            <span className="text-lg flex-shrink-0">🎁</span>
+            <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
+              className="text-lg flex-shrink-0 hover:opacity-70 transition-opacity">🎁</button>
             {reward.pending_rewards > 0 ? (
               <p className="font-bold flex-1" style={{ color: t.accent }}>
                 ご褒美が届いています！メッセージをチェックしてみてね 🎉
@@ -387,18 +386,6 @@ function ChatPageInner() {
             </div>
             <InfoTooltip text={INTIMACY_INFO_TEXT} theme={t} />
           </div>
-        </div>
-      )}
-
-      {/* クレジット残高 */}
-      {creditBalance !== null && (
-        <div className="max-w-3xl mx-auto w-full px-4 pt-2">
-          <button type="button" onClick={() => router.push("/credits")}
-            className="w-full rounded-xl px-4 py-2 flex items-center justify-between gap-3 text-xs font-bold transition-all"
-            style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
-            <span>💰 クレジット残高：<span className="font-black" style={{ color: t.primary }}>{creditBalance}</span></span>
-            <span style={{ color: t.accent }}>購入する →</span>
-          </button>
         </div>
       )}
 

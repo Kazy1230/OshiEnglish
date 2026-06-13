@@ -250,7 +250,7 @@ export function CustomersTab() {
                     {c.email && `　✉ ${c.email}`}
                     　📝 記事: {c.published_count ?? 0}公開 / {c.article_count ?? 0}件
                     {(c.exercise_count ?? 0) > 0 && `　🧩 演習: ${c.exercise_count}件`}
-                    　💰 クレジット: {c.credit_balance ?? 0}
+                    　🔶 クレジット: {c.credit_balance ?? 0}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
@@ -331,7 +331,7 @@ export function CustomersTab() {
                   {/* クレジット残高の手動調整 */}
                   <div className="rounded-xl p-3 flex flex-col gap-2" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
                     <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>
-                      💰 クレジット残高調整（現在: {c.credit_balance ?? 0}）
+                      🔶 クレジット残高調整（現在: {c.credit_balance ?? 0}）
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                       <div>

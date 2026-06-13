@@ -156,9 +156,9 @@ function ShelfContent() {
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <button onClick={() => router.push("/credits")} aria-label="クレジット残高"
-              className="text-xs sm:text-sm font-bold px-2.5 py-1 rounded-full text-white transition-colors"
+              className="text-[11px] sm:text-sm font-bold px-2 sm:px-2.5 py-1 rounded-full text-white transition-colors whitespace-nowrap"
               style={{ background: "rgba(255,255,255,0.15)" }}>
-              💰 {me?.credit_balance ?? 0}
+              🔶 {(me?.credit_balance ?? 0).toLocaleString()}
             </button>
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🎁 ご褒美</button>

@@ -1299,7 +1299,7 @@ export default function ApplyPage() {
                     background: theme.accentLight, border: `1px solid ${theme.border}`,
                   }}>
                     <p style={{ fontSize: ".8rem", color: theme.text, lineHeight: 1.8, margin: 0, fontFamily: theme.fontFamily }}>
-                      💰 <strong>公式キャラクター</strong>を選ぶとキャラ作成費が無料になり、<strong>20クレジット</strong>を即プレゼント。<br />
+                      🔶 <strong>公式キャラクター</strong>を選ぶとキャラ作成費が無料になり、<strong>20クレジット</strong>を即プレゼント。<br />
                       ✍️ <strong>オリジナルキャラクター</strong>を作る場合はキャラ作成費 <strong>¥500</strong>（<strong>500クレジット</strong>付与・実質チャージ）。
                     </p>
                   </div>

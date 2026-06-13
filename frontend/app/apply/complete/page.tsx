@@ -69,7 +69,7 @@ function CompleteContent() {
                   🎁 500クレジットを付与しました
                 </p>
                 <p className="text-xs mt-1" style={{ color: "var(--text)" }}>
-                  記事・問題のリクエストやDMの送信にご利用いただけます。ログイン後、ヘッダーの💰アイコンから残高を確認できます。
+                  記事・問題のリクエストやDMの送信にご利用いただけます。ログイン後、ヘッダーの🔶アイコンから残高を確認できます。
                 </p>
               </div>
               <p className="text-sm font-bold mb-2" style={{ color: "#e11d48" }}>
