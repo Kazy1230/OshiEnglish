@@ -138,7 +138,10 @@ def _issue_account(db: Session, order: Order):
     check_and_unlock_rewards(db, customer)
 
     order.customer_id = customer.id
-    order.status = "in_progress"
+    # 公式キャラクターの場合はキャラクターを即時割り当て済みで運営側の作業が発生しないため、
+    # 受注リストに「対応中（キャラ作成依頼）」として残らないよう納品済みにする。
+    # オーダーメイド（公式キャラ以外）の場合は運営によるキャラクター作成が必要なため「対応中」のまま。
+    order.status = "delivered" if preset_character else "in_progress"
     order.issued_username = username
     order.issued_password = password
     order.credentials_viewed = False

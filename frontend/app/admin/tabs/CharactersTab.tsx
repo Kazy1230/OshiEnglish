@@ -35,6 +35,7 @@ const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: 
 export function CharactersTab() {
   const [characters, setCharacters] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [articles, setArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingChar, setEditingChar] = useState<any | null>(null);
@@ -77,9 +78,27 @@ export function CharactersTab() {
     toast("新しい語尾テンプレートを追加しました。これ以降、他のテンプレと同じように一覧から使えます", "success");
   }
 
-  const reload = () => Promise.all([api.adminGetCharacters(), api.adminGetCustomers()])
-    .then(([chars, custs]) => { setCharacters(chars); setCustomers(custs.filter((c: any) => !c.is_admin)); });
+  const reload = () => Promise.all([api.adminGetCharacters(), api.adminGetCustomers(), api.adminGetArticles()])
+    .then(([chars, custs, arts]) => { setCharacters(chars); setCustomers(custs.filter((c: any) => !c.is_admin)); setArticles(arts); });
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+
+  const welcomeArticles = articles.filter((a: any) => a.is_welcome_template);
+
+  async function handleWelcomeTemplateChange(charId: number, newArticleId: string) {
+    const current = welcomeArticles.find((a: any) => a.template_character_id === charId);
+    try {
+      if (current && String(current.id) !== newArticleId) {
+        await api.adminUpdateArticle(current.id, { clear_template_character_id: true });
+      }
+      if (newArticleId) {
+        await api.adminUpdateArticle(Number(newArticleId), { template_character_id: charId });
+      }
+      await reload();
+      toast("ウェルカムページの設定を更新しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
+    }
+  }
 
   function handleColorSchemeChange(val: string) {
     setForm(f => ({ ...f, color_scheme: val }));
@@ -510,6 +529,26 @@ export function CharactersTab() {
                       </p>
                     )}
                   </div>
+
+                  {/* ウェルカムページ設定（公式キャラのみ） */}
+                  {c.is_preset && (
+                    <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                      <p className="text-xs font-medium mb-1" style={{ color: "var(--accent)" }}>🏠 ウェルカムページ</p>
+                      <select
+                        value={String(welcomeArticles.find((a: any) => a.template_character_id === c.id)?.id ?? "")}
+                        onChange={e => handleWelcomeTemplateChange(c.id, e.target.value)}>
+                        <option value="">未設定（汎用ウェルカムページを使用）</option>
+                        {welcomeArticles.map((a: any) => (
+                          <option key={a.id} value={a.id}>{a.title}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                        この公式キャラを選んで申し込んだ顧客の本棚に最初に届くウェルカムページです。
+                        記事管理画面で記事タイプ「🏠 ウェルカムページ」を作成し、対象キャラに「{c.name}」を指定すると、ここに選択肢として表示されます。
+                        未設定のままだと、対象キャラ未指定（汎用）のウェルカムページが使われます。
+                      </p>
+                    </div>
+                  )}
 
                   {/* 画像管理 */}
                   <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>

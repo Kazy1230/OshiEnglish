@@ -393,15 +393,18 @@ class ArticleCreate(BaseModel):
     exercise_data: Optional[dict] = None
     request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
+    is_welcome_template: bool = False  # ウェルカムページ用テンプレートかどうか
+    template_character_id: Optional[int] = None  # 公式キャラ専用テンプレートの場合、対象キャラのID（汎用テンプレートはNULL）
 
     @model_validator(mode="after")
     def _validate_by_type(self):
-        VALID_TYPES = ("request", "blog", "exercise", "writing_feedback", "speaking_feedback")
+        VALID_TYPES = ("request", "blog", "exercise", "writing_feedback", "speaking_feedback", "welcome")
         if self.article_type not in VALID_TYPES:
             raise ValueError(
                 "article_type は 'request'（依頼記事）/ 'blog'（ブログ記事）/ 'exercise'（演習問題）"
                 "/ 'writing_feedback'（ライティングフィードバック）"
-                "/ 'speaking_feedback'（スピーキングフィードバック）のいずれかを指定してください"
+                "/ 'speaking_feedback'（スピーキングフィードバック）"
+                "/ 'welcome'（ウェルカムページ）のいずれかを指定してください"
             )
         if self.article_type == "request":
             if self.customer_id is None or self.grammar_master_id is None:
@@ -432,6 +435,17 @@ class ArticleCreate(BaseModel):
             self.exercise_format = None
             self.exercise_category = None
             self.exercise_data = None
+        elif self.article_type == "welcome":
+            # ウェルカムページ：新規顧客の本棚に最初に届くテンプレート記事。
+            # 公式キャラ専用（template_character_id=キャラID）または汎用（NULL）として登録する。
+            if not self.content:
+                raise ValueError("ウェルカムページには本文の入力が必須です")
+            self.customer_id = None
+            self.grammar_master_id = None
+            self.exercise_format = None
+            self.exercise_category = None
+            self.exercise_data = None
+            self.is_welcome_template = True
         else:
             # 演習問題：特定の顧客に向けて出題する（依頼記事と同様、顧客の本棚に届く）
             if self.customer_id is None:
@@ -457,6 +471,11 @@ class ArticleUpdate(BaseModel):
     exercise_data: Optional[dict] = None
     request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
+    is_welcome_template: Optional[bool] = None
+    template_character_id: Optional[int] = None
+    # template_character_id を NULL に戻したい場合、exclude_none=True では None が無視されるため
+    # このフラグで明示的にクリアする
+    clear_template_character_id: bool = False
 
     @model_validator(mode="after")
     def _validate_exercise_on_update(self):
@@ -496,6 +515,8 @@ def admin_get_all_articles(
             "character_id": a.character_id,
             "customer_id": a.customer_id,
             "is_llm_drafted": a.is_llm_drafted,
+            "is_welcome_template": a.is_welcome_template,
+            "template_character_id": a.template_character_id,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "updated_at": a.updated_at.isoformat() if a.updated_at else None,
             # 結合データ
@@ -562,8 +583,11 @@ def admin_update_article(
 
     prev_status = article.status  # 公開状態の変化を検知するために保存
 
-    for key, val in data.model_dump(exclude_none=True).items():
+    clear_template = data.clear_template_character_id
+    for key, val in data.model_dump(exclude_none=True, exclude={"clear_template_character_id"}).items():
         setattr(article, key, val)
+    if clear_template:
+        article.template_character_id = None
     db.commit()
     db.refresh(article)
 

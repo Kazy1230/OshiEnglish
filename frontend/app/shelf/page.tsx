@@ -264,20 +264,6 @@ export default function ShelfPage() {
                 <p className="text-sm leading-relaxed" style={{ color: t.text, fontFamily: t.fontFamily }}>「{greeting}」</p>
               </div>
             )}
-
-            {me?.character_id && (
-              <button onClick={() => router.push("/chat")}
-                className="relative mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
-                style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-                💬 {theme?.name ? `${theme.name}とお話する` : "キャラクターとお話する"}
-                {unread > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md"
-                    style={{ background: "#ff3b30", border: "2px solid white" }}>
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                )}
-              </button>
-            )}
           </div>
         )}
 
@@ -437,7 +423,6 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, pending, onClaimed }
   pending: boolean;
   onClaimed: (article: { id: number; title: string; article_type: string }) => void;
 }) {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleClaim() {
@@ -516,14 +501,6 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, pending, onClaimed }
           </div>
         )}
 
-        {/* 4. チャットへの導線（公式キャラのみ。オリジナルキャラはキャラ準備中のため非表示） */}
-        {!pending && (
-          <button onClick={() => router.push("/chat")}
-            className="mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
-            style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-            💬 チャット画面を見る
-          </button>
-        )}
       </div>
     </div>
   );

@@ -22,6 +22,8 @@ const emptyArticleForm = {
   request_message_id: "",
   // フィードバック記事：元になった添削リクエスト（公開時にステータス自動更新に使う）
   correction_request_id: "",
+  // ウェルカムページ：対象キャラ（公式キャラ専用テンプレートの場合のみ指定／空欄は汎用テンプレート）
+  template_character_id: "",
 };
 
 export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
@@ -96,6 +98,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
       exercise_data_text: a.exercise_data ? JSON.stringify(a.exercise_data, null, 2) : "",
       request_message_id: a.request_message_id ? String(a.request_message_id) : "",
       correction_request_id: a.correction_request_id ? String(a.correction_request_id) : "",
+      template_character_id: a.template_character_id ? String(a.template_character_id) : "",
     });
     setCorrectionSubmission(null);
     setShowForm(true);
@@ -115,6 +118,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
     const isBlog = form.article_type === "blog";
     const isExercise = form.article_type === "exercise";
     const isFeedback = form.article_type === "writing_feedback" || form.article_type === "speaking_feedback";
+    const isWelcome = form.article_type === "welcome";
     const payload: any = {
       article_type: form.article_type,
       character_id: Number(form.character_id),
@@ -144,6 +148,13 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
       payload.customer_id = Number(form.customer_id);
       if (form.correction_request_id) {
         payload.correction_request_id = Number(form.correction_request_id);
+      }
+    } else if (isWelcome) {
+      // ウェルカムページ：対象キャラを指定した場合のみ公式キャラ専用テンプレートになる（空欄は汎用テンプレート）
+      if (form.template_character_id) {
+        payload.template_character_id = Number(form.template_character_id);
+      } else if (editingArticle) {
+        payload.clear_template_character_id = true;
       }
     } else if (!isBlog) {
       payload.customer_id = Number(form.customer_id);
@@ -225,6 +236,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 ["exercise",         "🧩 演習問題",            "#7b5cff"],
                 ["writing_feedback", "✍️ ライティングFB",      "#e67e22"],
                 ["speaking_feedback","🎤 スピーキングFB",      "#16a085"],
+                ["welcome",          "🏠 ウェルカムページ",    "#2980b9"],
               ] as [string, string, string][]).map(([type, label, color]) => (
                 <button key={type} type="button"
                   disabled={!!editingArticle}
@@ -246,6 +258,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 ? "ライティングFB：記述式演習で提出されたライティング答案に対するキャラクターからのフィードバック記事です。採点・添削結果を顧客の本棚に届けます（文法マスター・演習データは不要）。"
                 : form.article_type === "speaking_feedback"
                 ? "スピーキングFB：記述式演習で提出されたスピーキング音声・テキストに対するキャラクターからのフィードバック記事です。評価・改善アドバイスを顧客の本棚に届けます（文法マスター・演習データは不要）。"
+                : form.article_type === "welcome"
+                ? "ウェルカムページ：新規登録した顧客の本棚に最初に届くテンプレート記事です。「対象キャラ」を指定すると、その公式キャラを選んだ顧客専用のテンプレートになります。空欄のまま保存すると、キャラビルダー利用者など対象キャラ未指定の顧客向けの汎用テンプレートになります。"
                 : "依頼記事：特定の顧客からの依頼に応じて作成する、通常の文法解説記事です。"}
               {editingArticle && "（記事タイプは作成後に変更できません）"}
             </p>
@@ -468,6 +482,26 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
             </div>
           )}
 
+          {/* ── ウェルカムページ専用セクション ── */}
+          {form.article_type === "welcome" && (
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                対象キャラ（公式キャラ専用テンプレートにする場合のみ選択）
+              </label>
+              <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}>
+                <option value="">汎用テンプレート（対象キャラを指定しない）</option>
+                {characters.filter(c => c.is_preset).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}（公式）専用</option>
+                ))}
+              </select>
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                公式キャラを選択すると、申し込み時にそのキャラを選んだ顧客専用のウェルカムページになります。
+                汎用テンプレートは、キャラビルダーで作成中の顧客など対象キャラ未指定の顧客に届きます。
+                各キャラ・汎用ごとに1件まで設定できます（同じ対象を選んだ既存のテンプレートがある場合は、後から保存した方が優先されます）。
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {form.article_type === "request" && (
               <>
@@ -635,6 +669,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                     <>✍️ ライティングFB　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}</>
                   ) : a.article_type === "speaking_feedback" ? (
                     <>🎤 スピーキングFB　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}</>
+                  ) : a.article_type === "welcome" ? (
+                    <>🏠 ウェルカムページ　{a.template_character_id ? `🎭 ${characters.find(c => c.id === a.template_character_id)?.name ?? `キャラID:${a.template_character_id}`}専用` : "汎用"}</>
                   ) : (
                     <>👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}　📚 {a.grammar_topic ?? "—"}</>
                   )}
@@ -660,6 +696,11 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 {a.article_type === "speaking_feedback" && (
                   <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#e0f7f4", color: "#0d6e5f" }}>
                     🎤 スピーキングFB
+                  </span>
+                )}
+                {a.article_type === "welcome" && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#dceefb", color: "#1f618d" }}>
+                    🏠 ウェルカム
                   </span>
                 )}
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(0,0,0,0.08)" }}>
