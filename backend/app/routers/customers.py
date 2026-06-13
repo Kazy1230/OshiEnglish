@@ -11,6 +11,9 @@ from app.models.customer import Customer
 from app.models.article import Article
 from app.models.message import Message
 from app.models.access_log import AccessLog
+from app.models.correction_request import CorrectionRequest
+from app.models.reward import CustomerReward
+from app.models.order import Order
 from app.core.intimacy import intimacy_info
 from app.core.credentials import generate_temp_password
 from app.core.email import send_email
@@ -257,10 +260,24 @@ def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Sess
 
     db.query(Message).filter(Message.customer_id == customer_id).delete(synchronize_session=False)
     db.query(AccessLog).filter(AccessLog.customer_id == customer_id).delete(synchronize_session=False)
+    db.query(CustomerReward).filter(CustomerReward.customer_id == customer_id).delete(synchronize_session=False)
+
+    # Article ⇄ CorrectionRequest は相互参照のため、先にArticle側の参照を外してから
+    # CorrectionRequestを削除し、その後Articleを削除する
+    db.query(Article).filter(Article.customer_id == customer_id).update(
+        {"correction_request_id": None}, synchronize_session=False
+    )
+    db.query(CorrectionRequest).filter(CorrectionRequest.customer_id == customer_id).delete(synchronize_session=False)
     db.query(Article).filter(Article.customer_id == customer_id).delete(synchronize_session=False)
+
+    # 紐づいている受注（受注リスト）の顧客アカウント紐づけを解除
+    db.query(Order).filter(Order.customer_id == customer_id).update(
+        {"customer_id": None}, synchronize_session=False
+    )
+
     db.delete(customer)
     db.commit()
-    return {"message": "削除しました（関連するDM・記事・アクセスログも合わせて削除されました）"}
+    return {"message": "削除しました（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美も合わせて削除されました）"}
 
 
 @router.post("/me/ack-character-ready")

@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { clearToken } from "@/lib/auth";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 
@@ -23,8 +22,8 @@ export default function ChangePasswordPage() {
     setLoading(true);
     try {
       await api.changePassword(current, next);
-      clearToken();
-      router.push("/login?changed=1");
+      const me = await api.me();
+      router.push(me.is_admin ? "/admin" : "/shelf");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "変更に失敗しました");
     } finally {
