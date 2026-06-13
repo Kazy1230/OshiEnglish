@@ -14,6 +14,7 @@ from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
 from app.core.email import send_email
 from app.core.rate_limit import enforce_rate_limit
+from app.core.welcome_articles import claim_welcome_article_for_customer
 from app.models.order import Order
 from app.models.customer import Customer
 from app.models.character import Character
@@ -127,9 +128,12 @@ def _issue_account(db: Session, order: Order):
     if preset_character:
         # 公式キャラクターを選択した場合は、即日チャット開始できるようそのキャラクターを直接割り当てる
         customer.character_id = preset_character.id
-    # 公式キャラ以外（オーダーメイド）の場合は character_id を割り当てない。
-    # 顧客専用のキャラクターは後ほど運営者がLLM下書き＋承認のうえ作成し、
-    # customers.character_id を更新して案内メールを送る（PATCH /customers/{id}）。
+    else:
+        # 公式キャラ以外（オーダーメイド）の場合は character_id を割り当てない。
+        # 顧客専用のキャラクターは後ほど運営者がLLM下書き＋承認のうえ作成し、
+        # customers.character_id を更新して案内メールを送る（PATCH /customers/{id}）。
+        # その間も本棚が空のままにならないよう、汎用ウェルカム記事を先に届けておく。
+        claim_welcome_article_for_customer(db, customer)
 
     check_and_unlock_rewards(db, customer)
 

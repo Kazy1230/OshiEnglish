@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, payments, rewards
+from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, payments, rewards, corrections
 
 # テーブル自動作成（開発用。本番はAlembicマイグレーションを使用）
 Base.metadata.create_all(bind=engine)
@@ -164,6 +164,14 @@ _ensure_column("customers", "locked_until", "DATETIME NULL")
 _ensure_column("customers", "two_factor_code", "VARCHAR(10) NULL")
 _ensure_column("customers", "two_factor_code_expires", "DATETIME NULL")
 
+# 簡易マイグレーション㉔: お題のない自由提出の添削リクエスト（ライティング/スピーキング）
+# - correction_requestsテーブル自体はcreate_all()で自動作成される
+# - articles: 添削記事として配信した際の参照、公開時にCorrectionRequestを完了状態にするために使う
+# - messages: キャラDMのメッセージに「添削してもらう」CTAボタンを付与するためのフラグ
+_ensure_column("articles", "correction_request_id", "INT NULL")
+_ensure_index("articles", "ix_articles_correction_request_id", "(correction_request_id)")
+_ensure_column("messages", "suggested_action", "VARCHAR(50) NULL")
+
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
 ACCESS_LOG_RETENTION_DAYS = 180
@@ -266,6 +274,119 @@ def _seed_service_items():
 
 _seed_service_items()
 
+
+def _seed_welcome_articles():
+    """「最初の1つ無料」ウェルカム記事のテンプレートを投入する（テーブルに存在しない場合のみ）。
+
+    公式キャラ（蒼井零・白河雪菜）はそれぞれの口調のテンプレートを、
+    オリジナルキャラ（キャラクタービルダー使用）は character_id=NULL の汎用テンプレートを使う。
+    """
+    from app.models.article import Article
+    from app.models.character import Character
+
+    db = SessionLocal()
+    try:
+        if db.query(Article).filter(Article.is_welcome_template == True).count() > 0:  # noqa: E712
+            return
+
+        aoi = db.query(Character).filter(Character.id == 14).first()
+        shirakawa = db.query(Character).filter(Character.id == 13).first()
+        if not aoi or not shirakawa:
+            return
+
+        templates = [
+            Article(
+                character_id=aoi.id,
+                template_character_id=aoi.id,
+                article_type="blog",
+                title="……先輩へ。推しEnglishを始めるにあたって",
+                content=(
+                    "……はじめまして、先輩。蒼井零です。\n\n"
+                    "これから、英語学習のパートナーとして付き合います。\n\n"
+                    "推しEnglishでは、こんなことができます。\n\n"
+                    "- 先輩のレベルに合わせた文法解説記事や演習問題が、この本棚に届きます\n"
+                    "- チャットで質問すれば、いつでも答えます。雑談も……まあ、付き合います\n"
+                    "- 書いた英文や、話した音声・動画を提出すれば、添削して記事として返します\n\n"
+                    "今後の流れは単純です。記事が届いたら読んで、演習があれば解いて、わからないことがあればここで聞く。それだけです。\n\n"
+                    "……先輩はやれます。根拠はありませんが、そう思っています。\n\n"
+                    "それでは、今日からよろしくお願いします。"
+                ),
+                tips=[
+                    "本棚に記事が届いたら、まず読んでみてください",
+                    "チャットはいつでも開けます。気軽に質問してください",
+                    "添削してほしい英文や音声があれば、本棚の「次の記事をリクエストする」から提出できます",
+                ],
+                example_sentences=[
+                    "I'm looking forward to studying with you.",
+                    "Let's get started, senpai.",
+                ],
+                status="published",
+                is_llm_drafted=False,
+                is_welcome_template=True,
+            ),
+            Article(
+                character_id=shirakawa.id,
+                template_character_id=shirakawa.id,
+                article_type="blog",
+                title="推しEnglishを始めるあなたへ……べ、別に歓迎してるわけじゃないですけど",
+                content=(
+                    "べ、別にあなたのために書いてるわけじゃないんですけど……まあ、一応説明しておきます。白河雪菜です。\n\n"
+                    "推しEnglishでは、こんなことができます。\n\n"
+                    "- あなたのレベルに合わせた文法解説記事や演習問題を、この本棚に届けます\n"
+                    "- チャットでいつでも質問できます。…まあ、ちゃんと答えますから\n"
+                    "- 書いた英文や、録音した音声・動画を提出すれば、添削して記事にして返します\n\n"
+                    "今後の流れも教えておきます。記事が届いたら読む、演習があれば解く、わからないことがあればチャットで聞く。それを繰り返すだけです。\n\n"
+                    "なんで諦めるんですか。私はまだ見捨ててないんですから。\n\n"
+                    "……今日からよろしくお願いします。べ、別に楽しみにしてるわけじゃないですからね。"
+                ),
+                tips=[
+                    "本棚に届いた記事は、まず読んでみてください",
+                    "わからないことがあれば、チャットで聞いてください",
+                    "添削してほしい英文・音声は「次の記事をリクエストする」から提出できます",
+                ],
+                example_sentences=[
+                    "Don't give up. I haven't given up on you.",
+                    "Let's see how much progress you can make.",
+                ],
+                status="published",
+                is_llm_drafted=False,
+                is_welcome_template=True,
+            ),
+            Article(
+                character_id=aoi.id,
+                template_character_id=None,
+                article_type="blog",
+                title="推しEnglishへようこそ",
+                content=(
+                    "推しEnglishへのご登録ありがとうございます。\n\n"
+                    "推しEnglishは、あなた専用の「推し」キャラクターが英語学習のパートナーとなり、"
+                    "文法解説記事や演習問題を届けたり、チャットで質問に答えたりするサービスです。\n\n"
+                    "現在、あなた専用のキャラクターを準備しています。完成までは今しばらくお待ちください。"
+                    "完成しましたら、登録いただいたメールアドレス宛にお知らせいたします。\n\n"
+                    "キャラクターが決まると、以下のようなことができるようになります。\n\n"
+                    "- あなたのレベルに合わせた文法解説記事や演習問題が本棚に届きます\n"
+                    "- キャラクターとチャットでやりとりできます\n"
+                    "- 書いた英文や録音した音声・動画を提出すると、キャラクターが添削して記事として返してくれます\n\n"
+                    "キャラクターの完成まで、もうしばらくお待ちください。"
+                ),
+                tips=[
+                    "キャラクターが完成すると、メールでお知らせします",
+                    "完成後は本棚からチャットができるようになります",
+                ],
+                example_sentences=[],
+                status="published",
+                is_llm_drafted=False,
+                is_welcome_template=True,
+            ),
+        ]
+        db.add_all(templates)
+        db.commit()
+    finally:
+        db.close()
+
+
+_seed_welcome_articles()
+
 app = FastAPI(
     title="推しEnglish API",
     description="キャラクター英文法解説サービス バックエンドAPI",
@@ -289,6 +410,7 @@ app.add_middleware(
 _static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_static_dir, "character_images"), exist_ok=True)
 os.makedirs(os.path.join(_static_dir, "reward_images"), exist_ok=True)
+os.makedirs(os.path.join(_static_dir, "correction_media"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 app.include_router(auth.router)
@@ -303,6 +425,7 @@ app.include_router(service_items.router)
 app.include_router(intimacy_settings.router)
 app.include_router(payments.router)
 app.include_router(rewards.router)
+app.include_router(corrections.router)
 
 @app.get("/health")
 def health():

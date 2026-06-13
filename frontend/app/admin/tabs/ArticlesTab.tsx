@@ -20,9 +20,14 @@ const emptyArticleForm = {
   exercise_format: "multiple_choice", exercise_category: "", exercise_data_text: "",
   // 依頼記事：元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
   request_message_id: "",
+  // フィードバック記事：元になった添削リクエスト（公開時にステータス自動更新に使う）
+  correction_request_id: "",
 };
 
-export function ArticlesTab() {
+export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
+  pendingCorrection?: any;
+  onConsumePendingCorrection?: () => void;
+} = {}) {
   const [articles, setArticles] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [characters, setCharacters] = useState<any[]>([]);
@@ -42,11 +47,28 @@ export function ArticlesTab() {
   const [isLlmDrafted, setIsLlmDrafted] = useState(false);
   // 依頼記事：選択中の顧客の対応中リクエスト一覧（紐付け選択用）
   const [openRequests, setOpenRequests] = useState<any[]>([]);
+  // 添削記事作成：CorrectionsTabから引き渡された添削提出内容（LLMプロンプトに直接反映する）
+  const [correctionSubmission, setCorrectionSubmission] = useState<any | null>(null);
 
   const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters()])
     .then(([a, c, ch, g]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); });
 
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+
+  // CorrectionsTabから「添削記事を作成」で遷移してきた場合、フォームに自動入力する
+  useEffect(() => {
+    if (!pendingCorrection) return;
+    setForm(f => ({
+      ...emptyArticleForm,
+      article_type: pendingCorrection.correction_type === "writing" ? "writing_feedback" : "speaking_feedback",
+      customer_id: String(pendingCorrection.customer_id),
+      character_id: pendingCorrection.character_id ? String(pendingCorrection.character_id) : f.character_id,
+      correction_request_id: String(pendingCorrection.id),
+    }));
+    setCorrectionSubmission(pendingCorrection);
+    setShowForm(true);
+    onConsumePendingCorrection?.();
+  }, [pendingCorrection]);
 
   // 依頼記事フォームで顧客が選択されたら、その顧客の対応中リクエスト一覧を取得する
   useEffect(() => {
@@ -73,7 +95,9 @@ export function ArticlesTab() {
       exercise_category: a.exercise_category ?? "",
       exercise_data_text: a.exercise_data ? JSON.stringify(a.exercise_data, null, 2) : "",
       request_message_id: a.request_message_id ? String(a.request_message_id) : "",
+      correction_request_id: a.correction_request_id ? String(a.correction_request_id) : "",
     });
+    setCorrectionSubmission(null);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -83,6 +107,7 @@ export function ArticlesTab() {
     setEditingArticle(null);
     setForm(emptyArticleForm);
     setIsLlmDrafted(false);
+    setCorrectionSubmission(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -117,6 +142,9 @@ export function ArticlesTab() {
     } else if (isFeedback) {
       // ライティング/スピーキングFB：顧客は必須、文法マスター不要
       payload.customer_id = Number(form.customer_id);
+      if (form.correction_request_id) {
+        payload.correction_request_id = Number(form.correction_request_id);
+      }
     } else if (!isBlog) {
       payload.customer_id = Number(form.customer_id);
       payload.grammar_master_id = Number(form.grammar_master_id);
@@ -382,13 +410,23 @@ export function ArticlesTab() {
                     const c = characters.find(ch => String(ch.id) === String(form.character_id));
                     const cu = form.customer_id ? customers.find(cs => String(cs.id) === String(form.customer_id)) : undefined;
                     if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
-                    const originalPrompt = window.prompt("【任意】元の演習問題のお題・設問文を貼り付けてください（空欄でもOK）", "") || undefined;
-                    const submission = window.prompt(
-                      form.article_type === "writing_feedback"
-                        ? "顧客が提出したライティングの答案を貼り付けてください（空欄でもOK）"
-                        : "顧客が提出したスピーキングのテキスト／メモを貼り付けてください（空欄でもOK）",
-                      ""
-                    ) || undefined;
+                    let originalPrompt: string | undefined;
+                    let submission: string | undefined;
+                    if (correctionSubmission) {
+                      submission = correctionSubmission.text_content || undefined;
+                      if (correctionSubmission.media_url) {
+                        const mediaNote = `※音声/動画は管理画面で確認してください: ${correctionSubmission.media_url}`;
+                        submission = submission ? `${submission}\n\n${mediaNote}` : mediaNote;
+                      }
+                    } else {
+                      originalPrompt = window.prompt("【任意】元の演習問題のお題・設問文を貼り付けてください（空欄でもOK）", "") || undefined;
+                      submission = window.prompt(
+                        form.article_type === "writing_feedback"
+                          ? "顧客が提出したライティングの答案を貼り付けてください（空欄でもOK）"
+                          : "顧客が提出したスピーキングのテキスト／メモを貼り付けてください（空欄でもOK）",
+                        ""
+                      ) || undefined;
+                    }
                     const promptText = form.article_type === "writing_feedback"
                       ? buildWritingFeedbackPrompt(c, cu, originalPrompt, submission)
                       : buildSpeakingFeedbackPrompt(c, cu, originalPrompt, submission);
@@ -402,11 +440,30 @@ export function ArticlesTab() {
                     ? "（先にキャラクターを選択）"
                     : (() => { const cu = customers.find(cs => String(cs.id) === String(form.customer_id)); return cu?.intimacy ? ` — 💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : ""; })()}
                 </button>
-                <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
-                  ボタンを押すと「元のお題」と「顧客の提出答案」を入力するダイアログが開き、
-                  キャラクターの世界観・<strong>現在の親密度レベルに応じた距離感</strong>を織り込んだフィードバック生成プロンプトをクリップボードにコピーします。
-                  LLMの出力を「本文」欄に貼り付けてください。
-                </p>
+                {correctionSubmission ? (
+                  <div className="text-xs p-2 rounded-lg" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+                    <p className="font-bold mb-1" style={{ color: "var(--primary)" }}>添削提出内容を自動反映します</p>
+                    {correctionSubmission.text_content && (
+                      <p className="whitespace-pre-wrap">{correctionSubmission.text_content}</p>
+                    )}
+                    {correctionSubmission.media_url && (
+                      correctionSubmission.media_type === "video" ? (
+                        <video controls src={correctionSubmission.media_url} className="w-full rounded-lg max-h-48 mt-1" />
+                      ) : (
+                        <audio controls src={correctionSubmission.media_url} className="w-full mt-1" />
+                      )
+                    )}
+                    {correctionSubmission.note && (
+                      <p className="mt-1"><strong>メモ：</strong>{correctionSubmission.note}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                    ボタンを押すと「元のお題」と「顧客の提出答案」を入力するダイアログが開き、
+                    キャラクターの世界観・<strong>現在の親密度レベルに応じた距離感</strong>を織り込んだフィードバック生成プロンプトをクリップボードにコピーします。
+                    LLMの出力を「本文」欄に貼り付けてください。
+                  </p>
+                )}
               </div>
             </div>
           )}

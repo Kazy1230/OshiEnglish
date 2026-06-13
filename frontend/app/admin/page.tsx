@@ -24,6 +24,7 @@ import { RewardsTab } from "./tabs/RewardsTab";
 export default function AdminPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [pendingCorrection, setPendingCorrection] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [msgBadge, setMsgBadge] = useState(0);
   const [mode, toggleMode] = useDarkMode();
@@ -145,8 +146,8 @@ export default function AdminPage() {
         {tab === "dashboard" && <DashboardTab onNavigate={setTab} />}
         {tab === "orders" && <OrdersTab />}
         {tab === "messages" && <MessagesTab />}
-        {tab === "corrections" && <CorrectionsTab />}
-        {tab === "articles" && <ArticlesTab />}
+        {tab === "corrections" && <CorrectionsTab onCreateFeedbackArticle={(item) => { setPendingCorrection(item); setTab("articles"); }} />}
+        {tab === "articles" && <ArticlesTab pendingCorrection={pendingCorrection} onConsumePendingCorrection={() => setPendingCorrection(null)} />}
         {tab === "customers" && <CustomersTab />}
         {tab === "characters" && <CharactersTab />}
         {tab === "rewards" && <RewardsTab />}

@@ -22,7 +22,7 @@ type Article = {
   exercise_category?: string | null;
   exercise_data?: any;
 };
-type Me = { username: string };
+type Me = { username: string; display_name?: string };
 type BlogPost = { id: number; title: string; created_at: string | null };
 
 const PAGE_BREAK_MARKER = "<!--PAGE-->";
@@ -161,7 +161,7 @@ export default function ArticlePage() {
   return (
     <div className="min-h-screen" style={{ background: t.bg, fontFamily: t.fontFamily, color: t.text }}>
       {/* 透かし */}
-      <div className="watermark"><span style={{ color: t.primary }}>{me?.username}</span></div>
+      <div className="watermark"><span style={{ color: t.primary }}>{me?.display_name || me?.username}</span></div>
 
       {/* ヘッダー */}
       <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>

@@ -13,6 +13,7 @@ import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { toast } from "@/components/Toast";
 import { RequestArticleModal } from "@/components/RequestArticleModal";
+import { CorrectionSubmissionModal } from "@/components/CorrectionSubmissionModal";
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
 
@@ -25,6 +26,7 @@ type Msg = {
   grammar_topic: string | null;
   request_status: string | null;
   is_reward: boolean;
+  suggested_action: string | null;
   created_at: string;
 };
 
@@ -81,6 +83,7 @@ function ChatPageInner() {
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [correctionModalType, setCorrectionModalType] = useState<"writing" | "speaking" | "ask" | null>(null);
   const [mode, toggleMode] = useDarkMode();
   const bottomRef = useRef<HTMLDivElement>(null);
   const prependingRef = useRef(false);
@@ -115,7 +118,8 @@ function ChatPageInner() {
         if (user.is_password_reset_required) { router.replace("/change-password"); return; }
         if (user.is_admin) { router.replace("/admin"); return; }
         setMe(user);
-        const charTheme = user.character_id ? await api.getCharacterTheme(user.character_id) : null;
+        if (!user.character_id) { return; }
+        const charTheme = await api.getCharacterTheme(user.character_id);
         setTheme(charTheme);
         await load();
       } catch {
@@ -164,6 +168,26 @@ function ChatPageInner() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: t.bg }}>
         <p style={{ color: t.primary }}>読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!me?.character_id) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center" style={{ background: t.bg }}>
+        <p className="text-5xl mb-4">🛠️</p>
+        <h1 className="text-xl font-black mb-2" style={{ color: t.primary, fontFamily: t.fontFamily }}>
+          キャラクター準備中です
+        </h1>
+        <p className="text-sm leading-relaxed max-w-sm" style={{ color: t.text }}>
+          あなた専用のキャラクターを準備しています。完成しましたら、登録メールアドレス宛にお知らせします。
+          完成までは、本棚に届いているウェルカム記事をご覧ください。
+        </p>
+        <button onClick={() => router.push("/shelf")}
+          className="mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
+          style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+          📚 本棚に戻る
+        </button>
       </div>
     );
   }
@@ -349,7 +373,8 @@ function ChatPageInner() {
         )}
         <div className="flex flex-col gap-3">
           {messages.map((m) => (
-            <MessageBubble key={m.id} m={m} theme={t} charName={charName} charImage={charImage} />
+            <MessageBubble key={m.id} m={m} theme={t} charName={charName} charImage={charImage}
+              onSuggestedAction={() => setCorrectionModalType("ask")} />
           ))}
         </div>
         <div ref={bottomRef} />
@@ -389,7 +414,15 @@ function ChatPageInner() {
 
       {/* 記事・問題・添削のリクエストポップアップ */}
       {showRequestModal && (
-        <RequestArticleModal theme={t} onClose={() => setShowRequestModal(false)} onSent={load} />
+        <RequestArticleModal theme={t} onClose={() => setShowRequestModal(false)} onSent={load}
+          onRequestCorrection={(type) => setCorrectionModalType(type)} />
+      )}
+
+      {/* 添削提出ポップアップ（お題不要のライティング/スピーキング添削） */}
+      {correctionModalType && (
+        <CorrectionSubmissionModal theme={t}
+          initialType={correctionModalType === "ask" ? undefined : correctionModalType}
+          onClose={() => setCorrectionModalType(null)} onSent={load} />
       )}
       </>
       )}
@@ -397,8 +430,9 @@ function ChatPageInner() {
   );
 }
 
-function MessageBubble({ m, theme: t, charName, charImage }: {
+function MessageBubble({ m, theme: t, charName, charImage, onSuggestedAction }: {
   m: Msg; theme: ReturnType<typeof resolveTheme>; charName: string; charImage?: string;
+  onSuggestedAction?: (action: string) => void;
 }) {
   const isCustomer = m.sender === "customer";
 
@@ -436,6 +470,13 @@ function MessageBubble({ m, theme: t, charName, charImage }: {
             }}>
             {m.content}
           </div>
+        )}
+        {!isCustomer && m.suggested_action === "request_correction" && (
+          <button type="button" onClick={() => onSuggestedAction?.(m.suggested_action!)}
+            className="mt-1 text-xs px-3 py-1.5 rounded-full font-bold transition-all"
+            style={{ background: t.accent, color: "white" }}>
+            📝 添削してもらう
+          </button>
         )}
         {m.is_request && (
           <div className="mt-1 rounded-xl px-3 py-1.5 text-xs flex items-center gap-2"

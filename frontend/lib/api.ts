@@ -100,6 +100,18 @@ export const api = {
   getMyRewardStatus: () => apiFetch("/messages/me/reward-status"),
   getMyUnreadCount: () => apiFetch("/messages/me/unread-count"),
 
+  // 顧客：添削リクエスト（お題のない自由提出のライティング/スピーキング）
+  submitCorrectionText: (data: { correction_type: "writing" | "speaking"; text_content?: string; note?: string }) =>
+    apiFetch("/corrections/me", { method: "POST", body: JSON.stringify(data) }),
+  submitCorrectionMedia: (params: { file: File | Blob; filename?: string; correction_type?: string; media_type_hint?: "audio" | "video"; note?: string }) => {
+    const fd = new FormData();
+    fd.append("file", params.file, params.filename || "submission");
+    if (params.correction_type) fd.append("correction_type", params.correction_type);
+    if (params.media_type_hint) fd.append("media_type_hint", params.media_type_hint);
+    if (params.note) fd.append("note", params.note);
+    return apiUpload("/corrections/me/media", fd);
+  },
+
   // 管理者：記事
   adminGetArticles: () => apiFetch("/articles/admin/all"),
   adminCreateArticle: (data: object) => apiFetch("/articles/admin/", { method: "POST", body: JSON.stringify(data) }),
@@ -186,11 +198,18 @@ export const api = {
     const q = qs.toString();
     return apiFetch(`/messages/admin/${customerId}${q ? `?${q}` : ""}`);
   },
-  adminReplyMessage: (customerId: number, content: string) =>
-    apiFetch(`/messages/admin/${customerId}/reply`, { method: "POST", body: JSON.stringify({ content }) }),
+  adminReplyMessage: (customerId: number, content: string, suggestedAction?: string) =>
+    apiFetch(`/messages/admin/${customerId}/reply`, { method: "POST", body: JSON.stringify({ content, suggested_action: suggestedAction }) }),
   adminDraftReply: (customerId: number) =>
     apiFetch(`/messages/admin/${customerId}/draft-reply`, { method: "POST" }),
   adminListExerciseSubmissions: () => apiFetch("/messages/admin/exercise-submissions"),
+
+  // 管理者：添削リクエスト（お題のない自由提出のライティング/スピーキング）
+  adminListCorrectionRequests: (status?: string) =>
+    apiFetch(`/corrections/admin/${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  adminGetCorrectionRequest: (id: number) => apiFetch(`/corrections/admin/${id}`),
+  adminUpdateCorrectionStatus: (id: number, status: string) =>
+    apiFetch(`/corrections/admin/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   adminUpdateMemo: (customerId: number, adminMemo: string) =>
     apiFetch(`/messages/admin/${customerId}/memo`, { method: "PATCH", body: JSON.stringify({ admin_memo: adminMemo }) }),
   adminUpdateRequestStatus: (messageId: number, status: string) =>

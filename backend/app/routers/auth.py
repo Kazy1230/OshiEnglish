@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.character_voice import customer_display_name
 from app.core.security import verify_password, create_access_token, hash_password, get_current_user
 from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
@@ -138,7 +139,10 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
     """
     enforce_rate_limit(request, "login", limit=20, window_seconds=3600)
 
-    user = db.query(Customer).filter(Customer.username == form.username).first()
+    # ログインはメールアドレスを使用する（メール未設定の旧アカウントはusernameでも照合する）
+    user = db.query(Customer).filter(
+        (Customer.email == form.username) | (Customer.username == form.username)
+    ).first()
 
     if user and _is_locked(user):
         raise HTTPException(
@@ -152,7 +156,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
         await asyncio.sleep(0.5)  # タイミング攻撃・ブルートフォース抑止
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="ユーザー名またはパスワードが正しくありません"
+            detail="メールアドレスまたはパスワードが正しくありません"
         )
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="アカウントが無効です")
@@ -282,6 +286,7 @@ def get_me(current_user: Customer = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "username": current_user.username,
+        "display_name": customer_display_name(current_user),
         "is_admin": current_user.is_admin,
         "is_password_reset_required": current_user.is_password_reset_required,
         "character_id": current_user.character_id,

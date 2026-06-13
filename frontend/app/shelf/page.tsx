@@ -10,6 +10,7 @@ import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { reportError } from "@/lib/reportError";
 import { toast } from "@/components/Toast";
 import { RequestArticleModal } from "@/components/RequestArticleModal";
+import { CorrectionSubmissionModal } from "@/components/CorrectionSubmissionModal";
 
 type Article = {
   id: number; title: string; character_id: number;
@@ -18,7 +19,7 @@ type Article = {
   exercise_category?: string | null;
 };
 type Me = {
-  username: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null;
+  username: string; display_name?: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null;
   theme_config?: { wallpaper_url?: string } | null;
   email?: string | null; free_content_claimed?: boolean;
 };
@@ -35,6 +36,7 @@ export default function ShelfPage() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [correctionModalType, setCorrectionModalType] = useState<"writing" | "speaking" | null>(null);
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
@@ -131,7 +133,7 @@ export default function ShelfPage() {
       fontFamily: t.fontFamily,
     }}>
       {/* 透かし */}
-      <div className="watermark"><span style={{ color: t.primary }}>{me?.username}</span></div>
+      <div className="watermark"><span style={{ color: t.primary }}>{me?.display_name || me?.username}</span></div>
 
       {/* ヘッダー */}
       <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>
@@ -151,7 +153,7 @@ export default function ShelfPage() {
             <button onClick={() => router.push("/purchases")} aria-label="購入履歴"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🧾 購入履歴</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-            <span className="hidden sm:inline text-sm text-white/70">{me?.username} さん</span>
+            <span className="hidden sm:inline text-sm text-white/70">{me?.display_name || me?.username} さん</span>
             <button onClick={() => { clearToken(); router.push("/login"); }}
               aria-label="ログアウト"
               className="text-xs sm:text-sm text-white/50 hover:text-white transition-colors">ログアウト</button>
@@ -162,9 +164,12 @@ export default function ShelfPage() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 relative z-10">
 
-        {/* ウェルカムカード（キャラ作成完了前のみ表示） */}
-        {!me?.character_id && (
+        {/* ウェルカムカード：
+            ・オリジナルキャラ（キャラ未割り当て）の間は中立的な案内を表示
+            ・公式キャラは「最初の1つ無料」を受け取るまで表示 */}
+        {(!me?.character_id || (theme?.is_preset && !me?.free_content_claimed)) && (
           <WelcomeCard theme={t} email={me?.email} freeContentClaimed={!!me?.free_content_claimed}
+            pending={!me?.character_id}
             onClaimed={(article) => {
               setArticles(prev => [...prev, { id: article.id, title: article.title, character_id: 0, article_type: article.article_type }]);
               setMe(prev => prev ? { ...prev, free_content_claimed: true } : prev);
@@ -260,17 +265,19 @@ export default function ShelfPage() {
               </div>
             )}
 
-            <button onClick={() => router.push("/chat")}
-              className="relative mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
-              style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-              💬 {theme?.name ? `${theme.name}とお話する` : "キャラクターとお話する"}
-              {unread > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md"
-                  style={{ background: "#ff3b30", border: "2px solid white" }}>
-                  {unread > 99 ? "99+" : unread}
-                </span>
-              )}
-            </button>
+            {me?.character_id && (
+              <button onClick={() => router.push("/chat")}
+                className="relative mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
+                style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+                💬 {theme?.name ? `${theme.name}とお話する` : "キャラクターとお話する"}
+                {unread > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md"
+                    style={{ background: "#ff3b30", border: "2px solid white" }}>
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         )}
 
@@ -297,7 +304,10 @@ export default function ShelfPage() {
             <BookCard key={article.id} article={article} index={i} theme={t}
               onClick={() => router.push(`/articles/${article.id}`)} />
           ))}
-          <RequestCard theme={t} onClick={() => setShowRequestModal(true)} />
+          {/* 次の記事・問題・添削依頼カード（オリジナルキャラのキャラ作成完了前は非表示） */}
+          {me?.character_id && (
+            <RequestCard theme={t} onClick={() => setShowRequestModal(true)} />
+          )}
         </div>
 
         {/* 退会リンク */}
@@ -311,7 +321,14 @@ export default function ShelfPage() {
 
       {/* 記事・問題・添削のリクエストポップアップ */}
       {showRequestModal && (
-        <RequestArticleModal theme={t} onClose={() => setShowRequestModal(false)} />
+        <RequestArticleModal theme={t} onClose={() => setShowRequestModal(false)}
+          onRequestCorrection={(type) => setCorrectionModalType(type)} />
+      )}
+
+      {/* 添削提出ポップアップ（お題不要のライティング/スピーキング添削） */}
+      {correctionModalType && (
+        <CorrectionSubmissionModal theme={t} initialType={correctionModalType}
+          onClose={() => setCorrectionModalType(null)} />
       )}
 
       {/* 退会確認モーダル */}
@@ -412,10 +429,12 @@ function RequestCard({ theme: t, onClick }: {
   );
 }
 
-function WelcomeCard({ theme: t, email, freeContentClaimed, onClaimed }: {
+function WelcomeCard({ theme: t, email, freeContentClaimed, pending, onClaimed }: {
   theme: ReturnType<typeof resolveTheme>;
   email?: string | null;
   freeContentClaimed: boolean;
+  /** true: オリジナルキャラ（キャラクタービルダー使用・キャラ未割り当て）, false: 公式キャラ（キャラ割り当て済み） */
+  pending: boolean;
   onClaimed: (article: { id: number; title: string; article_type: string }) => void;
 }) {
   const router = useRouter();
@@ -446,56 +465,65 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, onClaimed }: {
           推しEnglishは、あなただけの「推し」キャラクターが英語学習のパートナーになって、
           記事や演習問題を届けたり、チャットで励ましてくれるサービスです。
         </p>
-        <div className="mt-3 rounded-xl p-3 flex items-start gap-3" style={{ background: t.example_bg, border: `1px dashed ${t.border}` }}>
-          <span className="text-lg flex-shrink-0">🎨</span>
-          <p className="text-sm leading-relaxed" style={{ color: t.text, fontFamily: t.fontFamily }}>
-            あなたの先生を準備しています。もうしばらくお待ちください。
-          </p>
-        </div>
 
-        {/* 2. 無料キャンペーンの案内 */}
-        <div className="mt-6 rounded-xl p-4" style={{ background: t.example_bg, border: `2px solid ${t.accent}` }}>
-          <p className="text-xs font-black inline-block px-2 py-0.5 rounded-full text-white mb-2"
-            style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-            🎁 最初の1つ無料！
-          </p>
-          <p className="text-sm mb-3" style={{ color: t.text }}>
-            ボタンを押すと、あなたの「推し」キャラクターからのウェルカム記事を1つ本棚に届けます。
-          </p>
-
-          {freeContentClaimed ? (
-            <p className="text-sm font-bold" style={{ color: t.accent }}>
-              ✅ 無料コンテンツは利用済みです。本棚をご確認ください。
+        {pending && (
+          <div className="mt-3 rounded-xl p-3 flex items-start gap-3" style={{ background: t.example_bg, border: `1px dashed ${t.border}` }}>
+            <span className="text-lg flex-shrink-0">🎨</span>
+            <p className="text-sm leading-relaxed" style={{ color: t.text, fontFamily: t.fontFamily }}>
+              あなたの先生を準備しています。もうしばらくお待ちください。
             </p>
-          ) : (
-            <button onClick={handleClaim} disabled={submitting}
-              className="self-start text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md disabled:opacity-60"
+          </div>
+        )}
+
+        {/* 2. 無料キャンペーンの案内（公式キャラのみ。オリジナルキャラはキャラ未割り当てのため対象外） */}
+        {!pending && (
+          <div className="mt-6 rounded-xl p-4" style={{ background: t.example_bg, border: `2px solid ${t.accent}` }}>
+            <p className="text-xs font-black inline-block px-2 py-0.5 rounded-full text-white mb-2"
               style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-              {submitting ? "受け取り中…" : "無料で受け取る"}
-            </button>
-          )}
-        </div>
+              🎁 最初の1つ無料！
+            </p>
+            <p className="text-sm mb-3" style={{ color: t.text }}>
+              ボタンを押すと、あなたの「推し」キャラクターからのウェルカム記事を1つ本棚に届けます。
+            </p>
 
-        {/* 3. キャラ完成通知の説明 */}
-        <div className="mt-6 rounded-xl p-3 flex items-start gap-3" style={{ background: t.example_bg, border: `1px dashed ${t.border}` }}>
-          <span className="text-lg flex-shrink-0">📩</span>
-          <p className="text-sm leading-relaxed" style={{ color: t.text }}>
-            キャラクターが完成しましたら、登録メールアドレス宛にお知らせします。
-            {email && (
-              <>
-                <br />
-                <span className="font-bold" style={{ color: t.accent }}>登録メールアドレス：{maskEmail(email)}</span>
-              </>
+            {freeContentClaimed ? (
+              <p className="text-sm font-bold" style={{ color: t.accent }}>
+                ✅ 無料コンテンツは利用済みです。本棚をご確認ください。
+              </p>
+            ) : (
+              <button onClick={handleClaim} disabled={submitting}
+                className="self-start text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md disabled:opacity-60"
+                style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+                {submitting ? "受け取り中…" : "無料で受け取る"}
+              </button>
             )}
-          </p>
-        </div>
+          </div>
+        )}
 
-        {/* 4. チャットへの導線 */}
-        <button onClick={() => router.push("/chat")}
-          className="mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
-          style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-          💬 チャット画面を見る
-        </button>
+        {/* 3. キャラ完成通知の説明（オリジナルキャラのみ） */}
+        {pending && (
+          <div className="mt-6 rounded-xl p-3 flex items-start gap-3" style={{ background: t.example_bg, border: `1px dashed ${t.border}` }}>
+            <span className="text-lg flex-shrink-0">📩</span>
+            <p className="text-sm leading-relaxed" style={{ color: t.text }}>
+              キャラクターが完成しましたら、登録メールアドレス宛にお知らせします。
+              {email && (
+                <>
+                  <br />
+                  <span className="font-bold" style={{ color: t.accent }}>登録メールアドレス：{maskEmail(email)}</span>
+                </>
+              )}
+            </p>
+          </div>
+        )}
+
+        {/* 4. チャットへの導線（公式キャラのみ。オリジナルキャラはキャラ準備中のため非表示） */}
+        {!pending && (
+          <button onClick={() => router.push("/chat")}
+            className="mt-6 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
+            style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+            💬 チャット画面を見る
+          </button>
+        )}
       </div>
     </div>
   );

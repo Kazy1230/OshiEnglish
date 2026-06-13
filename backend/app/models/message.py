@@ -25,6 +25,10 @@ class Message(Base):
     grammar_topic = Column(String(300), nullable=True)  # リクエストされた文法トピック
     request_status = Column(String(20), nullable=True)  # pending / accepted / completed（リクエストのみ使用）
 
+    # キャラクター→顧客メッセージに付与するCTA（行動喚起）ボタン。
+    # 例: "request_correction"（添削してもらう）→ 顧客チャットでクリックすると素材提出モーダルが開く。
+    suggested_action = Column(String(50), nullable=True)
+
     is_reward = Column(Boolean, default=False)        # ご褒美写真メッセージかどうか
     is_read = Column(Boolean, default=False)          # 顧客が既読したか（character→customer向け）
 

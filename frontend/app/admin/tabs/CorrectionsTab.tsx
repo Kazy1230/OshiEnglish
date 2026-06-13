@@ -4,18 +4,24 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { reportError } from "@/lib/reportError";
 
-export function CorrectionsTab() {
+export function CorrectionsTab({ onCreateFeedbackArticle }: { onCreateFeedbackArticle?: (item: any) => void } = {}) {
   const [items, setItems] = useState<any[]>([]);
+  const [corrections, setCorrections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<number | null>(null);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [sendingId, setSendingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const data = await api.adminListExerciseSubmissions();
-      setItems(data);
+      const [submissions, correctionRequests] = await Promise.all([
+        api.adminListExerciseSubmissions(),
+        api.adminListCorrectionRequests(),
+      ]);
+      setItems(submissions);
+      setCorrections(correctionRequests);
     } catch (err: any) {
       reportError("admin:adminListExerciseSubmissions", err);
       toast(err.message || "読み込みに失敗しました", "error");
@@ -23,6 +29,16 @@ export function CorrectionsTab() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function handleCorrectionStatusChange(item: any, status: string) {
+    setUpdatingId(item.id);
+    try {
+      await api.adminUpdateCorrectionStatus(item.id, status);
+      await load();
+    } catch (err: any) {
+      toast(err.message || "更新に失敗しました", "error");
+    } finally { setUpdatingId(null); }
+  }
 
   async function handleSend(item: any) {
     const content = (drafts[item.message.id] || "").trim();
@@ -46,6 +62,83 @@ export function CorrectionsTab() {
         <button className="btn-ghost text-sm" onClick={load}>🔄 更新</button>
       </div>
 
+      <h3 className="text-sm font-black mb-2" style={{ color: "var(--primary)" }}>📝 添削リクエスト（お題不要の自由提出）</h3>
+      {loading ? (
+        <div className="card text-center py-12 mb-4" style={{ color: "var(--muted)" }}>読み込み中...</div>
+      ) : corrections.length === 0 ? (
+        <div className="card text-center py-8 mb-4" style={{ color: "var(--muted)" }}>
+          対応待ちの添削リクエストはありません
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 mb-6">
+          {corrections.map(item => (
+            <div key={item.id} className="card">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-sm truncate" style={{ color: "var(--primary)" }}>
+                    {item.username}
+                    {item.character_name && (
+                      <span className="ml-2 text-xs font-normal" style={{ color: "var(--muted)" }}>
+                        → {item.character_name}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: "var(--bg)", color: "var(--accent)" }}>
+                    {item.correction_type === "writing" ? "✍️ ライティング" : "🎤 スピーキング"}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+                    {item.status === "pending" ? "未対応" : item.status === "in_progress" ? "対応中" : "完了"}
+                  </span>
+                </div>
+              </div>
+
+              {item.text_content && (
+                <div className="text-sm p-3 rounded-lg mb-2" style={{ background: "var(--bg)" }}>
+                  <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+                    {item.correction_type === "writing" ? "提出された英文" : "メモ"}
+                  </p>
+                  <p className="whitespace-pre-wrap">{item.text_content}</p>
+                </div>
+              )}
+
+              {item.media_url && (
+                <div className="text-sm p-3 rounded-lg mb-2" style={{ background: "var(--bg)" }}>
+                  <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>提出された音声・動画</p>
+                  {item.media_type === "video" ? (
+                    <video controls src={item.media_url} className="w-full rounded-lg max-h-64" />
+                  ) : (
+                    <audio controls src={item.media_url} className="w-full" />
+                  )}
+                </div>
+              )}
+
+              {item.note && (
+                <div className="text-sm p-3 rounded-lg mb-2" style={{ background: "var(--bg)" }}>
+                  <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>メモ</p>
+                  <p className="whitespace-pre-wrap">{item.note}</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 flex-wrap">
+                {item.status === "pending" && (
+                  <button type="button" onClick={() => handleCorrectionStatusChange(item, "in_progress")} disabled={updatingId === item.id}
+                    className="btn-ghost text-sm px-3 py-1.5 disabled:opacity-50">
+                    対応中にする
+                  </button>
+                )}
+                <button type="button" onClick={() => onCreateFeedbackArticle?.(item)}
+                  className="btn-primary text-sm px-4 py-2">
+                  添削記事を作成
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h3 className="text-sm font-black mb-2" style={{ color: "var(--primary)" }}>📚 演習の解答提出</h3>
       {loading ? (
         <div className="card text-center py-12" style={{ color: "var(--muted)" }}>読み込み中...</div>
       ) : items.length === 0 ? (

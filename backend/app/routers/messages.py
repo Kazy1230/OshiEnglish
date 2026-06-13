@@ -49,6 +49,7 @@ def serialize_message(m: Message) -> dict:
         "is_read": m.is_read,
         "is_exercise_submission": m.is_exercise_submission,
         "article_id": m.article_id,
+        "suggested_action": m.suggested_action,
         "created_at": m.created_at.isoformat() if m.created_at else None,
     }
 
@@ -439,6 +440,7 @@ def adjust_intimacy(customer_id: int, data: IntimacyAdjust, admin=Depends(get_cu
 
 class ReplyCreate(BaseModel):
     content: str
+    suggested_action: Optional[str] = None  # 例: "request_correction"（添削してもらうCTAボタンを表示）
 
 
 @router.post("/admin/{customer_id}/reply")
@@ -455,6 +457,7 @@ def reply_as_character(customer_id: int, data: ReplyCreate, admin=Depends(get_cu
         character_id=customer.character_id,
         sender="character",
         content=data.content.strip(),
+        suggested_action=data.suggested_action,
     )
     db.add(msg)
     customer.intimacy_points = (customer.intimacy_points or 0) + POINTS_PER_CHARACTER_REPLY

@@ -19,10 +19,13 @@ export const TOPIC_PRICES: Record<string, string> = {
   "スピーキング添削": "¥1,000",
 };
 
-export function RequestArticleModal({ theme: t, onClose, onSent }: {
+export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrection }: {
   theme: ReturnType<typeof resolveTheme>;
   onClose: () => void;
   onSent?: () => void;
+  /** 「ライティング添削」「スピーキング添削」を選択した場合に呼ばれる。
+   * お題不要の添削提出モーダル（CorrectionSubmissionModal）へ誘導するため。 */
+  onRequestCorrection?: (type: "writing" | "speaking") => void;
 }) {
   const [topic, setTopic] = useState("");
   const [message, setMessage] = useState("");
@@ -30,6 +33,14 @@ export function RequestArticleModal({ theme: t, onClose, onSent }: {
 
   async function handleSubmit() {
     if (!topic.trim() || sending) return;
+
+    // 「ライティング添削」「スピーキング添削」はお題不要の添削提出フローへ誘導する
+    if (topic === "ライティング添削" || topic === "スピーキング添削") {
+      onClose();
+      onRequestCorrection?.(topic === "ライティング添削" ? "writing" : "speaking");
+      return;
+    }
+
     setSending(true);
     try {
       const content = message.trim()

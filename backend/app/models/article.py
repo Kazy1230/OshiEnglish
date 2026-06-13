@@ -17,6 +17,9 @@ class Article(Base):
     # この記事の元になった「記事リクエスト」メッセージ（messages.is_request=True）への参照。
     # 公開時にこのメッセージの request_status を自動で completed にするために使う。
     request_message_id = Column(Integer, ForeignKey("messages.id"), nullable=True, index=True)
+    # この記事の元になった「添削リクエスト」（お題のない自由提出のライティング/スピーキング）への参照。
+    # 公開時にこのCorrectionRequestのstatusをcompletedにし、feedback_article_idをこの記事に設定する。
+    correction_request_id = Column(Integer, ForeignKey("correction_requests.id"), nullable=True, index=True)
     # ----- 演習問題（exercise）専用フィールド -----
     # exercise_format: "multiple_choice"（選択式：リーディング・リスニング等の自動採点問題）
     #                  "written_response"（記述式：ライティング・スピーキング等のキャラフィードバック前提の問題）
@@ -44,3 +47,4 @@ class Article(Base):
     character = relationship("Character", back_populates="articles", foreign_keys=[character_id])
     grammar_master = relationship("GrammarMaster", back_populates="articles")
     access_logs = relationship("AccessLog", back_populates="article")
+    correction_request = relationship("CorrectionRequest", foreign_keys=[correction_request_id])

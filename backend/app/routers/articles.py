@@ -5,11 +5,13 @@ from app.core.database import get_db
 from app.core.security import get_current_user, get_current_admin
 from app.models.article import Article
 from app.models.message import Message
+from app.models.correction_request import CorrectionRequest
 from app.models.access_log import AccessLog
 from app.models.customer import Customer
 from app.models.character import Character
 from app.core.intimacy import get_intimacy_settings
 from app.core.character_voice import customer_display_name
+from app.core.welcome_articles import claim_welcome_article_for_customer
 from app.core.rewards import check_and_unlock_rewards
 from pydantic import BaseModel, model_validator
 from typing import Optional
@@ -390,6 +392,7 @@ class ArticleCreate(BaseModel):
     exercise_category: Optional[str] = None
     exercise_data: Optional[dict] = None
     request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
+    correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
 
     @model_validator(mode="after")
     def _validate_by_type(self):
@@ -453,6 +456,7 @@ class ArticleUpdate(BaseModel):
     exercise_category: Optional[str] = None
     exercise_data: Optional[dict] = None
     request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
+    correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
 
     @model_validator(mode="after")
     def _validate_exercise_on_update(self):
@@ -517,37 +521,10 @@ def claim_welcome_article(
     if current_user.free_content_claimed:
         raise HTTPException(status_code=400, detail="無料コンテンツは既にご利用いただいています")
 
-    character = None
-    if current_user.character_id:
-        character = db.query(Character).filter(Character.id == current_user.character_id).first()
-
-    template = None
-    if character and character.is_preset:
-        template = db.query(Article).filter(
-            Article.is_welcome_template == True,  # noqa: E712
-            Article.template_character_id == character.id,
-        ).first()
-    if not template:
-        template = db.query(Article).filter(
-            Article.is_welcome_template == True,  # noqa: E712
-            Article.template_character_id.is_(None),
-        ).first()
-    if not template:
+    article = claim_welcome_article_for_customer(db, current_user)
+    if not article:
         raise HTTPException(status_code=404, detail="ウェルカム記事のテンプレートが見つかりません")
 
-    article = Article(
-        customer_id=current_user.id,
-        character_id=character.id if character else template.character_id,
-        article_type=template.article_type,
-        title=template.title,
-        content=template.content,
-        tips=template.tips,
-        example_sentences=template.example_sentences,
-        status="published",
-        is_llm_drafted=False,
-    )
-    db.add(article)
-    current_user.free_content_claimed = True
     db.commit()
     db.refresh(article)
 
@@ -633,7 +610,21 @@ def admin_update_article(
         if req_msg and req_msg.request_status != "completed":
             req_msg.request_status = "completed"
 
-    if notification_sent or (
+    # 記事が「公開」に切り替わった瞬間、紐付けられた添削リクエスト（お題のない自由提出の
+    # ライティング/スピーキング）を完了状態にし、この記事への参照を記録する。
+    correction_updated = False
+    if (
+        data.status == "published"
+        and prev_status != "published"
+        and article.correction_request_id is not None
+    ):
+        cr = db.query(CorrectionRequest).filter(CorrectionRequest.id == article.correction_request_id).first()
+        if cr:
+            cr.status = "completed"
+            cr.feedback_article_id = article.id
+            correction_updated = True
+
+    if notification_sent or correction_updated or (
         data.status == "published"
         and prev_status != "published"
         and article.request_message_id is not None
