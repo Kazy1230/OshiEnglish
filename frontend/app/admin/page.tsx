@@ -65,7 +65,13 @@ export default function AdminPage() {
       try {
         const orders = await api.adminGetOrders();
         if (cancelled) return;
-        setOrdersBadge(orders.filter((o: any) => o.status !== "delivered").length);
+        // 未納品の受注に加えて、納品済みでもキャラ作成依頼・記事・添削の対応待ちがある受注もバッジに含める
+        setOrdersBadge(orders.filter((o: any) =>
+          o.status !== "delivered"
+          || o.character_creation_pending
+          || o.pending_article_requests?.length > 0
+          || o.pending_corrections?.length > 0
+        ).length);
       } catch (err) { reportError("admin:adminGetOrders(badge)", err); }
     }
     loadBadge();
