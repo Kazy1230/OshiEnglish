@@ -73,9 +73,9 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <div>
-              <label htmlFor="username" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>ユーザー名</label>
+              <label htmlFor="username" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>ユーザー名（メールアドレス）</label>
               <input id="username" type="text" value={username} onChange={e => setUsername(e.target.value)}
-                required autoFocus placeholder="username" autoComplete="username" />
+                required autoFocus placeholder="example@example.com" autoComplete="username" />
             </div>
             <div>
               <label htmlFor="password" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>パスワード</label>

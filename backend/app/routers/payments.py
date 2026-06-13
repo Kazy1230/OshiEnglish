@@ -94,9 +94,13 @@ def _issue_account(db: Session, order: Order):
     呼び出し前に order.stripe_session_id / stripe_payment_status / stripe_payment_intent_id /
     amount_total / currency / stripe_invoice_id を設定しておくこと。
     """
-    username = generate_username()
-    while db.query(Customer).filter(Customer.username == username).first():
+    # アカウントIDはメールアドレスをそのまま使う（ランダム文字列だと顧客が覚えられないため）。
+    # 同じメールアドレスで既にアカウントが存在する場合（再購入等）は、衝突回避のためランダム生成にフォールバックする。
+    username = order.email
+    if not username or db.query(Customer).filter(Customer.username == username).first():
         username = generate_username()
+        while db.query(Customer).filter(Customer.username == username).first():
+            username = generate_username()
     password = generate_temp_password()
 
     customer = Customer(

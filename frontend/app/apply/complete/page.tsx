@@ -59,7 +59,7 @@ function CompleteContent() {
               <div className="text-3xl mb-2">🎉</div>
               <h2 className="text-lg font-bold mb-3" style={{ color: "var(--primary)" }}>アカウントが発行されました</h2>
               <div className="text-left p-3 rounded-lg mb-3" style={{ background: "var(--accentLight, #f0f7ee)", border: "1px solid var(--border)" }}>
-                <p className="text-xs mb-1" style={{ color: "var(--muted)" }}>ユーザー名</p>
+                <p className="text-xs mb-1" style={{ color: "var(--muted)" }}>ユーザー名（メールアドレス）</p>
                 <p className="font-mono font-bold mb-2 break-all" style={{ color: "var(--text)" }}>{credentials.username}</p>
                 <p className="text-xs mb-1" style={{ color: "var(--muted)" }}>仮パスワード</p>
                 <p className="font-mono font-bold break-all" style={{ color: "var(--text)" }}>{credentials.temporary_password}</p>
