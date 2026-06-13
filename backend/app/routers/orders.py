@@ -8,8 +8,11 @@ from app.core.receipt import generate_receipt_pdf, format_amount
 from app.core.rate_limit import enforce_rate_limit
 from app.models.order import Order
 from app.models.customer import Customer
+from app.models.character import Character
 from app.models.message import Message
 from app.models.correction_request import CorrectionRequest
+from app.core.email import send_email
+from app.core.config import settings
 from pydantic import BaseModel
 import logging
 
@@ -144,6 +147,7 @@ def update_order(order_id: int, data: OrderUpdate, admin=Depends(get_current_adm
         raise HTTPException(status_code=404, detail="受注が見つかりません")
     if data.status is not None and data.status not in ("new", "in_progress", "delivered"):
         raise HTTPException(status_code=400, detail="不正なステータスです")
+    old_status = order.status
     # customer_id は None 指定で解除できるため exclude_none は使えない; 個別に処理
     if data.status is not None:
         order.status = data.status
@@ -158,6 +162,24 @@ def update_order(order_id: int, data: OrderUpdate, admin=Depends(get_current_adm
         order.customer_id = data.customer_id
     db.commit()
     db.refresh(order)
+
+    # 「納品完了」操作時、紐づいた顧客に専用キャラクターが割り当て済みなら
+    # キャラクター完成案内メールを送信する
+    if old_status != "delivered" and order.status == "delivered" and order.customer_id:
+        customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+        if customer and customer.character_id and customer.email:
+            character = db.query(Character).filter(Character.id == customer.character_id).first()
+            if character:
+                send_email(
+                    to=customer.email,
+                    subject="【推しEnglish】あなた専用キャラクターが完成しました",
+                    html=(
+                        f"<p>{customer.username} 様</p>"
+                        f"<p>お待たせしました。あなた専用のキャラクター「{character.name}」が完成しました！</p>"
+                        "<p>さっそくアプリにログインして、アプリ内チャットでやり取りを始めましょう。</p>"
+                        f'<p><a href="{settings.FRONTEND_URL}/login">ログインはこちら</a></p>'
+                    ),
+                )
     customer_username = None
     if order.customer_id:
         cu = db.query(Customer).filter(Customer.id == order.customer_id).first()

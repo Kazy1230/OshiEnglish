@@ -30,7 +30,7 @@ const COLOR_PRESETS = [
   { label: "ウォームオレンジ（元気系）",   value: '{"primary":"#7c2d12","accent":"#ea580c","bg":"#fff7ed","text":"#2c1a0e","card":"#ffffff","border":"#fed7aa","example_bg":"#ffedd5","tips_bg":"#fef3c7"}' },
 ];
 
-const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", chat_error_message: "", instagram_account: "", is_preset: false };
+const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", chat_error_message: "", instagram_account: "", is_preset: false, linked_customer_id: "" };
 
 export function CharactersTab() {
   const [characters, setCharacters] = useState<any[]>([]);
@@ -119,6 +119,7 @@ export function CharactersTab() {
       chat_error_message: c.chat_error_message ?? "",
       instagram_account: c.instagram_account ?? "",
       is_preset: !!c.is_preset,
+      linked_customer_id: "",
     });
     try { setPreviewColors(c.color_scheme); } catch { setPreviewColors(null); }
     setShowForm(true);
@@ -158,7 +159,10 @@ export function CharactersTab() {
         await api.adminUpdateCharacter(editingChar.id, payload);
         toast(`「${form.name}」を更新しました`, "success");
       } else {
-        await api.adminCreateCharacter(payload);
+        const created = await api.adminCreateCharacter(payload);
+        if (!form.is_preset && form.linked_customer_id) {
+          await api.adminUpdateCustomer(Number(form.linked_customer_id), { character_id: created.id });
+        }
         toast(`「${form.name}」を追加しました`, "success");
       }
       await reload();
@@ -277,6 +281,22 @@ export function CharactersTab() {
             <p className="text-xs -mt-2" style={{ color: "var(--muted)" }}>
               公式キャラクターは、選択時にキャラ作成費無料・即日チャット開始・限定称号/壁紙・隠しセリフ多数（最大{15}件）などの特典が適用されます。
             </p>
+          )}
+          {!form.is_preset && !editingChar && (
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>紐づけアカウント（オリジナルキャラを依頼した顧客）</label>
+              <select value={form.linked_customer_id} onChange={e => setForm({ ...form, linked_customer_id: e.target.value })}>
+                <option value="">指定なし（後で紐づける）</option>
+                {customers.map(cu => (
+                  <option key={cu.id} value={cu.id}>
+                    {cu.username}{cu.character_id ? "（既にキャラ割当済み）" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                選択すると、作成したキャラクターをこの顧客に割り当て、完成案内メールを送信します。
+              </p>
+            </div>
           )}
 
           <div>

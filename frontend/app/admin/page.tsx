@@ -27,6 +27,7 @@ export default function AdminPage() {
   const [pendingCorrection, setPendingCorrection] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [msgBadge, setMsgBadge] = useState(0);
+  const [ordersBadge, setOrdersBadge] = useState(0);
   const [mode, toggleMode] = useDarkMode();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -60,6 +61,12 @@ export default function AdminPage() {
         }
         prevUnreadFromCustomerRef.current = unreadFromCustomer;
       } catch (err) { reportError("admin:adminListThreads(badge)", err); }
+
+      try {
+        const orders = await api.adminGetOrders();
+        if (cancelled) return;
+        setOrdersBadge(orders.filter((o: any) => o.status !== "delivered").length);
+      } catch (err) { reportError("admin:adminGetOrders(badge)", err); }
     }
     loadBadge();
     const interval = setInterval(loadBadge, 30000);
@@ -128,6 +135,12 @@ export default function AdminPage() {
                 <span className="ml-auto min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md flex-shrink-0"
                   style={{ background: "#ff3b30" }}>
                   {msgBadge > 99 ? "99+" : msgBadge}
+                </span>
+              )}
+              {t.key === "orders" && ordersBadge > 0 && (
+                <span className="ml-auto min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md flex-shrink-0"
+                  style={{ background: "#ff3b30" }}>
+                  {ordersBadge > 99 ? "99+" : ordersBadge}
                 </span>
               )}
             </button>

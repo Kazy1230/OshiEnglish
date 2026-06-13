@@ -15,7 +15,6 @@ from app.core.intimacy import intimacy_info
 from app.core.credentials import generate_temp_password
 from app.core.email import send_email
 from app.core.config import settings
-from app.models.character import Character
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -143,25 +142,8 @@ def update_customer(customer_id: int, data: CustomerUpdate, admin=Depends(get_cu
     db.commit()
     db.refresh(customer)
 
-    # キャラクター完成通知（運営者がLLM下書き＋承認のうえキャラクターを作成し、
-    # この顧客に新しく割り当てたタイミングでResend経由で案内メールを送る）
-    if (
-        data.character_id is not None
-        and data.character_id != old_character_id
-        and customer.email
-    ):
-        character = db.query(Character).filter(Character.id == customer.character_id).first()
-        if character:
-            send_email(
-                to=customer.email,
-                subject="【推しEnglish】あなた専用キャラクターが完成しました",
-                html=(
-                    f"<p>{customer.username} 様</p>"
-                    f"<p>お待たせしました。あなた専用のキャラクター「{character.name}」が完成しました！</p>"
-                    "<p>さっそくアプリにログインして、アプリ内チャットでやり取りを始めましょう。</p>"
-                    f'<p><a href="{settings.FRONTEND_URL}/login">ログインはこちら</a></p>'
-                ),
-            )
+    # キャラクター完成案内メールは、受注管理画面で「納品完了」操作をした
+    # タイミングで送信する（routers/orders.py の update_order 参照）。
     # 最新の intimacy も含めて返す（フロントエンドがそのまま使えるように）
     return {
         "id": customer.id,
