@@ -109,6 +109,10 @@ _ensure_column("orders", "email", "VARCHAR(255) NULL")
 # - キャラ作成完了前の顧客が、無料コンテンツ（記事／演習問題）を一人一回だけ受け取れるようにする
 _ensure_column("customers", "free_content_claimed", "TINYINT(1) NOT NULL DEFAULT 0")
 
+# 簡易マイグレーション⑫-2: オリジナルキャラ作成完了時の「ようこそ」表示
+# - 既存顧客は表示済み扱い（DEFAULT 1）。管理者がcharacter_idを初めて割り当てた時にFalseにする
+_ensure_column("customers", "character_ready_announced", "TINYINT(1) NOT NULL DEFAULT 1")
+
 # 簡易マイグレーション⑬: 公式キャラクター（プリセットキャラ）フラグ
 _ensure_column("characters", "is_preset", "TINYINT(1) NOT NULL DEFAULT 0")
 with engine.connect() as _conn:

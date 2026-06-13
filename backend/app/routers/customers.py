@@ -134,6 +134,12 @@ def update_customer(customer_id: int, data: CustomerUpdate, admin=Depends(get_cu
 
     for key, val in data.model_dump(exclude_none=True).items():
         setattr(customer, key, val)
+
+    # オリジナルキャラ作成完了：キャラ未割り当て→割り当て済みになったタイミングで
+    # 本棚に「ようこそ」演出を一度表示するためのフラグを立てる
+    if old_character_id is None and customer.character_id is not None:
+        customer.character_ready_announced = False
+
     db.commit()
     db.refresh(customer)
 
@@ -273,6 +279,14 @@ def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Sess
     db.delete(customer)
     db.commit()
     return {"message": "削除しました（関連するDM・記事・アクセスログも合わせて削除されました）"}
+
+
+@router.post("/me/ack-character-ready")
+def ack_character_ready(current_user: Customer = Depends(get_current_user), db: Session = Depends(get_db)):
+    """オリジナルキャラ作成完了の「ようこそ」演出を表示済みにする（一人一回限り）。"""
+    current_user.character_ready_announced = True
+    db.commit()
+    return {"message": "確認しました"}
 
 
 @router.post("/me/withdraw")

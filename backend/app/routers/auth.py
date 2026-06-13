@@ -293,4 +293,5 @@ def get_me(current_user: Customer = Depends(get_current_user)):
         "theme_config": current_user.theme_config,
         "email": current_user.email,
         "free_content_claimed": current_user.free_content_claimed,
+        "character_ready_announced": current_user.character_ready_announced,
     }

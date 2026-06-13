@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { STEP1, STEP2, STEP3 } from "@/lib/charCopy";
 import type { GK, RK, PK, CharCopyTable } from "@/lib/charCopy";
@@ -265,28 +266,6 @@ const GLOBAL_CSS = `
     50%    { opacity:0.85; transform:scale(1.08); }
   }
 
-  /* 先生：柔らかいスポットライト呼吸 */
-  @keyframes yt-spotlight {
-    0%,100%{ opacity:0.90; transform:translateX(-50%) scale(1); }
-    50%    { opacity:1;    transform:translateX(-50%) scale(1.12); }
-  }
-  @keyframes yt-spotlight-sub {
-    0%,100%{ opacity:0.70; transform:translateX(-50%) scale(1); }
-    50%    { opacity:1;    transform:translateX(-50%) scale(1.10); }
-  }
-  /* 先生：光の中を漂う塵（ほこり）の粒子 */
-  @keyframes yt-dust-1 {
-    0%   { transform:translate(0,0); opacity:0; }
-    15%  { opacity:0.8; }
-    85%  { opacity:0.6; }
-    100% { transform:translate(18px,-120px); opacity:0; }
-  }
-  @keyframes yt-dust-2 {
-    0%   { transform:translate(0,0); opacity:0; }
-    20%  { opacity:0.7; }
-    80%  { opacity:0.5; }
-    100% { transform:translate(-24px,-150px); opacity:0; }
-  }
 
   /* 関係性オーバーレイ・フェードイン */
   @keyframes yt-overlay-in { from{opacity:0} to{opacity:1} }
@@ -647,57 +626,6 @@ function RelationshipOverlay({ relationship, reduceMotion = false, isMobile = fa
             background: `linear-gradient(to bottom, transparent 0%, ${r.grad} 30%, ${r.grad} 70%, transparent 100%)`,
             transformOrigin: "top center",
             animation: `${r.anim} ${r.dur} ease-in-out ${r.delay} infinite`,
-            willChange: "transform, opacity",
-          }} />
-        ))}
-      </div>
-    );
-  }
-
-  // ── 先生：柔らかい放射状スポットライト＋漂う塵 ──────────────────────────────
-  if (relationship === "teacher") {
-    // 光の中をゆっくり舞う塵の粒子（モバイルは半分に間引く）
-    const allDust = [
-      { size:5, top:"30%", left:"35%", anim:"yt-dust-1 7s ease-in-out 0s infinite" },
-      { size:4, top:"45%", left:"55%", anim:"yt-dust-2 9s ease-in-out -2s infinite" },
-      { size:6, top:"55%", left:"42%", anim:"yt-dust-1 8s ease-in-out -4s infinite" },
-      { size:3, top:"38%", left:"62%", anim:"yt-dust-2 6.5s ease-in-out -1s infinite" },
-    ];
-    const dust = isMobile ? allDust.slice(0, 2) : allDust;
-    return (
-      <div aria-hidden="true" style={wrap}>
-        {/* メイン：天井から差し込む楕円グロー（やや歪んだ形でむらを出す） */}
-        <div style={{
-          position: "absolute",
-          top: "-15%", left: "50%",
-          width: "130%", paddingBottom: "90%",
-          borderRadius: "48% 52% 50% 50% / 55% 50% 50% 45%",
-          background: "radial-gradient(ellipse at 48% 40%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.45) 45%, transparent 70%)",
-          transform: "translateX(-50%)",
-          animation: "yt-spotlight 6s ease-in-out 0s infinite",
-          willChange: "transform, opacity",
-        }} />
-        {/* サブ：床からの反射光 */}
-        <div style={{
-          position: "absolute",
-          bottom: "-10%", left: "50%",
-          width: "80%", paddingBottom: "40%",
-          borderRadius: "52% 48% 50% 50% / 50% 50% 55% 45%",
-          background: "radial-gradient(ellipse, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.20) 50%, transparent 70%)",
-          transform: "translateX(-50%)",
-          animation: "yt-spotlight-sub 6s ease-in-out -3s infinite",
-          willChange: "transform, opacity",
-        }} />
-        {/* 漂う塵の粒子 */}
-        {dust.map((d, i) => (
-          <div key={i} style={{
-            position: "absolute",
-            top: d.top, left: d.left,
-            width: d.size, height: d.size,
-            borderRadius: "50%",
-            backgroundColor: "rgba(255,255,255,0.95)",
-            boxShadow: "0 0 6px rgba(255,255,255,0.8)",
-            animation: d.anim,
             willChange: "transform, opacity",
           }} />
         ))}
@@ -1281,6 +1209,12 @@ export default function ApplyPage() {
           fontStyle: theme.fontFamily.includes("serif") ? "italic" : "normal",
           transition: `font-family ${T},letter-spacing ${T}`, minHeight: "3.4rem" }}>
           {theme.tagline}
+        </p>
+
+        <p style={{ fontSize: ".78rem", margin: ".9rem 0 0" }}>
+          <Link href="/login" style={{ color: "rgba(255,255,255,.75)", textDecoration: "underline" }}>
+            すでに登録済みの方はこちら（ログイン）
+          </Link>
         </p>
 
         {/* 選択状況バッジ */}

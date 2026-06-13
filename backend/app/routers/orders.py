@@ -8,6 +8,8 @@ from app.core.receipt import generate_receipt_pdf, format_amount
 from app.core.rate_limit import enforce_rate_limit
 from app.models.order import Order
 from app.models.customer import Customer
+from app.models.message import Message
+from app.models.correction_request import CorrectionRequest
 from pydantic import BaseModel
 import logging
 
@@ -15,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["受注管理"])
 
-def serialize_order(o: Order, customer_username: Optional[str] = None) -> dict:
+def serialize_order(
+    o: Order,
+    customer_username: Optional[str] = None,
+    pending_corrections: Optional[list] = None,
+    pending_article_requests: Optional[list] = None,
+    character_creation_pending: bool = False,
+) -> dict:
     return {
         "id": o.id,
         "customer_name": o.customer_name,
@@ -29,6 +37,10 @@ def serialize_order(o: Order, customer_username: Optional[str] = None) -> dict:
         "form_submitted_at": o.form_submitted_at.isoformat() if o.form_submitted_at else None,
         "created_at": o.created_at.isoformat() if o.created_at else None,
         "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+        # 受注に紐づく顧客の対応待ち事項（管理画面で「子要素」として表示するため）
+        "pending_corrections": pending_corrections or [],          # 添削リクエスト（未完了）
+        "pending_article_requests": pending_article_requests or [],  # 記事リクエスト（未完了）
+        "character_creation_pending": character_creation_pending,    # キャラクター作成が未完了か
     }
 
 class OrderUpdate(BaseModel):
@@ -49,13 +61,61 @@ class OrderCreate(BaseModel):
 @router.get("/")
 def list_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db)):
     orders = db.query(Order).order_by(Order.created_at.desc()).all()
-    # 紐づき顧客のユーザー名を一括取得（N+1回避）
+    # 紐づき顧客のユーザー名・キャラ作成状況を一括取得（N+1回避）
     customer_ids = {o.customer_id for o in orders if o.customer_id}
     username_map: dict = {}
+    character_id_map: dict = {}
     if customer_ids:
-        custs = db.query(Customer.id, Customer.username).filter(Customer.id.in_(customer_ids)).all()
+        custs = db.query(Customer.id, Customer.username, Customer.character_id).filter(Customer.id.in_(customer_ids)).all()
         username_map = {c.id: c.username for c in custs}
-    return [serialize_order(o, username_map.get(o.customer_id)) for o in orders]
+        character_id_map = {c.id: c.character_id for c in custs}
+
+    # 未完了の添削リクエスト（顧客IDごとにグループ化）
+    corrections_map: dict = {}
+    if customer_ids:
+        corrections = (
+            db.query(CorrectionRequest)
+            .filter(CorrectionRequest.customer_id.in_(customer_ids), CorrectionRequest.status != "completed")
+            .order_by(CorrectionRequest.created_at.asc())
+            .all()
+        )
+        for cr in corrections:
+            corrections_map.setdefault(cr.customer_id, []).append({
+                "id": cr.id,
+                "correction_type": cr.correction_type,
+                "status": cr.status,
+            })
+
+    # 未完了の記事リクエスト（顧客IDごとにグループ化）
+    requests_map: dict = {}
+    if customer_ids:
+        requests = (
+            db.query(Message)
+            .filter(
+                Message.customer_id.in_(customer_ids),
+                Message.is_request == True,  # noqa: E712
+                Message.request_status.in_(["pending", "accepted"]),
+            )
+            .order_by(Message.created_at.asc())
+            .all()
+        )
+        for m in requests:
+            requests_map.setdefault(m.customer_id, []).append({
+                "id": m.id,
+                "grammar_topic": m.grammar_topic,
+                "request_status": m.request_status,
+            })
+
+    return [
+        serialize_order(
+            o,
+            username_map.get(o.customer_id),
+            corrections_map.get(o.customer_id, []),
+            requests_map.get(o.customer_id, []),
+            bool(o.customer_id) and character_id_map.get(o.customer_id) is None,
+        )
+        for o in orders
+    ]
 
 @router.post("/", status_code=201)
 def create_order(data: OrderCreate, admin=Depends(get_current_admin), db: Session = Depends(get_db)):

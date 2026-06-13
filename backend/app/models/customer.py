@@ -36,6 +36,10 @@ class Customer(Base):
     last_login_bonus_date = Column(Date, nullable=True)
     # キャラ作成完了前に案内する「最初の1つ無料」コンテンツを利用済みかどうか（一人一回限り）。
     free_content_claimed = Column(Boolean, default=False, nullable=False)
+    # オリジナルキャラ（キャラクタービルダー）作成完了の「ようこそ」表示が未読かどうか。
+    # 既存顧客はTrue（表示済み扱い）。管理者が初めてcharacter_idを割り当てた時にFalseにし、
+    # 本棚で一度表示したらTrueに戻す（一人一回限りの演出）。
+    character_ready_announced = Column(Boolean, default=True, nullable=False)
     subscription_plan = Column(String(50), default="buy_once")  # buy_once / monthly
     # サポート担当の割り当て（管理者・オペレーター複数人での分担運用のため）。
     # is_admin=True の customers.id を指す。未割り当ての場合は NULL。

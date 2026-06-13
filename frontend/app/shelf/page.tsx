@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
 import { resolveTheme, pickGreeting, maskEmail, type CharacterTheme } from "@/lib/theme";
@@ -21,11 +21,12 @@ type Article = {
 type Me = {
   username: string; display_name?: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null;
   theme_config?: { wallpaper_url?: string } | null;
-  email?: string | null; free_content_claimed?: boolean;
+  email?: string | null; free_content_claimed?: boolean; character_ready_announced?: boolean;
 };
 
-export default function ShelfPage() {
+function ShelfContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [me, setMe] = useState<Me | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [theme, setTheme] = useState<CharacterTheme | null>(null);
@@ -61,6 +62,11 @@ export default function ShelfPage() {
       }
     })();
   }, [router]);
+
+  // フッターの「退会する」リンク（/shelf?withdraw=1）から開いた場合は確認モーダルを自動表示する
+  useEffect(() => {
+    if (searchParams.get("withdraw") === "1") setShowWithdrawModal(true);
+  }, [searchParams]);
 
   // LINE風の未読バッジ：チャットの未読件数を取得（本棚を開くたび、およびタブが見えている間だけ定期的に更新）
   useEffect(() => {
@@ -167,12 +173,19 @@ export default function ShelfPage() {
         {/* ウェルカムカード：
             ・オリジナルキャラ（キャラ未割り当て）の間は中立的な案内を表示
             ・公式キャラは「最初の1つ無料」を受け取るまで表示 */}
-        {(!me?.character_id || (theme?.is_preset && !me?.free_content_claimed)) && (
+        {(!me?.character_id || (theme?.is_preset && !me?.free_content_claimed) || (!!me?.character_id && !theme?.is_preset && !me?.character_ready_announced)) && (
           <WelcomeCard theme={t} email={me?.email} freeContentClaimed={!!me?.free_content_claimed}
             pending={!me?.character_id}
+            justCompleted={!!me?.character_id && !theme?.is_preset && !me?.character_ready_announced}
             onClaimed={(article) => {
               setArticles(prev => [...prev, { id: article.id, title: article.title, character_id: 0, article_type: article.article_type }]);
               setMe(prev => prev ? { ...prev, free_content_claimed: true } : prev);
+            }}
+            onAck={async () => {
+              try {
+                await api.ackCharacterReady();
+              } catch (err) { reportError("shelf:ackCharacterReady", err); }
+              setMe(prev => prev ? { ...prev, character_ready_announced: true } : prev);
             }} />
         )}
 
@@ -295,14 +308,6 @@ export default function ShelfPage() {
             <RequestCard theme={t} onClick={() => setShowRequestModal(true)} />
           )}
         </div>
-
-        {/* 退会リンク */}
-        <div className="mt-12 text-center">
-          <button onClick={() => setShowWithdrawModal(true)}
-            className="text-xs underline transition-colors" style={{ color: t.accent }}>
-            退会する
-          </button>
-        </div>
       </main>
 
       {/* 記事・問題・添削のリクエストポップアップ */}
@@ -345,6 +350,14 @@ export default function ShelfPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ShelfPage() {
+  return (
+    <Suspense>
+      <ShelfContent />
+    </Suspense>
   );
 }
 
@@ -415,13 +428,16 @@ function RequestCard({ theme: t, onClick }: {
   );
 }
 
-function WelcomeCard({ theme: t, email, freeContentClaimed, pending, onClaimed }: {
+function WelcomeCard({ theme: t, email, freeContentClaimed, pending, justCompleted, onClaimed, onAck }: {
   theme: ReturnType<typeof resolveTheme>;
   email?: string | null;
   freeContentClaimed: boolean;
   /** true: オリジナルキャラ（キャラクタービルダー使用・キャラ未割り当て）, false: 公式キャラ（キャラ割り当て済み） */
   pending: boolean;
+  /** true: オリジナルキャラの作成が完了した直後（「ようこそ」演出が未表示） */
+  justCompleted: boolean;
   onClaimed: (article: { id: number; title: string; article_type: string }) => void;
+  onAck: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
 
@@ -460,8 +476,25 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, pending, onClaimed }
           </div>
         )}
 
-        {/* 2. 無料キャンペーンの案内（公式キャラのみ。オリジナルキャラはキャラ未割り当てのため対象外） */}
-        {!pending && (
+        {/* 2. オリジナルキャラ作成完了の案内（一人一回限り） */}
+        {justCompleted && (
+          <div className="mt-3 rounded-xl p-4" style={{ background: t.example_bg, border: `2px solid ${t.accent}` }}>
+            <p className="text-sm font-bold mb-2" style={{ color: t.primary }}>
+              🎉 あなた専用のキャラクターが完成しました！
+            </p>
+            <p className="text-sm mb-3" style={{ color: t.text }}>
+              さっそくチャットでお話してみましょう。
+            </p>
+            <button onClick={onAck}
+              className="self-start text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md"
+              style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+              閉じる
+            </button>
+          </div>
+        )}
+
+        {/* 3. 無料キャンペーンの案内（公式キャラのみ。オリジナルキャラはキャラ未割り当てのため対象外） */}
+        {!pending && !justCompleted && (
           <div className="mt-6 rounded-xl p-4" style={{ background: t.example_bg, border: `2px solid ${t.accent}` }}>
             <p className="text-xs font-black inline-block px-2 py-0.5 rounded-full text-white mb-2"
               style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
@@ -485,7 +518,7 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, pending, onClaimed }
           </div>
         )}
 
-        {/* 3. キャラ完成通知の説明（オリジナルキャラのみ） */}
+        {/* 4. キャラ完成通知の説明（オリジナルキャラのみ・作成完了前） */}
         {pending && (
           <div className="mt-6 rounded-xl p-3 flex items-start gap-3" style={{ background: t.example_bg, border: `1px dashed ${t.border}` }}>
             <span className="text-lg flex-shrink-0">📩</span>

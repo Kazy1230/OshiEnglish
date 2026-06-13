@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { buildSuggestedQuestions, buildQuestionIdeaPrompt, type SuggestedQuestion } from "../lib/promptBuilders";
+import { buildSuggestedQuestions, buildQuestionIdeaPrompt, buildRewardImagePrompt, type SuggestedQuestion } from "../lib/promptBuilders";
 
 const API_ORIGIN_M = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
 
@@ -426,6 +426,21 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
             <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploadingReward}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleRewardUpload(f); e.target.value = ""; }} />
           </label>
+          <button
+            type="button"
+            className="text-xs px-3 py-2 rounded-lg border font-bold transition-all hover:shadow"
+            style={{ borderColor: cBorder, color: cAccent }}
+            onClick={() => {
+              const charForPrompt = {
+                name: data.customer.character_name,
+                description: data.customer.character_description,
+                tone_profile: data.customer.tone_profile,
+              };
+              navigator.clipboard.writeText(buildRewardImagePrompt(charForPrompt, data.customer));
+              toast("ご褒美写真の画像生成プロンプトをコピーしました（著作権配慮・サイズ指定込み）", "success");
+            }}>
+            🎨 ご褒美画像プロンプトをコピー
+          </button>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import {
   buildWritingFeedbackPrompt,
   buildSpeakingFeedbackPrompt,
   buildPersonalizedLLMPrompt,
+  buildWelcomePagePrompt,
   getCustomerDisplayName,
 } from "../lib/promptBuilders";
 
@@ -485,19 +486,34 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
           {/* ── ウェルカムページ専用セクション ── */}
           {form.article_type === "welcome" && (
             <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-                対象キャラ（公式キャラ専用テンプレートにする場合のみ選択）
-              </label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                  対象キャラ（キャラ専用テンプレートにする場合のみ選択）
+                </label>
+                <button
+                  type="button"
+                  className="text-xs px-2 py-0.5 rounded-lg border transition-all hover:shadow flex-shrink-0"
+                  style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                  onClick={() => {
+                    const char = characters.find(c => String(c.id) === form.template_character_id);
+                    navigator.clipboard.writeText(buildWelcomePagePrompt(char));
+                    toast(char ? `「${char.name}」向けウェルカムページ作成プロンプトをコピーしました` : "汎用ウェルカムページ作成プロンプトをコピーしました", "success");
+                  }}>
+                  📋 ウェルカムページ作成プロンプトをコピー
+                </button>
+              </div>
               <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}>
                 <option value="">汎用テンプレート（対象キャラを指定しない）</option>
-                {characters.filter(c => c.is_preset).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}（公式）専用</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
                 ))}
               </select>
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-                公式キャラを選択すると、申し込み時にそのキャラを選んだ顧客専用のウェルカムページになります。
-                汎用テンプレートは、キャラビルダーで作成中の顧客など対象キャラ未指定の顧客に届きます。
+                キャラを選択すると、そのキャラが割り当てられた顧客専用のウェルカムページになります
+                （公式キャラ：申し込み時に選択した顧客 / オリジナルキャラ：キャラ作成完了時にそのキャラが割り当てられた顧客）。
+                汎用テンプレートは、キャラ未割り当ての顧客（キャラビルダーでの作成中など）に届きます。
                 各キャラ・汎用ごとに1件まで設定できます（同じ対象を選んだ既存のテンプレートがある場合は、後から保存した方が優先されます）。
+                上の「プロンプトをコピー」ボタンで、選択中のキャラに合わせたウェルカムページ文章のLLM作成用プロンプトをコピーできます。
               </p>
             </div>
           )}

@@ -4,7 +4,9 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 
 const CATEGORY_LABELS: Record<string, string> = { line: "隠しセリフ", title: "称号", wallpaper: "壁紙" };
+const CATEGORY_ICONS: Record<string, string> = { line: "✏️", title: "🏅", wallpaper: "🖼️" };
 const TRIGGER_LABELS: Record<string, string> = { intimacy: "親密度レベル", article_count: "記事依頼回数" };
+const INTIMACY_LEVELS = [1, 2, 3, 4, 5];
 
 const emptyForm = {
   category: "line",
@@ -48,6 +50,14 @@ export function RewardsTab() {
   }, [characterId]);
 
   function cancelForm() { setShowForm(false); setEditingItem(null); setForm(emptyForm); }
+
+  // ロードマップの「+ 追加」ショートカット：トリガー種別・到達条件を入力済みの状態で新規フォームを開く
+  function openAddForm(trigger_type: string, threshold: number, category?: string) {
+    setEditingItem(null);
+    setForm({ ...emptyForm, trigger_type, threshold, ...(category ? { category } : {}) });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function startEdit(item: any) {
     setEditingItem(item);
@@ -286,6 +296,84 @@ export function RewardsTab() {
           {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+
+      {/* 設定状況の一覧：レベルごとに報酬が設定済みかひとめで分かる + 未設定箇所をすぐ追加できる */}
+      {!loading && characterId != null && (
+        <div className="card mb-4 flex flex-col gap-3">
+          <h3 className="font-bold" style={{ color: "var(--primary)" }}>📊 設定状況</h3>
+
+          {/* 隠しセリフの登録件数（上限あり） */}
+          <div>
+            <div className="flex items-center justify-between text-xs mb-1" style={{ color: "var(--muted)" }}>
+              <span>✏️ 隠しセリフ登録数</span>
+              <span>{lineItemCount} / {lineItemLimit} 件</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg)" }}>
+              <div className="h-full rounded-full" style={{
+                width: `${Math.min(100, Math.round((lineItemCount / lineItemLimit) * 100))}%`,
+                background: lineItemCount >= lineItemLimit ? "#c0392b" : "var(--accent)",
+              }} />
+            </div>
+          </div>
+
+          {/* 親密度レベル到達報酬：Lv1→2〜Lv4→5の各段階で設定済みか確認できる */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: "var(--muted)" }}>親密度レベル到達報酬</p>
+            <div className="flex flex-col gap-1.5">
+              {INTIMACY_LEVELS.map(level => {
+                const levelItems = intimacyItems.filter(i => i.threshold === level);
+                return (
+                  <div key={level} className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="font-bold flex-shrink-0" style={{ color: "var(--primary)", minWidth: "5.5rem" }}>
+                      Lv.{level - 1} → Lv.{level}
+                    </span>
+                    {levelItems.length === 0 ? (
+                      <>
+                        <span style={{ color: "var(--muted)", opacity: 0.6 }}>未設定</span>
+                        <button className="px-2 py-0.5 rounded border" style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                          onClick={() => openAddForm("intimacy", level)}>+ 追加</button>
+                      </>
+                    ) : (
+                      <>
+                        {levelItems.map(item => (
+                          <span key={item.id} className="px-2 py-0.5 rounded-full" style={{ background: "var(--bg)", color: "var(--text)" }}>
+                            {CATEGORY_ICONS[item.category]} {CATEGORY_LABELS[item.category]}
+                            {item.official_only && " 🔒"}
+                          </span>
+                        ))}
+                        <button className="px-2 py-0.5 rounded border" style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                          onClick={() => openAddForm("intimacy", level)}>+ 追加</button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] mt-1" style={{ color: "var(--muted)" }}>🔒 = 公式キャラクター限定の報酬</p>
+          </div>
+
+          {/* 記事依頼回数到達報酬：登録済みの回数一覧 */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: "var(--muted)" }}>記事依頼回数到達報酬</p>
+            {articleItems.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--muted)", opacity: 0.6 }}>登録されている報酬はありません</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {articleItems.map(item => (
+                  <span key={item.id} className="px-2 py-0.5 rounded-full" style={{ background: "var(--bg)", color: "var(--text)" }}>
+                    累計{item.threshold}件 → {CATEGORY_ICONS[item.category]} {CATEGORY_LABELS[item.category]}
+                    {item.official_only && " 🔒"}
+                  </span>
+                ))}
+              </div>
+            )}
+            <button className="text-xs px-2 py-0.5 rounded border mt-2" style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+              onClick={() => openAddForm("article_count", (articleItems[articleItems.length - 1]?.threshold ?? 0) + 1)}>
+              + 新しい回数で追加
+            </button>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card mb-6 flex flex-col gap-3">

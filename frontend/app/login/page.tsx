@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { setToken } from "@/lib/auth";
@@ -149,6 +150,11 @@ function LoginForm() {
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
           ID・パスワードはお申し込み完了画面でお知らせします
+        </p>
+        <p className="text-center text-xs mt-2">
+          <Link href="/apply" className="font-medium transition-colors" style={{ color: "var(--accent)" }}>
+            まだ登録していない方はこちら（お申し込み）
+          </Link>
         </p>
       </div>
     </div>

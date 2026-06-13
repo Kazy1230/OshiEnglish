@@ -85,6 +85,8 @@ export const api = {
   getCharacterTheme: (id: number) => apiFetch(`/characters/theme/${id}`),
   claimWelcomeArticle: () =>
     apiFetch("/articles/me/claim-welcome", { method: "POST" }),
+  ackCharacterReady: () =>
+    apiFetch("/customers/me/ack-character-ready", { method: "POST" }),
   getCharacterBlogPosts: (characterId: number) => apiFetch(`/articles/character/${characterId}/blog-posts`),
 
   // 顧客：チャット（キャラクターとのメッセージ）

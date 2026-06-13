@@ -209,6 +209,26 @@ export function OrdersTab() {
                       </button>
                     )}
                   </div>
+                  {/* 添削・記事リクエスト・キャラ作成の対応待ち事項を子要素として表示 */}
+                  {(o.character_creation_pending || o.pending_corrections?.length > 0 || o.pending_article_requests?.length > 0) && (
+                    <div className="flex flex-col gap-1 mt-2 pl-3" style={{ borderLeft: "2px solid var(--border)" }}>
+                      {o.character_creation_pending && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium self-start" style={{ background: "#fdebe8", color: "#c0392b" }}>
+                          🎨 キャラクター作成: 未対応
+                        </span>
+                      )}
+                      {o.pending_article_requests?.map((r: any) => (
+                        <span key={`req-${r.id}`} className="text-xs px-2 py-0.5 rounded-full font-medium self-start" style={{ background: "#e8f4fd", color: "#2471a3" }}>
+                          📝 記事依頼: {r.grammar_topic || "未指定"}（{r.request_status === "accepted" ? "対応中" : "未対応"}）
+                        </span>
+                      ))}
+                      {o.pending_corrections?.map((c: any) => (
+                        <span key={`cor-${c.id}`} className="text-xs px-2 py-0.5 rounded-full font-medium self-start" style={{ background: "#fdf3e8", color: "#a36a1f" }}>
+                          ✏️ 添削（{c.correction_type === "writing" ? "ライティング" : "スピーキング"}）: {c.status === "in_progress" ? "対応中" : "未対応"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
                   {o.status === "new" && <button className="btn-accent text-xs py-1 px-3" onClick={() => updateStatus(o.id, "in_progress")}>対応開始</button>}
