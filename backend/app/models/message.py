@@ -37,4 +37,4 @@ class Message(Base):
 
     customer = relationship("Customer", back_populates="messages")
     character = relationship("Character")
-    article = relationship("Article")
+    article = relationship("Article", foreign_keys=[article_id])
