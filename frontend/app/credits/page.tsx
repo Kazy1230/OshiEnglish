@@ -86,6 +86,16 @@ function CreditsPageInner() {
           DM送信は1クレジット、記事・問題のリクエストは200〜400クレジットを消費します。
         </p>
 
+        <div className="rounded-xl p-4 mb-6" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
+          <p className="text-sm font-bold mb-1" style={{ color: t.primary }}>
+            🎁 毎日ログインボーナス
+          </p>
+          <p className="text-sm leading-relaxed" style={{ color: t.text }}>
+            毎日ログインすると10クレジットを獲得できます（残高が50クレジットを超えない範囲）。
+            無課金でも、記事・問題のリクエストや、キャラクターから届くテンプレ記事の開封に活用できます。
+          </p>
+        </div>
+
         <div className="flex flex-col gap-3">
           {CREDIT_PACKS.map(credits => (
             <button key={credits} type="button" onClick={() => handlePurchase(credits)} disabled={purchasing !== null}

@@ -13,7 +13,7 @@ class Article(Base):
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
     character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
     grammar_master_id = Column(Integer, ForeignKey("grammar_masters.id"), nullable=True)
-    article_type = Column(String(20), nullable=False, default="request")  # request / blog / exercise
+    article_type = Column(String(20), nullable=False, default="request")  # request / blog / exercise / template
     # この記事の元になった「記事リクエスト」メッセージ（messages.is_request=True）への参照。
     # 公開時にこのメッセージの request_status を自動で completed にするために使う。
     request_message_id = Column(Integer, ForeignKey("messages.id"), nullable=True, index=True)
@@ -40,6 +40,12 @@ class Article(Base):
     # is_welcome_template=True の場合のみ使用。対象キャラクター（公式キャラ向けテンプレート）。
     # NULLの場合は「キャラクタービルダー使用（カスタムキャラ）」向けの汎用テンプレートを表す。
     template_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
+    # ----- クレジットによる開封課金 -----
+    unlock_cost = Column(Integer, nullable=False, default=0)   # 開封に必要なクレジット（0=無料）
+    opened_at = Column(DateTime(timezone=True), nullable=True)  # 顧客が開封（課金）した日時。NULL=未開封
+    # テンプレ記事プール（article_type="template", customer_id=NULL）からこの記事の元になったテンプレートのID。
+    # 同じテンプレートを同じ顧客に重複配布しないための履歴として使う。
+    template_source_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

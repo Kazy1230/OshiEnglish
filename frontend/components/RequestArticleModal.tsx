@@ -27,6 +27,9 @@ const CREDIT_COST_BY_PRICE: Record<string, number> = {
   "¥1,000": 400,
 };
 
+// 記事・問題リクエスト時に即時消費する固定費（残りは記事が届いて開封する時に消費する）
+const ARTICLE_REQUEST_FEE = 50;
+
 // 料金プランページ（/pricing）の価格表に基づくパート別ラインナップ（演習問題数も明記）
 const TOEIC_PARTS: PartOption[] = [
   { label: "Part 1（写真描写）", content: "6問＋解説", price: "¥500" },
@@ -316,6 +319,8 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
         </p>
         <p className="text-[11px] mb-3" style={{ color: t.accent }}>
           {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}（{selectedPrice} ／ {creditCost}クレジット）
+          <br />
+          依頼時 {ARTICLE_REQUEST_FEE}クレジット ／ 記事が届いたら残り{(creditCost ?? 0) - ARTICLE_REQUEST_FEE}クレジットで読めます
         </p>
 
         {category === "文法" && (

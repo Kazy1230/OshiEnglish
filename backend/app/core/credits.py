@@ -5,6 +5,18 @@ from sqlalchemy.orm import Session
 from app.models.customer import Customer
 from app.models.credit_transaction import CreditTransaction
 
+# 記事・問題リクエスト時に即時消費する固定費（合計の一部）。残りは記事のunlock_costとして開封時に消費する。
+ARTICLE_REQUEST_FEE = 50
+# テンプレ記事（無料配布・開封課金）の開封コストのデフォルト値
+TEMPLATE_UNLOCK_COST = 50
+# テンプレ記事の配布間隔（日数）
+TEMPLATE_INTERVAL_DAYS = 3
+
+# 毎日ログインボーナスとして付与するクレジット数
+DAILY_LOGIN_BONUS = 10
+# ログインボーナスでクレジット残高がこの値を超えるまで付与する（無課金でも記事・テンプレ記事の開封ができる程度の範囲に留める）
+DAILY_LOGIN_BONUS_CAP = 50
+
 
 def grant_credits(
     db: Session,

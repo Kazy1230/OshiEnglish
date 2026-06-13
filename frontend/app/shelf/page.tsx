@@ -17,6 +17,9 @@ type Article = {
   article_type?: string;
   exercise_format?: "multiple_choice" | "written_response" | null;
   exercise_category?: string | null;
+  unlock_cost?: number;
+  opened_at?: string | null;
+  locked?: boolean;
 };
 type Me = {
   username: string; display_name?: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null;
@@ -356,10 +359,14 @@ function BookCard({ article, index, theme: t, onClick }: {
   // 演習問題は紫系の色味で統一し、ひと目で「解く」コンテンツだと分かるようにする
   const isExercise = article.article_type === "exercise";
   const isBlog = article.article_type === "blog";
-  const hue = isExercise ? 265 : hues[index % hues.length];
-  const actionLabel = isExercise ? "解く →" : isBlog ? "読む →" : "読む →";
-  const badgeIcon = isExercise ? "🧩" : isBlog ? "📰" : null;
-  const badgeText = isExercise ? (article.exercise_category || "演習問題") : isBlog ? "ブログ" : null;
+  const isTemplate = article.article_type === "template";
+  const isLocked = !!article.locked;
+  const hue = isLocked ? 0 : isExercise ? 265 : isTemplate ? 140 : hues[index % hues.length];
+  const actionLabel = isLocked
+    ? `🔒 ${article.unlock_cost}クレジットで読む`
+    : isExercise ? "解く →" : isBlog ? "読む →" : "読む →";
+  const badgeIcon = isTemplate ? "🎁" : isExercise ? "🧩" : isBlog ? "📰" : null;
+  const badgeText = isTemplate ? "特別記事" : isExercise ? (article.exercise_category || "演習問題") : isBlog ? "ブログ" : null;
 
   return (
     <button onClick={onClick}
@@ -381,7 +388,7 @@ function BookCard({ article, index, theme: t, onClick }: {
           )}
         </div>
         <p className="font-bold text-sm leading-snug flex-1" style={{ color: t.primary, fontFamily: t.fontFamily }}>
-          {article.title}
+          {isLocked ? "🔒 " : ""}{article.title}
         </p>
         <div className="mt-3">
           <span className="text-xs px-2 py-1 rounded-full font-bold"

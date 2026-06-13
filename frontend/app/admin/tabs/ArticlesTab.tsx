@@ -25,6 +25,8 @@ const emptyArticleForm = {
   correction_request_id: "",
   // ウェルカムページ：対象キャラ（公式キャラ専用テンプレートの場合のみ指定／空欄は汎用テンプレート）
   template_character_id: "",
+  // 開封コスト（任意・未入力時はサーバー側のデフォルト計算に従う）
+  unlock_cost: "",
 };
 
 export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
@@ -75,7 +77,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
 
   // 依頼記事フォームで顧客が選択されたら、その顧客の対応中リクエスト一覧を取得する
   useEffect(() => {
-    if (form.article_type === "request" && form.customer_id) {
+    if ((form.article_type === "request" || form.article_type === "exercise") && form.customer_id) {
       api.adminGetCustomerRequests(Number(form.customer_id)).then(setOpenRequests).catch(() => setOpenRequests([]));
     } else {
       setOpenRequests([]);
@@ -100,6 +102,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
       request_message_id: a.request_message_id ? String(a.request_message_id) : "",
       correction_request_id: a.correction_request_id ? String(a.correction_request_id) : "",
       template_character_id: a.template_character_id ? String(a.template_character_id) : "",
+      unlock_cost: a.unlock_cost != null ? String(a.unlock_cost) : "",
     });
     setCorrectionSubmission(null);
     setShowForm(true);
@@ -120,6 +123,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
     const isExercise = form.article_type === "exercise";
     const isFeedback = form.article_type === "writing_feedback" || form.article_type === "speaking_feedback";
     const isWelcome = form.article_type === "welcome";
+    const isTemplate = form.article_type === "template";
     const payload: any = {
       article_type: form.article_type,
       // ウェルカムページ：「対象キャラ」が空欄（汎用テンプレート）の場合は、
@@ -139,6 +143,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
       payload.customer_id = Number(form.customer_id);
       payload.exercise_format = form.exercise_format;
       payload.exercise_category = form.exercise_category;
+      payload.request_message_id = form.request_message_id ? Number(form.request_message_id) : null;
       if (!form.exercise_data_text.trim()) {
         toast("演習問題データ（JSON）を入力・読み込みしてください", "error");
         return;
@@ -149,6 +154,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
         toast("演習問題データのJSONを解析できませんでした。形式を確認してください", "error");
         return;
       }
+    } else if (isTemplate) {
+      // テンプレ記事プール：customer_id等はサーバー側で自動的にクリアされる
     } else if (isFeedback) {
       // ライティング/スピーキングFB：顧客は必須、文法マスター不要
       payload.customer_id = Number(form.customer_id);
@@ -171,6 +178,9 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
       payload.customer_id = Number(form.customer_id);
       payload.grammar_master_id = Number(form.grammar_master_id);
       payload.request_message_id = form.request_message_id ? Number(form.request_message_id) : null;
+    }
+    if (form.unlock_cost !== "") {
+      payload.unlock_cost = Number(form.unlock_cost);
     }
     try {
       if (editingArticle) {
@@ -256,6 +266,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 ["writing_feedback", "✍️ ライティングFB",      "#e67e22"],
                 ["speaking_feedback","🎤 スピーキングFB",      "#16a085"],
                 ["welcome",          "🏠 ウェルカムページ",    "#2980b9"],
+                ["template",         "🗂 テンプレ記事プール",  "#8e44ad"],
               ] as [string, string, string][]).map(([type, label, color]) => (
                 <button key={type} type="button"
                   disabled={!!editingArticle}
@@ -279,6 +290,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 ? "スピーキングFB：記述式演習で提出されたスピーキング音声・テキストに対するキャラクターからのフィードバック記事です。評価・改善アドバイスを顧客の本棚に届けます（文法マスター・演習データは不要）。"
                 : form.article_type === "welcome"
                 ? "ウェルカムページ：新規登録した顧客の本棚に最初に届くテンプレート記事です。「対象キャラ」を指定すると、その公式キャラを選んだ顧客専用のテンプレートになります。空欄のまま保存すると、キャラビルダー利用者など対象キャラ未指定の顧客向けの汎用テンプレートになります。"
+                : form.article_type === "template"
+                ? "テンプレ記事プール：customer_idを指定せずに保管する「特別記事」のひな形です。3日ごとに1本、各顧客の本棚に無料で自動配布されます（開封には50クレジット必要・unlock_costで変更可）。"
                 : "依頼記事：特定の顧客からの依頼に応じて作成する、通常の文法解説記事です。"}
               {editingArticle && "（記事タイプは作成後に変更できません）"}
             </p>
@@ -587,6 +600,27 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 </div>
               </>
             )}
+            {form.article_type === "exercise" && (
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                  対応するリクエスト（公開時にステータスを自動で「対応済み」にします／任意）
+                </label>
+                <select value={form.request_message_id} onChange={e => setForm({ ...form, request_message_id: e.target.value })}>
+                  <option value="">紐付けない</option>
+                  {openRequests.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.grammar_topic ? `[${r.grammar_topic}] ` : ""}{r.content}
+                    </option>
+                  ))}
+                </select>
+                {!form.customer_id && (
+                  <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>※顧客を選択するとリクエスト一覧が表示されます</p>
+                )}
+                {form.customer_id && openRequests.length === 0 && (
+                  <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>この顧客の対応中リクエストはありません</p>
+                )}
+              </div>
+            )}
             {form.article_type === "request" && (
               <div className="sm:col-span-2">
                 <button type="button"
@@ -633,6 +667,16 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 <option value="published">公開</option>
               </select>
             </div>
+            {(form.article_type === "request" || form.article_type === "exercise" || form.article_type === "template") && (
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                  開封コスト（クレジット／任意）
+                </label>
+                <input type="number" min="0" value={form.unlock_cost}
+                  onChange={e => setForm({ ...form, unlock_cost: e.target.value })}
+                  placeholder={form.article_type === "template" ? "未入力で50" : "未入力でリクエスト額から自動算出"} />
+              </div>
+            )}
           </div>
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タイトル</label>

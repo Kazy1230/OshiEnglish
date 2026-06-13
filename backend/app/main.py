@@ -181,6 +181,19 @@ _ensure_column("messages", "suggested_action", "VARCHAR(50) NULL")
 # - credit_transactionsテーブル自体はcreate_all()で自動作成される
 _ensure_column("customers", "credit_balance", "INT NOT NULL DEFAULT 0")
 
+# 簡易マイグレーション㉖: 記事の開封課金・テンプレ記事の定期配布
+# - articles.unlock_cost: 開封に必要なクレジット（0=無料）
+# - articles.opened_at: 顧客が開封（課金）した日時。NULL=未開封
+# - articles.template_source_id: テンプレ記事プールの元記事ID（重複配布防止）
+# - messages.credit_cost: 記事・問題リクエスト時に合意した総消費クレジット
+# - customers.last_template_article_at: テンプレ記事の最終配布日時
+_ensure_column("articles", "unlock_cost", "INT NOT NULL DEFAULT 0")
+_ensure_column("articles", "opened_at", "DATETIME NULL")
+_ensure_column("articles", "template_source_id", "INT NULL")
+_ensure_index("articles", "ix_articles_template_source_id", "(template_source_id)")
+_ensure_column("messages", "credit_cost", "INT NULL")
+_ensure_column("customers", "last_template_article_at", "DATETIME NULL")
+
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
 ACCESS_LOG_RETENTION_DAYS = 180

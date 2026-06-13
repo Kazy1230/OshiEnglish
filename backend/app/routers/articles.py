@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session, joinedload
 from typing import List
@@ -12,7 +13,9 @@ from app.models.character import Character
 from app.core.intimacy import get_intimacy_settings
 from app.core.character_voice import customer_display_name
 from app.core.welcome_articles import claim_welcome_article_for_customer
+from app.core.template_articles import distribute_template_article_if_due
 from app.core.rewards import check_and_unlock_rewards
+from app.core.credits import consume_credits, ARTICLE_REQUEST_FEE, TEMPLATE_UNLOCK_COST
 from pydantic import BaseModel, model_validator
 from typing import Optional
 
@@ -21,7 +24,7 @@ router = APIRouter(prefix="/articles", tags=["記事"])
 class ArticleOut(BaseModel):
     id: int
     title: str
-    content: str
+    content: Optional[str] = None
     tips: Optional[list] = None
     example_sentences: Optional[list[str]] = None
     status: str
@@ -32,6 +35,9 @@ class ArticleOut(BaseModel):
     grammar_master_id: Optional[int] = None
     character_id: int
     customer_id: Optional[int] = None
+    unlock_cost: int = 0
+    opened_at: Optional[str] = None
+    locked: bool = False
 
     class Config:
         from_attributes = True
@@ -65,6 +71,37 @@ def _sanitized_exercise_data_for_customer(article: Article) -> Optional[dict]:
         return sanitized
     return data
 
+
+def _serialize_article_for_customer(article: Article) -> dict:
+    """顧客向けに記事をシリアライズする。未開封の有料記事（unlock_cost > 0 かつ未開封）は
+    本文等を省略し、locked=True として返す（本棚・詳細画面でロック表示するため）。
+    """
+    locked = (article.unlock_cost or 0) > 0 and article.opened_at is None
+    data = {
+        "id": article.id,
+        "title": article.title,
+        "status": article.status,
+        "article_type": article.article_type,
+        "exercise_format": article.exercise_format,
+        "exercise_category": article.exercise_category,
+        "grammar_master_id": article.grammar_master_id,
+        "character_id": article.character_id,
+        "customer_id": article.customer_id,
+        "unlock_cost": article.unlock_cost or 0,
+        "opened_at": article.opened_at.isoformat() if article.opened_at else None,
+        "locked": locked,
+    }
+    if locked:
+        data.update({"content": None, "tips": None, "example_sentences": None, "exercise_data": None})
+    else:
+        data.update({
+            "content": article.content,
+            "tips": article.tips,
+            "example_sentences": article.example_sentences,
+            "exercise_data": _sanitized_exercise_data_for_customer(article),
+        })
+    return data
+
 # ===== 顧客向け =====
 
 @router.get("/", response_model=List[ArticleOut])
@@ -76,29 +113,18 @@ def get_my_articles(
 
     演習問題（選択式）の正解・解説は、一覧表示の時点では含めない
     （詳細表示・採点エンドポイントと同じ方針：自力で解いてから答え合わせをしてもらう）。
+
+    取得のたびに、テンプレ記事プールから配布間隔（TEMPLATE_INTERVAL_DAYS）に応じた
+    新しいテンプレ記事が無料で本棚に追加される（あれば）。
     """
+    distribute_template_article_if_due(db, current_user)
+    db.commit()
+
     articles = db.query(Article).filter(
         Article.customer_id == current_user.id,
         Article.status == "published"
     ).all()
-    return [
-        {
-            "id": a.id,
-            "title": a.title,
-            "content": a.content,
-            "tips": a.tips,
-            "example_sentences": a.example_sentences,
-            "status": a.status,
-            "article_type": a.article_type,
-            "exercise_format": a.exercise_format,
-            "exercise_category": a.exercise_category,
-            "exercise_data": _sanitized_exercise_data_for_customer(a),
-            "grammar_master_id": a.grammar_master_id,
-            "character_id": a.character_id,
-            "customer_id": a.customer_id,
-        }
-        for a in articles
-    ]
+    return [_serialize_article_for_customer(a) for a in articles]
 
 @router.get("/character/{character_id}/blog-posts")
 def get_character_blog_posts(
@@ -163,21 +189,33 @@ def get_article(
 
     # 演習問題（選択式）は、答え・解説を見せる前にまず自力で解いてもらいたいので、
     # 詳細表示の時点では問題文・選択肢のみを返し、正解・解説は採点エンドポイント経由で渡す
-    return {
-        "id": article.id,
-        "title": article.title,
-        "content": article.content,
-        "tips": article.tips,
-        "example_sentences": article.example_sentences,
-        "status": article.status,
-        "article_type": article.article_type,
-        "exercise_format": article.exercise_format,
-        "exercise_category": article.exercise_category,
-        "exercise_data": _sanitized_exercise_data_for_customer(article),
-        "grammar_master_id": article.grammar_master_id,
-        "character_id": article.character_id,
-        "customer_id": article.customer_id,
-    }
+    return _serialize_article_for_customer(article)
+
+
+@router.post("/{article_id}/unlock", response_model=ArticleOut)
+def unlock_article(
+    article_id: int,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """未開封の記事を開封する。unlock_costが設定されている場合はクレジットを消費する
+    （残高不足の場合は402）。既に開封済みの場合はそのまま現在の記事データを返す（冪等）。
+    """
+    article = db.query(Article).filter(
+        Article.id == article_id,
+        Article.customer_id == current_user.id,
+    ).first()
+    if not article:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="記事が見つかりません")
+
+    if article.opened_at is None:
+        if (article.unlock_cost or 0) > 0:
+            consume_credits(db, current_user, article.unlock_cost, reason="article_unlock")
+        article.opened_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(article)
+
+    return _serialize_article_for_customer(article)
 
 
 class ExerciseSubmitMC(BaseModel):
@@ -395,16 +433,17 @@ class ArticleCreate(BaseModel):
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
     is_welcome_template: bool = False  # ウェルカムページ用テンプレートかどうか
     template_character_id: Optional[int] = None  # 公式キャラ専用テンプレートの場合、対象キャラのID（汎用テンプレートはNULL）
+    unlock_cost: Optional[int] = None  # 開封に必要なクレジット（未指定時はrequest_message_id/article_typeから自動算出）
 
     @model_validator(mode="after")
     def _validate_by_type(self):
-        VALID_TYPES = ("request", "blog", "exercise", "writing_feedback", "speaking_feedback", "welcome")
+        VALID_TYPES = ("request", "blog", "exercise", "writing_feedback", "speaking_feedback", "welcome", "template")
         if self.article_type not in VALID_TYPES:
             raise ValueError(
                 "article_type は 'request'（依頼記事）/ 'blog'（ブログ記事）/ 'exercise'（演習問題）"
                 "/ 'writing_feedback'（ライティングフィードバック）"
                 "/ 'speaking_feedback'（スピーキングフィードバック）"
-                "/ 'welcome'（ウェルカムページ）のいずれかを指定してください"
+                "/ 'welcome'（ウェルカムページ）/ 'template'（テンプレ記事プール）のいずれかを指定してください"
             )
         if self.article_type == "request":
             if self.customer_id is None or self.grammar_master_id is None:
@@ -451,6 +490,15 @@ class ArticleCreate(BaseModel):
                 self.template_character_id = None
             else:
                 self.is_welcome_template = True
+        elif self.article_type == "template":
+            # テンプレ記事プール：customer_id=NULLで保管し、配布時にコピーして各顧客の本棚に追加する。
+            if not self.content:
+                raise ValueError("テンプレ記事には本文の入力が必須です")
+            self.customer_id = None
+            self.grammar_master_id = None
+            self.exercise_format = None
+            self.exercise_category = None
+            self.exercise_data = None
         else:
             # 演習問題：特定の顧客に向けて出題する（依頼記事と同様、顧客の本棚に届く）
             if self.customer_id is None:
@@ -478,6 +526,7 @@ class ArticleUpdate(BaseModel):
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
     is_welcome_template: Optional[bool] = None
     template_character_id: Optional[int] = None
+    unlock_cost: Optional[int] = None  # 開封に必要なクレジット
     # template_character_id を NULL に戻したい場合、exclude_none=True では None が無視されるため
     # このフラグで明示的にクリアする
     clear_template_character_id: bool = False
@@ -565,7 +614,21 @@ def admin_create_article(
     admin=Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    article = Article(**data.model_dump())
+    article = Article(**data.model_dump(exclude={"unlock_cost"}))
+
+    # 開封コスト（unlock_cost）の決定：
+    # 1. 管理者が明示的に指定していればそれを使う
+    # 2. 記事リクエストに紐付く場合は、合意した総額（credit_cost）から依頼時の固定費を引いた残額
+    # 3. テンプレ記事の場合は、デフォルトの開封コストを使う
+    if data.unlock_cost is not None:
+        article.unlock_cost = data.unlock_cost
+    elif data.request_message_id is not None:
+        req_msg = db.query(Message).filter(Message.id == data.request_message_id).first()
+        if req_msg and req_msg.credit_cost:
+            article.unlock_cost = max(0, req_msg.credit_cost - ARTICLE_REQUEST_FEE)
+    elif data.article_type == "template":
+        article.unlock_cost = TEMPLATE_UNLOCK_COST
+
     db.add(article)
     # 「依頼記事」の作成は記事依頼回数カウントの対象になるため、報酬解放チェックを行う
     if article.article_type == "request" and article.customer_id:

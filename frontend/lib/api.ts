@@ -82,6 +82,7 @@ export const api = {
     apiFetch(`/articles/${id}/check-answer`, { method: "POST", body: JSON.stringify({ question_index: questionIndex, chosen_index: chosenIndex }) }),
   submitWrittenExercise: (id: number, answer: string) =>
     apiFetch(`/articles/${id}/submit-written`, { method: "POST", body: JSON.stringify({ answer }) }),
+  unlockArticle: (id: number) => apiFetch(`/articles/${id}/unlock`, { method: "POST" }),
   getCharacterTheme: (id: number) => apiFetch(`/characters/theme/${id}`),
   claimWelcomeArticle: () =>
     apiFetch("/articles/me/claim-welcome", { method: "POST" }),

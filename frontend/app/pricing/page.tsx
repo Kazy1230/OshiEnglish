@@ -250,6 +250,39 @@ export default function PricingPage() {
             </>
           )}
         </section>
+
+        {/* クレジットの消費タイミング（2段階課金） */}
+        <section className="mb-8 rounded-xl p-4" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
+          <h3 className="text-lg font-black mb-2" style={{ color: t.primary }}>
+            記事・問題リクエストのクレジット消費について
+          </h3>
+          <p className="text-sm leading-relaxed" style={{ color: t.text }}>
+            記事・問題のリクエストは、依頼するハードルを下げるため <strong>2段階</strong> でクレジットを消費します。
+          </p>
+          <ul className="text-sm leading-relaxed list-disc pl-5 mt-2" style={{ color: t.text }}>
+            <li><strong>依頼時</strong>：50クレジットのみ消費します</li>
+            <li><strong>記事が届いて本棚で開封する時</strong>：残りのクレジット（200クレジットの記事なら150、400クレジットの記事なら350）を消費します</li>
+          </ul>
+          <p className="text-sm leading-relaxed mt-2" style={{ color: t.text }}>
+            合計の消費クレジット数は表示されている料金と変わりません。未開封の記事は本棚で🔒マークが付き、
+            開封ボタンを押すとクレジットが消費されていつでも読めるようになります。
+          </p>
+        </section>
+
+        {/* テンプレ記事（定期配布） */}
+        <section className="mb-8 rounded-xl p-4" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
+          <h3 className="text-lg font-black mb-2" style={{ color: t.primary }}>
+            🎁 特別記事（テンプレ記事）の定期配布
+          </h3>
+          <p className="text-sm leading-relaxed" style={{ color: t.text }}>
+            3日ごとに1本、キャラクターが用意した「特別記事」が無料で本棚に届きます。
+          </p>
+          <ul className="text-sm leading-relaxed list-disc pl-5 mt-2" style={{ color: t.text }}>
+            <li>記事が届くこと自体は<strong>無料</strong>です（クレジットは消費しません）</li>
+            <li>本棚で読む（開封する）には<strong>50クレジット</strong>を消費します</li>
+            <li>未開封の特別記事も本棚で🔒マークが付き、開封ボタンを押すと読めるようになります</li>
+          </ul>
+        </section>
       </main>
     </div>
   );

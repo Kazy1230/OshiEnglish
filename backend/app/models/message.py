@@ -24,6 +24,10 @@ class Message(Base):
     is_request = Column(Boolean, default=False)       # 記事リクエストかどうか
     grammar_topic = Column(String(300), nullable=True)  # リクエストされた文法トピック
     request_status = Column(String(20), nullable=True)  # pending / accepted / completed（リクエストのみ使用）
+    # 記事・問題リクエスト時に合意した総消費クレジット（200/400）。
+    # 依頼時には一部（ARTICLE_REQUEST_FEE）のみ消費し、残りは記事のunlock_costとして開封時に消費するため、
+    # 記事作成時にunlock_costを算出する基準値として保持する。
+    credit_cost = Column(Integer, nullable=True)
 
     # キャラクター→顧客メッセージに付与するCTA（行動喚起）ボタン。
     # 例: "request_correction"（添削してもらう）→ 顧客チャットでクリックすると素材提出モーダルが開く。

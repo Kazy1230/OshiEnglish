@@ -8,12 +8,13 @@ import { ArticleSkeleton } from "@/components/Skeleton";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { reportError } from "@/lib/reportError";
+import { toast } from "@/components/Toast";
 import ReactMarkdown from "react-markdown";
 
 type Article = {
   id: number;
   title: string;
-  content: string;
+  content?: string | null;
   tips?: string[];
   example_sentences?: string[];
   character_id: number;
@@ -21,6 +22,9 @@ type Article = {
   exercise_format?: "multiple_choice" | "written_response" | null;
   exercise_category?: string | null;
   exercise_data?: any;
+  unlock_cost?: number;
+  opened_at?: string | null;
+  locked?: boolean;
 };
 type Me = { username: string; display_name?: string };
 type BlogPost = { id: number; title: string; created_at: string | null };
@@ -79,6 +83,8 @@ export default function ArticlePage() {
   const [mode, toggleMode] = useDarkMode();
   const [pageIndex, setPageIndex] = useState(0);
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  const [unlocking, setUnlocking] = useState(false);
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
   const articleSectionRef = useRef<HTMLDivElement>(null);
 
   // ページ送り時は本文セクションの先頭へスクロールする。
@@ -141,6 +147,25 @@ export default function ArticlePage() {
   // 体裁のため、文言・ラベル類を記事タイプに応じて出し分ける（依頼記事の語彙をそのまま使うと違和感が出るため）
   const isBlog = article?.article_type === "blog";
   const isExercise = article?.article_type === "exercise";
+
+  async function handleUnlock() {
+    if (!article) return;
+    setUnlocking(true);
+    setInsufficientCredits(false);
+    try {
+      const data: Article = await api.unlockArticle(article.id);
+      setArticle(data);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes("402")) {
+        setInsufficientCredits(true);
+        toast("クレジットが不足しています", "error");
+      } else {
+        toast(err instanceof Error ? err.message : "開封に失敗しました", "error");
+      }
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   if (loading) return <ArticleSkeleton />;
 
@@ -265,8 +290,36 @@ export default function ArticlePage() {
             <h2 className="text-xl font-black leading-snug" style={{ color: t.primary }}>{article.title}</h2>
           </div>
 
+          {/* ロック画面：未開封の有料記事はクレジットを消費して開封する */}
+          {article.locked && (
+            <div className="rounded-2xl px-4 sm:px-6 py-10 shadow-sm text-center" style={{ background: t.card, border: `1px solid ${t.border}` }}>
+              <p className="text-4xl mb-3">🔒</p>
+              <p className="font-bold mb-2" style={{ color: t.primary }}>
+                この{isExercise ? "問題" : "記事"}は{article.unlock_cost}クレジットで読めます
+              </p>
+              <p className="text-xs mb-4" style={{ color: t.accent }}>
+                開封すると{article.unlock_cost}クレジットを消費して、いつでも読めるようになります。
+              </p>
+              <button type="button" onClick={handleUnlock} disabled={unlocking}
+                className="px-6 py-2.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md disabled:opacity-50"
+                style={{ borderColor: t.primary, color: "white", background: t.primary }}>
+                {unlocking ? "開封中…" : `🔓 ${article.unlock_cost}クレジットを使って読む`}
+              </button>
+              {insufficientCredits && (
+                <div className="mt-4">
+                  <p className="text-xs font-bold mb-2" style={{ color: "#d9534f" }}>クレジットが不足しています</p>
+                  <button type="button" onClick={() => router.push("/credits")}
+                    className="px-4 py-2 rounded-full text-xs font-bold border-2 transition-all hover:shadow-md"
+                    style={{ borderColor: t.accent, color: t.accent, background: t.card }}>
+                    クレジットを購入する →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 演習問題：問題表示・解答UI（選択式は自動採点、記述式はキャラへの提出） */}
-          {isExercise && (
+          {!article.locked && isExercise && (
             <div className="rounded-2xl px-4 sm:px-6 py-5 shadow-sm" style={{ background: t.card, border: `1px solid ${t.border}` }}>
               <SectionLabel color={t.primary} icon="🧩" label="問題" />
               <div className="mt-3">
@@ -276,7 +329,7 @@ export default function ArticlePage() {
           )}
 
           {/* 補足メモ（演習問題で本文に何か書かれている場合のみ表示） */}
-          {isExercise && article.content && article.content.trim() && (
+          {!article.locked && isExercise && article.content && article.content.trim() && (
             <div className="rounded-2xl px-4 sm:px-6 py-5 shadow-sm" style={{ background: t.card, border: `1px solid ${t.border}` }}>
               <SectionLabel color={t.accent} icon="📝" label="ひとことメモ" />
               <div className="mt-3 markdown-body" style={{ color: t.text, "--md-accent": t.accent, "--md-primary": t.primary, "--md-bg": t.bg, "--md-border": t.border } as React.CSSProperties}>
@@ -288,7 +341,7 @@ export default function ArticlePage() {
           )}
 
           {/* 本文（Markdownレンダリング・複数ページ表示） */}
-          {!isExercise && (
+          {!article.locked && !isExercise && (
           <div ref={articleSectionRef} className="rounded-2xl px-4 sm:px-6 py-5 shadow-sm" style={{ background: t.card, border: `1px solid ${t.border}` }}>
             <div className="flex items-center justify-between">
               {isBlog
@@ -327,7 +380,7 @@ export default function ArticlePage() {
                   hr: () => <hr className="my-4" style={{ borderColor: t.border }} />,
                 }}
               >
-                {pages[pageIndex] ?? article.content}
+                {pages[pageIndex] ?? article.content ?? ""}
               </ReactMarkdown>
             </div>
 

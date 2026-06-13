@@ -15,7 +15,7 @@ from app.models.credit_transaction import CreditTransaction
 from app.models.order import Order
 from app.core.intimacy import intimacy_info, POINTS_PER_CHARACTER_REPLY, get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
-from app.core.credits import grant_credits, consume_credits
+from app.core.credits import grant_credits, consume_credits, ARTICLE_REQUEST_FEE
 from app.core.llm import generate_text, LLMError
 from app.core.character_voice import (
     build_dm_reply_system_prompt,
@@ -166,14 +166,15 @@ def send_my_message(
     会話のやり取りは「親密度」に少しずつ反映される
     （送るたびに大きく増えるものではなく、コツコツ続けることで関係が育っていく設計）。
 
-    DM送信は1クレジット、記事・問題リクエストはcredit_cost（200/400）を消費する。
+    DM送信は1クレジット、記事・問題リクエストは依頼時にARTICLE_REQUEST_FEE（50）のみ消費する。
+    残りの金額（credit_cost - ARTICLE_REQUEST_FEE）は、記事完成後に本棚で開封する際に消費する。
     残高不足の場合は402を返す。
     """
     if not data.content and not data.grammar_topic:
         raise HTTPException(status_code=400, detail="メッセージ内容を入力してください")
 
     is_request = bool(data.grammar_topic)
-    cost = data.credit_cost if (is_request and data.credit_cost) else 1
+    cost = ARTICLE_REQUEST_FEE if is_request else 1
     consume_credits(
         db, current_user, cost,
         reason="article_request" if is_request else "dm_send",
@@ -187,6 +188,7 @@ def send_my_message(
         is_request=is_request,
         grammar_topic=data.grammar_topic,
         request_status="accepted" if is_request else None,
+        credit_cost=data.credit_cost if is_request else None,
     )
     db.add(msg)
     db.flush()
