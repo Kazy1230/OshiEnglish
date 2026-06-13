@@ -10,43 +10,37 @@ export const TOPIC_SUGGESTIONS = [
 ];
 
 export const TOPIC_PRICES: Record<string, string> = {
-  "TOEIC": "各¥500",
-  "IELTS": "¥500〜¥1,000",
-  "英検": "¥500〜¥1,000",
-  "TOEFL": "¥500〜¥1,000",
-  "文法": "¥500",
-  "ライティング添削": "¥1,000",
-  "スピーキング添削": "¥1,000",
+  "TOEIC": "各200クレジット",
+  "IELTS": "200〜400クレジット",
+  "英検": "200〜400クレジット",
+  "TOEFL": "200〜400クレジット",
+  "文法": "200クレジット",
+  "ライティング添削": "400クレジット",
+  "スピーキング添削": "400クレジット",
 };
 
-type PartOption = { label: string; content: string; price: string };
-
-// 価格表記（¥500/¥1,000）に対応する消費クレジット数
-const CREDIT_COST_BY_PRICE: Record<string, number> = {
-  "¥500": 200,
-  "¥1,000": 400,
-};
+type PartOption = { label: string; content: string; credits: number };
 
 // 記事・問題リクエスト時に即時消費する固定費（残りは記事が届いて開封する時に消費する）
 const ARTICLE_REQUEST_FEE = 50;
 
 // 料金プランページ（/pricing）の価格表に基づくパート別ラインナップ（演習問題数も明記）
 const TOEIC_PARTS: PartOption[] = [
-  { label: "Part 1（写真描写）", content: "6問＋解説", price: "¥500" },
-  { label: "Part 2（応答問題）", content: "6問＋解説", price: "¥500" },
-  { label: "Part 3（会話問題）", content: "2セット（6問）＋解説", price: "¥500" },
-  { label: "Part 4（説明文問題）", content: "2セット（6問）＋解説", price: "¥500" },
-  { label: "Part 5（短文穴埋め）", content: "5問＋解説", price: "¥500" },
-  { label: "Part 6（長文穴埋め）", content: "2セット（8問）＋解説", price: "¥500" },
-  { label: "Part 7（長文読解）", content: "1セット＋解説", price: "¥500" },
+  { label: "Part 1（写真描写）", content: "6問＋解説", credits: 200 },
+  { label: "Part 2（応答問題）", content: "6問＋解説", credits: 200 },
+  { label: "Part 3（会話問題）", content: "2セット（6問）＋解説", credits: 200 },
+  { label: "Part 4（説明文問題）", content: "2セット（6問）＋解説", credits: 200 },
+  { label: "Part 5（短文穴埋め）", content: "5問＋解説", credits: 200 },
+  { label: "Part 6（長文穴埋め）", content: "2セット（8問）＋解説", credits: 200 },
+  { label: "Part 7（長文読解）", content: "1セット＋解説", credits: 200 },
 ];
 
 const IELTS_PARTS: PartOption[] = [
-  { label: "Reading（Academic / General）", content: "1パッセージ＋設問＋解説", price: "¥500" },
-  { label: "Listening（Section 1〜4）", content: "1セット＋解説", price: "¥500" },
-  { label: "Writing Task 1", content: "1題＋評価観点メモ", price: "¥500" },
-  { label: "Writing Task 2", content: "1題＋評価観点メモ", price: "¥1,000" },
-  { label: "Speaking Part 1〜3", content: "1セット＋評価観点メモ", price: "¥1,000" },
+  { label: "Reading（Academic / General）", content: "1パッセージ＋設問＋解説", credits: 200 },
+  { label: "Listening（Section 1〜4）", content: "1セット＋解説", credits: 200 },
+  { label: "Writing Task 1", content: "1題＋評価観点メモ", credits: 200 },
+  { label: "Writing Task 2", content: "1題＋評価観点メモ", credits: 400 },
+  { label: "Speaking Part 1〜3", content: "1セット＋評価観点メモ", credits: 400 },
 ];
 
 export const EIKEN_GRADES = ["1級", "準1級", "2級", "準2級", "3級", "4級", "5級"] as const;
@@ -54,16 +48,16 @@ export type EikenGrade = typeof EIKEN_GRADES[number];
 
 function eikenParts(grade: EikenGrade): PartOption[] {
   const base: PartOption[] = [
-    { label: "リーディング（短文穴埋め）", content: "5問＋解説", price: "¥500" },
-    { label: "リーディング（長文穴埋め）", content: "2セット＋解説", price: "¥500" },
-    { label: "リーディング（長文読解）", content: "1セット＋解説", price: "¥500" },
-    { label: "リスニング", content: "1セット＋解説", price: "¥500" },
+    { label: "リーディング（短文穴埋め）", content: "5問＋解説", credits: 200 },
+    { label: "リーディング（長文穴埋め）", content: "2セット＋解説", credits: 200 },
+    { label: "リーディング（長文読解）", content: "1セット＋解説", credits: 200 },
+    { label: "リスニング", content: "1セット＋解説", credits: 200 },
   ];
   if (grade === "4級" || grade === "5級") return base;
   return [
     ...base,
-    { label: "ライティング", content: "1題＋評価観点メモ", price: "¥1,000" },
-    { label: "スピーキング", content: "1セット＋評価観点メモ", price: "¥1,000" },
+    { label: "ライティング", content: "1題＋評価観点メモ", credits: 400 },
+    { label: "スピーキング", content: "1セット＋評価観点メモ", credits: 400 },
   ];
 }
 
@@ -71,17 +65,17 @@ export const TOEFL_TYPES = ["iBT", "ITP"] as const;
 export type ToeflType = typeof TOEFL_TYPES[number];
 
 const TOEFL_IBT_PARTS: PartOption[] = [
-  { label: "Reading", content: "1パッセージ＋設問＋解説", price: "¥500" },
-  { label: "Listening", content: "1セット＋解説", price: "¥500" },
-  { label: "Writing Integrated Task", content: "1題＋評価観点メモ", price: "¥1,000" },
-  { label: "Writing Academic Discussion", content: "1題＋評価観点メモ", price: "¥500" },
-  { label: "Speaking Task 1〜4", content: "1セット＋評価観点メモ", price: "¥1,000" },
+  { label: "Reading", content: "1パッセージ＋設問＋解説", credits: 200 },
+  { label: "Listening", content: "1セット＋解説", credits: 200 },
+  { label: "Writing Integrated Task", content: "1題＋評価観点メモ", credits: 400 },
+  { label: "Writing Academic Discussion", content: "1題＋評価観点メモ", credits: 200 },
+  { label: "Speaking Task 1〜4", content: "1セット＋評価観点メモ", credits: 400 },
 ];
 
 const TOEFL_ITP_PARTS: PartOption[] = [
-  { label: "Listening", content: "1セット＋解説", price: "¥500" },
-  { label: "Structure and Written Expression", content: "5問＋解説", price: "¥500" },
-  { label: "Reading", content: "1パッセージ＋設問＋解説", price: "¥500" },
+  { label: "Listening", content: "1セット＋解説", credits: 200 },
+  { label: "Structure and Written Expression", content: "5問＋解説", credits: 200 },
+  { label: "Reading", content: "1パッセージ＋設問＋解説", credits: 200 },
 ];
 
 export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrection }: {
@@ -127,9 +121,8 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
     return [];
   }
 
-  // 「文法」は ¥500 固定・トピック自由入力。それ以外はパート選択で価格が決まる
-  const selectedPrice = category === "文法" ? "¥500" : part?.price ?? null;
-  const creditCost = selectedPrice ? CREDIT_COST_BY_PRICE[selectedPrice] ?? null : null;
+  // 「文法」は200クレジット固定・トピック自由入力。それ以外はパート選択で価格が決まる
+  const creditCost = category === "文法" ? 200 : part?.credits ?? null;
   const canSubmit = category === "文法" ? grammarDetail.trim().length > 0 : !!part;
 
   // 級・試験種別の選択が必要かどうか
@@ -288,7 +281,7 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
                   <span>{p.label}</span>
                   <span className="text-[11px] font-normal" style={{ color: t.accent }}>{p.content}</span>
                 </span>
-                <span className="flex-shrink-0" style={{ color: t.accent }}>{p.price}</span>
+                <span className="flex-shrink-0" style={{ color: t.accent }}>{p.credits}クレジット</span>
               </button>
             ))}
           </div>
@@ -318,7 +311,7 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
           📋 {headLabel}の記事・問題をリクエスト
         </p>
         <p className="text-[11px] mb-3" style={{ color: t.accent }}>
-          {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}（{selectedPrice} ／ {creditCost}クレジット）
+          {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}（{creditCost}クレジット）
           <br />
           依頼時 {ARTICLE_REQUEST_FEE}クレジット ／ 記事が届いたら残り{(creditCost ?? 0) - ARTICLE_REQUEST_FEE}クレジットで読めます
         </p>

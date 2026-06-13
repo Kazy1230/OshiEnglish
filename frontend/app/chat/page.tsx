@@ -275,6 +275,13 @@ function ChatPageInner() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {creditBalance !== null && (
+              <button onClick={() => router.push("/credits")} aria-label="クレジット残高"
+                className="text-xs font-bold px-2.5 py-1 rounded-full text-white transition-colors flex-shrink-0"
+                style={{ background: "rgba(255,255,255,0.15)" }}>
+                💰 {creditBalance}
+              </button>
+            )}
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0">🎁 ご褒美</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />

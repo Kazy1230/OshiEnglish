@@ -25,6 +25,7 @@ type Me = {
   username: string; display_name?: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null;
   theme_config?: { wallpaper_url?: string } | null;
   email?: string | null; free_content_claimed?: boolean; character_ready_announced?: boolean;
+  credit_balance?: number;
 };
 
 function ShelfContent() {
@@ -154,6 +155,11 @@ function ShelfContent() {
             )}
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
+            <button onClick={() => router.push("/credits")} aria-label="クレジット残高"
+              className="text-xs sm:text-sm font-bold px-2.5 py-1 rounded-full text-white transition-colors"
+              style={{ background: "rgba(255,255,255,0.15)" }}>
+              💰 {me?.credit_balance ?? 0}
+            </button>
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🎁 ご褒美</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
