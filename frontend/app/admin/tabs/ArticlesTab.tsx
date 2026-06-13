@@ -151,11 +151,16 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
         payload.correction_request_id = Number(form.correction_request_id);
       }
     } else if (isWelcome) {
-      // ウェルカムページ：対象キャラを指定した場合のみ公式キャラ専用テンプレートになる（空欄は汎用テンプレート）
-      if (form.template_character_id) {
-        payload.template_character_id = Number(form.template_character_id);
-      } else if (editingArticle) {
-        payload.clear_template_character_id = true;
+      if (form.customer_id) {
+        // 対象顧客を指定した場合：テンプレートではなく、その顧客の本棚に直接届く個別ウェルカムページになる
+        payload.customer_id = Number(form.customer_id);
+      } else {
+        // ウェルカムページ：対象キャラを指定した場合のみ公式キャラ専用テンプレートになる（空欄は汎用テンプレート）
+        if (form.template_character_id) {
+          payload.template_character_id = Number(form.template_character_id);
+        } else if (editingArticle) {
+          payload.clear_template_character_id = true;
+        }
       }
     } else if (!isBlog) {
       payload.customer_id = Number(form.customer_id);
@@ -502,7 +507,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                   📋 ウェルカムページ作成プロンプトをコピー
                 </button>
               </div>
-              <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}>
+              <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}
+                disabled={!!form.customer_id}>
                 <option value="">汎用テンプレート（対象キャラを指定しない）</option>
                 {characters.map(c => (
                   <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
@@ -514,6 +520,18 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 汎用テンプレートは、キャラ未割り当ての顧客（キャラビルダーでの作成中など）に届きます。
                 各キャラ・汎用ごとに1件まで設定できます（同じ対象を選んだ既存のテンプレートがある場合は、後から保存した方が優先されます）。
                 上の「プロンプトをコピー」ボタンで、選択中のキャラに合わせたウェルカムページ文章のLLM作成用プロンプトをコピーできます。
+              </p>
+
+              <label className="text-xs font-medium block mt-3 mb-1" style={{ color: "var(--muted)" }}>
+                対象顧客（特定の顧客に直接届ける場合のみ選択）
+              </label>
+              <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}>
+                <option value="">指定なし（テンプレートとして登録）</option>
+                {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
+              </select>
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                顧客を選択すると、テンプレートではなくその顧客の本棚に直接届く個別ウェルカムページとして登録されます。
+                「最初の1つ無料」を既に利用済みでテンプレートが自動配布されない既存顧客に、後からウェルカムページを届けたい場合に使用してください。
               </p>
             </div>
           )}
@@ -686,7 +704,11 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                   ) : a.article_type === "speaking_feedback" ? (
                     <>🎤 スピーキングFB　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}</>
                   ) : a.article_type === "welcome" ? (
-                    <>🏠 ウェルカムページ　{a.template_character_id ? `🎭 ${characters.find(c => c.id === a.template_character_id)?.name ?? `キャラID:${a.template_character_id}`}専用` : "汎用"}</>
+                    a.customer_id ? (
+                      <>🏠 ウェルカムページ（個別）　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}</>
+                    ) : (
+                      <>🏠 ウェルカムページ　{a.template_character_id ? `🎭 ${characters.find(c => c.id === a.template_character_id)?.name ?? `キャラID:${a.template_character_id}`}専用` : "汎用"}</>
+                    )
                   ) : (
                     <>👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}　📚 {a.grammar_topic ?? "—"}</>
                   )}

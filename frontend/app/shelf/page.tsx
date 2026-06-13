@@ -218,7 +218,6 @@ function ShelfContent() {
                 <div className="flex items-start gap-3 flex-1">
                   <span className="text-lg flex-shrink-0">💬</span>
                   <p className="text-sm leading-relaxed" style={{ color: t.text, fontFamily: t.fontFamily }}>
-                    <span className="font-bold" style={{ color: t.accent }}>{theme.name}より：</span>
                     「{greeting}」
                   </p>
                 </div>
@@ -268,15 +267,6 @@ function ShelfContent() {
             <p className="text-sm mt-2" style={{ color: t.accent }}>
               通常、お申し込みから2〜3日ほどで最初の1冊目が届きます。届くまで今しばらくお待ちください。
             </p>
-
-            {greeting && (
-              <div className="mt-6 max-w-md mx-auto rounded-xl p-4 text-left" style={{ background: t.example_bg, border: `1px dashed ${t.border}` }}>
-                <p className="text-xs font-bold mb-1" style={{ color: t.accent }}>
-                  💬 {theme?.name ? `${theme.name}より` : "キャラクターより"}：
-                </p>
-                <p className="text-sm leading-relaxed" style={{ color: t.text, fontFamily: t.fontFamily }}>「{greeting}」</p>
-              </div>
-            )}
           </div>
         )}
 

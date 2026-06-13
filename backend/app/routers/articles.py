@@ -438,14 +438,19 @@ class ArticleCreate(BaseModel):
         elif self.article_type == "welcome":
             # ウェルカムページ：新規顧客の本棚に最初に届くテンプレート記事。
             # 公式キャラ専用（template_character_id=キャラID）または汎用（NULL）として登録する。
+            # 「対象顧客」を指定した場合は、テンプレートではなくその顧客の本棚に直接届く
+            # 個別ウェルカムページとして登録する（自動配布の対象外になっている既存顧客向け）。
             if not self.content:
                 raise ValueError("ウェルカムページには本文の入力が必須です")
-            self.customer_id = None
             self.grammar_master_id = None
             self.exercise_format = None
             self.exercise_category = None
             self.exercise_data = None
-            self.is_welcome_template = True
+            if self.customer_id is not None:
+                self.is_welcome_template = False
+                self.template_character_id = None
+            else:
+                self.is_welcome_template = True
         else:
             # 演習問題：特定の顧客に向けて出題する（依頼記事と同様、顧客の本棚に届く）
             if self.customer_id is None:
@@ -609,6 +614,7 @@ def admin_update_article(
             "exercise":         "演習問題",
             "writing_feedback": "ライティングフィードバック",
             "speaking_feedback": "スピーキングフィードバック",
+            "welcome":          "ウェルカムページ",
         }
         article_type_label = _TYPE_LABEL.get(article.article_type, "記事")
         notification_msg = Message(

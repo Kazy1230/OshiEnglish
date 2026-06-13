@@ -253,46 +253,6 @@ export function summarizeExerciseData(format: string, data: any): string {
   return "";
 }
 
-export const ENDING_TEMPLATES_STORAGE_KEY = "yt_admin_ending_templates_v1";
-
-export type EndingTemplate = { id: string; label: string; sample: string; custom?: boolean };
-
-export const DEFAULT_ENDING_TEMPLATES: EndingTemplate[] = [
-  { id: "gentle",     label: "やさしい系（〜だよ／〜だね）",     sample: "今日も一緒に頑張ろうね。わからないところがあったら、いつでも聞いていいんだよ。" },
-  { id: "onee",       label: "クール系（〜なんだけど／〜でしょ）", sample: "…はあ、しょうがないわね。今日も付き合ってあげるんだから、感謝しなさいよね。" },
-  { id: "genki",      label: "元気系（〜だぜ！／〜だろ！）",     sample: "よっしゃ、今日も気合入れていくぜ！一緒に頑張るぞー！" },
-  { id: "ojousama",   label: "お嬢様系（〜ですわ／〜ますわよ）", sample: "ごきげんよう。今日もわたくしと一緒に学んでまいりましょう。" },
-  { id: "keigo",      label: "丁寧・敬語系（〜です／〜ます）",   sample: "本日もよろしくお願いいたします。一歩ずつ、着実に進めていきましょう。" },
-  { id: "kansai",     label: "関西弁系（〜やで／〜やん）",       sample: "おっ、今日も来てくれたんやな。ほな、一緒にがんばろっか！" },
-  { id: "samurai",    label: "武士語系（〜でござる／〜なり）",   sample: "おお、よく参られた。本日も励むがよいでござる。" },
-  { id: "robot",      label: "ロボット系（〜なのだ／〜であ る）", sample: "学習を開始するのだ。本日のミッションを達成するため、共に頑張るのだ。" },
-  { id: "neko",       label: "猫語尾系（〜にゃ／〜なのにゃ）",   sample: "今日も来てくれたにゃ！一緒にお勉強がんばるにゃ。" },
-  { id: "tsundere",   label: "ツンデレ系（〜なんだからね／〜もん）", sample: "別にあなたのために用意したわけじゃないんだからね。…ちゃんと見てるもん。" },
-  { id: "sleepy",     label: "ゆるふわ系（〜なのです…／〜だなぁ）", sample: "ふわぁ…今日ものんびり一緒に進めていきましょうなのです。" },
-  { id: "senpai",     label: "先輩系（〜だぞ／〜だからな）",     sample: "おっ、来たな。今日もしっかり鍛えてやるから覚悟しておけよ。" },
-];
-
-export function loadEndingTemplates(): EndingTemplate[] {
-  if (typeof window === "undefined") return DEFAULT_ENDING_TEMPLATES;
-  try {
-    const raw = localStorage.getItem(ENDING_TEMPLATES_STORAGE_KEY);
-    const custom: EndingTemplate[] = raw ? JSON.parse(raw) : [];
-    return [...DEFAULT_ENDING_TEMPLATES, ...custom];
-  } catch {
-    return DEFAULT_ENDING_TEMPLATES;
-  }
-}
-
-export function saveCustomEndingTemplate(t: EndingTemplate) {
-  if (typeof window === "undefined") return;
-  try {
-    const raw = localStorage.getItem(ENDING_TEMPLATES_STORAGE_KEY);
-    const custom: EndingTemplate[] = raw ? JSON.parse(raw) : [];
-    custom.push(t);
-    localStorage.setItem(ENDING_TEMPLATES_STORAGE_KEY, JSON.stringify(custom));
-  } catch { /* ignore */ }
-}
-
 export function renderToneProfile(tp: any): string {
   if (!tp || typeof tp !== "object") return "";
   const KNOWN: Record<string, string> = {
@@ -1273,6 +1233,70 @@ ${renderToneProfile(tp)}
 2. 横長（1920x1080px程度）の背景・情景イラストにする
 3. キャラクター本人の顔がメインにならないようにする（背景・雰囲気重視）
 4. 出力は画像生成AIにそのまま貼り付けられる英語プロンプト1つのみ（説明文は付けない）`.trim();
+}
+
+/**
+ * 成長ループ・報酬管理タブの「LLMにアイデアを相談」用プロンプト。
+ * 未設定のレベル到達報酬・記事依頼回数報酬について、キャラクターの個性に合った
+ * 隠しセリフ／称号／壁紙のアイデアをLLMに考えてもらい、JSONで返してもらう。
+ * 管理画面側はそのJSONをそのまま貼り付けるだけで報酬登録が完了する。
+ */
+export function buildRewardIdeaPrompt(
+  char: any,
+  unsetIntimacyLevels: number[],
+  lineRemaining: number,
+  nextArticleThreshold: number,
+): string {
+  const tp = char.tone_profile ?? {};
+  const intimacyLines = unsetIntimacyLevels.length > 0
+    ? unsetIntimacyLevels.map(lv => `- Lv.${lv - 1} → Lv.${lv} 到達時の報酬（まだ未設定）`).join("\n")
+    : "（すべての親密度レベルに報酬が設定済みです。隠しセリフの追加候補のみ提案してください）";
+
+  return `あなたは英語学習アプリ「推しEnglish」のご褒美・成長ループ設計を手伝うアシスタントです。
+以下のキャラクター設定に合わせて、顧客が学習を進めるモチベーションになる「ご褒美」のアイデアを考えてください。
+
+==================================================
+【キャラクター設定】
+==================================================
+■ 名前: ${char.name}
+■ 説明: ${char.description ?? ""}
+${renderToneProfile(tp)}
+
+==================================================
+【ご褒美の種類】
+==================================================
+- line（隠しセリフ）: 解放時にキャラクターから届く特別な短いセリフ・台詞（${lineRemaining}件まで追加可能）
+- title（称号）: 顧客に付与される短い称号名＋絵文字アイコン
+- wallpaper（壁紙）: チャット画面の背景になる壁紙の名前（画像は別途用意するため、ここでは名前のみ）
+
+==================================================
+【考えてほしい報酬】
+==================================================
+■ 親密度レベル到達報酬（顧客とキャラクターの親密度が上がるたびに解放）
+${intimacyLines}
+
+■ 記事依頼回数到達報酬（顧客が記事を ${nextArticleThreshold} 件依頼した時点で解放するアイデアを1つ）
+
+==================================================
+【出力フォーマット】
+==================================================
+説明文は付けず、以下のJSON配列のみを出力してください（コードブロックで囲んでも構いません）。
+各要素のキーは固定で、値だけをキャラクターに合わせて考えてください。
+
+\`\`\`json
+[
+  {"trigger_type": "intimacy", "threshold": 1, "category": "line", "text_content": "（隠しセリフ本文）", "official_only": false},
+  {"trigger_type": "intimacy", "threshold": 2, "category": "title", "text_content": "（称号名）", "icon": "🏅", "official_only": false},
+  {"trigger_type": "article_count", "threshold": ${nextArticleThreshold}, "category": "line", "text_content": "（隠しセリフ本文）", "official_only": false}
+]
+\`\`\`
+
+- trigger_type は "intimacy"（親密度レベル） または "article_count"（記事依頼回数累計）
+- category は "line"（隠しセリフ） / "title"（称号） / "wallpaper"（壁紙） のいずれか
+- category が "title" の場合のみ icon（絵文字1つ）を含める。それ以外は icon を省略してよい
+- category が "wallpaper" の場合、text_content には壁紙の名前（管理用、例：「桜の小道」）を入れる
+- official_only は基本 false でよい
+- 上記「考えてほしい報酬」に挙げたレベル・回数の分だけ要素を作成すること（未設定の親密度レベルがない場合は line のアイデアを1件だけ追加）`.trim();
 }
 
 /**

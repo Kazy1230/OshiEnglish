@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { buildRewardWallpaperPrompt } from "../lib/promptBuilders";
+import { buildRewardWallpaperPrompt, buildRewardIdeaPrompt, parseExerciseJsonInput } from "../lib/promptBuilders";
 
 const CATEGORY_LABELS: Record<string, string> = { line: "隠しセリフ", title: "称号", wallpaper: "壁紙" };
 const CATEGORY_ICONS: Record<string, string> = { line: "✏️", title: "🏅", wallpaper: "🖼️" };
@@ -29,6 +29,9 @@ export function RewardsTab() {
   const [form, setForm] = useState<any>(emptyForm);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<number | null>(null);
+  const [showIdeaPaste, setShowIdeaPaste] = useState(false);
+  const [ideaJsonText, setIdeaJsonText] = useState("");
+  const [applyingIdeas, setApplyingIdeas] = useState(false);
 
   useEffect(() => {
     api.adminGetCharacters().then((cs: any[]) => {
@@ -141,6 +144,55 @@ export function RewardsTab() {
   const currentCharacter = characters.find(c => c.id === characterId);
   const lineItemCount = items.filter(i => i.category === "line").length;
   const lineItemLimit = currentCharacter?.is_preset ? 15 : 5;
+  const unsetIntimacyLevels = INTIMACY_LEVELS.filter(level => !intimacyItems.some(i => i.threshold === level));
+  const nextArticleThreshold = (articleItems[articleItems.length - 1]?.threshold ?? 0) + 1;
+
+  function copyIdeaPrompt() {
+    if (!currentCharacter) return;
+    const prompt = buildRewardIdeaPrompt(currentCharacter, unsetIntimacyLevels, Math.max(0, lineItemLimit - lineItemCount), nextArticleThreshold);
+    navigator.clipboard.writeText(prompt);
+    setShowIdeaPaste(true);
+    toast("LLMへの相談プロンプトをコピーしました。回答をもらったら下の欄に貼り付けてください", "success");
+  }
+
+  async function applyIdeaJson() {
+    if (characterId == null) return;
+    let parsed: any;
+    try {
+      parsed = parseExerciseJsonInput(ideaJsonText);
+    } catch {
+      toast("JSONを解析できませんでした。LLMの回答をそのまま貼り付けてください", "error");
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      toast("JSON配列の形式で貼り付けてください", "error");
+      return;
+    }
+    setApplyingIdeas(true);
+    try {
+      for (const idea of parsed) {
+        if (!idea || typeof idea !== "object") continue;
+        await api.adminCreateRewardItem({
+          character_id: characterId,
+          category: idea.category,
+          trigger_type: idea.trigger_type,
+          threshold: Number(idea.threshold) || 0,
+          text_content: idea.text_content ? String(idea.text_content).trim() : null,
+          icon: idea.icon ? String(idea.icon).trim() : null,
+          sort_order: 0,
+          official_only: !!idea.official_only,
+        });
+      }
+      await reload();
+      setIdeaJsonText("");
+      setShowIdeaPaste(false);
+      toast("LLMのアイデアを報酬として登録しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "登録に失敗しました", "error");
+    } finally {
+      setApplyingIdeas(false);
+    }
+  }
 
   const formFields = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -289,10 +341,35 @@ export function RewardsTab() {
       <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={handleFileChange} />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>🎁 成長ループ・報酬管理</h2>
-        <button className="btn-accent" onClick={() => showForm ? cancelForm() : setShowForm(true)} disabled={characterId == null}>
-          {showForm ? "キャンセル" : "+ 報酬を追加"}
-        </button>
+        <div className="flex gap-2">
+          <button className="text-sm px-3 py-2 rounded-xl font-bold border-2" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+            onClick={copyIdeaPrompt} disabled={characterId == null}>
+            🤖 LLMにアイデアを相談
+          </button>
+          <button className="btn-accent" onClick={() => showForm ? cancelForm() : setShowForm(true)} disabled={characterId == null}>
+            {showForm ? "キャンセル" : "+ 報酬を追加"}
+          </button>
+        </div>
       </div>
+
+      {showIdeaPaste && (
+        <div className="card mb-4 flex flex-col gap-2">
+          <h3 className="font-bold" style={{ color: "var(--primary)" }}>🤖 LLMの回答を貼り付けて反映</h3>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            コピーしたプロンプトをChatGPT / Claudeに貼り付けて出てきたJSONを、そのままここに貼り付けてください。
+            「反映する」を押すと、未設定の報酬が自動で登録されます。
+          </p>
+          <textarea rows={6} className="text-xs w-full" style={{ fontFamily: "monospace" }}
+            value={ideaJsonText} onChange={e => setIdeaJsonText(e.target.value)}
+            placeholder='[{"trigger_type":"intimacy","threshold":1,"category":"line","text_content":"..."}]' />
+          <div className="flex gap-2">
+            <button className="btn-primary text-sm px-4 py-1.5" disabled={!ideaJsonText.trim() || applyingIdeas} onClick={applyIdeaJson}>
+              {applyingIdeas ? "登録中…" : "📥 反映する"}
+            </button>
+            <button className="btn-ghost text-sm px-4 py-1.5" onClick={() => { setShowIdeaPaste(false); setIdeaJsonText(""); }}>閉じる</button>
+          </div>
+        </div>
+      )}
       <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
         親密度レベル到達（Lv1→2: 隠しセリフ／Lv2→3: 称号／Lv3→4: 壁紙／Lv4→5: ミックス）と、
         記事依頼回数到達の2系統で報酬を自動解放します。解放前は顧客にカテゴリ名のみ表示され、内容は伏せられます。

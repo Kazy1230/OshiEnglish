@@ -4,10 +4,6 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE, DEFAULT_CHAT_ERROR_MESSAGE } from "@/lib/theme";
 import {
-  type EndingTemplate,
-  DEFAULT_ENDING_TEMPLATES,
-  loadEndingTemplates,
-  saveCustomEndingTemplate,
   buildLLMPrompt,
   buildImagePrompt,
   buildCharacterDesignPrompt,
@@ -41,41 +37,12 @@ export function CharactersTab() {
   const [editingChar, setEditingChar] = useState<any | null>(null);
   const [form, setForm] = useState(emptyCharForm);
   const [previewColors, setPreviewColors] = useState<any>(null);
-  const [endingTemplates, setEndingTemplates] = useState<EndingTemplate[]>(DEFAULT_ENDING_TEMPLATES);
-  const [showAddEnding, setShowAddEnding] = useState(false);
-  const [newEndingLabel, setNewEndingLabel] = useState("");
-  const [newEndingSample, setNewEndingSample] = useState("");
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
   const [promptCustomerIdByChar, setPromptCustomerIdByChar] = useState<Record<number, string>>({});
 
   function toggleExpanded(id: number) {
     setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  useEffect(() => { setEndingTemplates(loadEndingTemplates()); }, []);
-
-  function insertEndingSample(t: EndingTemplate) {
-    const line = t.sample;
-    setForm(f => ({ ...f, greetings: f.greetings ? `${f.greetings}\n${line}` : line }));
-    toast(`「${t.label}」のサンプルを一言欄に追加しました。キャラクターに合わせて調整してね`, "success");
-  }
-
-  function handleAddEndingTemplate() {
-    if (!newEndingLabel.trim() || !newEndingSample.trim()) {
-      toast("テンプレ名とサンプル文の両方を入力してください", "error");
-      return;
-    }
-    const t: EndingTemplate = {
-      id: `custom_${Date.now()}`,
-      label: newEndingLabel.trim(),
-      sample: newEndingSample.trim(),
-      custom: true,
-    };
-    saveCustomEndingTemplate(t);
-    setEndingTemplates(prev => [...prev, t]);
-    setNewEndingLabel(""); setNewEndingSample(""); setShowAddEnding(false);
-    toast("新しい語尾テンプレートを追加しました。これ以降、他のテンプレと同じように一覧から使えます", "success");
   }
 
   const reload = () => Promise.all([api.adminGetCharacters(), api.adminGetCustomers(), api.adminGetArticles()])
@@ -267,12 +234,15 @@ export function CharactersTab() {
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>公式Instagramアカウント（@なし）</label>
               <input value={form.instagram_account} onChange={e => setForm({ ...form, instagram_account: e.target.value })}
-                placeholder="例：shirakawa_yukina._.a" />
+                placeholder="例：shirakawa_yukina._.a" disabled={!form.is_preset} />
+              {!form.is_preset && (
+                <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>「公式キャラクターにする」にチェックすると入力できます</p>
+              )}
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-2 text-sm font-medium pb-1" style={{ color: "var(--text)" }}>
                 <input type="checkbox" checked={form.is_preset}
-                  onChange={e => setForm({ ...form, is_preset: e.target.checked })} />
+                  onChange={e => setForm({ ...form, is_preset: e.target.checked, instagram_account: e.target.checked ? form.instagram_account : "" })} />
                 公式キャラクターにする
               </label>
             </div>
@@ -298,54 +268,6 @@ export function CharactersTab() {
               </p>
             </div>
           )}
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-                🗣️ 語尾・口調テンプレート — クリックでサンプル一言を下の欄に追加
-              </label>
-              <button type="button"
-                onClick={() => setShowAddEnding(v => !v)}
-                className="text-xs px-2 py-1 rounded-lg border transition-all hover:shadow"
-                style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
-                {showAddEnding ? "× 閉じる" : "+ 新しい語尾テンプレを追加"}
-              </button>
-            </div>
-
-            {showAddEnding && (
-              <div className="mb-2 p-3 rounded-lg flex flex-col gap-2" style={{ background: "var(--bg)", border: "1px dashed var(--border)" }}>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  変わった語尾・口調にも対応できます。テンプレ名（例：「お笑い芸人風（〜やないかい！）」）と、
-                  その口調を再現したサンプルの一言を登録すると、以降は他のテンプレと同じように一覧から呼び出せます。
-                </p>
-                <input value={newEndingLabel} onChange={e => setNewEndingLabel(e.target.value)}
-                  placeholder="テンプレ名　例：お笑い芸人風（〜やないかい！）" />
-                <textarea rows={2} value={newEndingSample} onChange={e => setNewEndingSample(e.target.value)}
-                  placeholder="サンプルの一言　例：お、今日も来たんかい！ほな、一緒に勉強していこうやないかい！" />
-                <div>
-                  <button type="button" className="btn-accent text-sm" onClick={handleAddEndingTemplate}>
-                    このテンプレを追加する
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {endingTemplates.map(t => (
-                <button key={t.id} type="button"
-                  onClick={() => insertEndingSample(t)}
-                  title={t.sample}
-                  className="text-xs px-2.5 py-1.5 rounded-full border transition-all hover:shadow"
-                  style={{
-                    borderColor: t.custom ? "var(--accent)" : "var(--border)",
-                    color: t.custom ? "var(--accent)" : "var(--muted)",
-                    background: t.custom ? "rgba(192,57,43,0.05)" : "transparent",
-                  }}>
-                  {t.custom && "✨ "}{t.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
