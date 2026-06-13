@@ -52,6 +52,12 @@ export const api = {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ username, password }),
     }),
+  // 管理者ログインの二段階認証コード（メール送信）を検証してアクセストークンを取得する
+  verify2FA: (username: string, code: string) =>
+    apiFetch("/auth/verify-2fa", {
+      method: "POST",
+      body: JSON.stringify({ username, code }),
+    }),
   me: () => apiFetch("/auth/me"),
   changePassword: (current_password: string, new_password: string) =>
     apiFetch("/auth/change-password", {

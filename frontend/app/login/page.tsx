@@ -11,6 +11,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [requires2FA, setRequires2FA] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,16 @@ function LoginForm() {
     }
   }, [searchParams]);
 
+  async function afterAuthenticated(data: { access_token: string; is_password_reset_required: boolean }) {
+    setToken(data.access_token);
+    if (data.is_password_reset_required) {
+      router.push("/change-password");
+    } else {
+      const me = await api.me();
+      router.push(me.is_admin ? "/admin" : "/shelf");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -33,15 +45,27 @@ function LoginForm() {
     setLoading(true);
     try {
       const data = await api.login(username, password);
-      setToken(data.access_token);
-      if (data.is_password_reset_required) {
-        router.push("/change-password");
+      if (data.requires_2fa) {
+        setRequires2FA(true);
       } else {
-        const me = await api.me();
-        router.push(me.is_admin ? "/admin" : "/shelf");
+        await afterAuthenticated(data);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerify2FA(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const data = await api.verify2FA(username, code);
+      await afterAuthenticated(data);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "認証コードの確認に失敗しました");
     } finally {
       setLoading(false);
     }
@@ -67,33 +91,60 @@ function LoginForm() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-            <div>
-              <label htmlFor="username" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>ユーザー名（メールアドレス）</label>
-              <input id="username" type="text" value={username} onChange={e => setUsername(e.target.value)}
-                required autoFocus placeholder="example@example.com" autoComplete="username" />
-            </div>
-            <div>
-              <label htmlFor="password" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>パスワード</label>
-              <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)}
-                required placeholder="••••••••" autoComplete="current-password" />
-              <div className="text-right mt-1">
-                <button type="button" onClick={() => router.push("/forgot-password")}
-                  className="text-xs font-medium transition-colors" style={{ color: "var(--accent)" }}>
-                  パスワードを忘れた方はこちら
-                </button>
+          {requires2FA ? (
+            <form onSubmit={handleVerify2FA} className="flex flex-col gap-4" noValidate>
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                登録済みのメールアドレスに認証コードを送信しました。6桁のコードを入力してください。
+              </p>
+              <div>
+                <label htmlFor="code" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>認証コード</label>
+                <input id="code" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
+                  value={code} onChange={e => setCode(e.target.value)}
+                  required autoFocus placeholder="123456" autoComplete="one-time-code" />
               </div>
-            </div>
 
-            {error && (
-              <p role="alert" className="text-sm text-red-500 bg-red-50 rounded-lg p-2 text-center">{error}</p>
-            )}
+              {error && (
+                <p role="alert" className="text-sm text-red-500 bg-red-50 rounded-lg p-2 text-center">{error}</p>
+              )}
 
-            <button type="submit" className="btn-primary text-center w-full mt-1" disabled={loading}
-              aria-busy={loading}>
-              {loading ? "ログイン中…" : "ログイン"}
-            </button>
-          </form>
+              <button type="submit" className="btn-primary text-center w-full mt-1" disabled={loading}
+                aria-busy={loading}>
+                {loading ? "確認中…" : "認証して進む"}
+              </button>
+              <button type="button" onClick={() => { setRequires2FA(false); setCode(""); setError(""); }}
+                className="text-xs font-medium text-center transition-colors" style={{ color: "var(--accent)" }}>
+                ログイン画面に戻る
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+              <div>
+                <label htmlFor="username" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>ユーザー名（メールアドレス）</label>
+                <input id="username" type="text" value={username} onChange={e => setUsername(e.target.value)}
+                  required autoFocus placeholder="example@example.com" autoComplete="username" />
+              </div>
+              <div>
+                <label htmlFor="password" className="text-sm font-medium block mb-1" style={{ color: "var(--muted)" }}>パスワード</label>
+                <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)}
+                  required placeholder="••••••••" autoComplete="current-password" />
+                <div className="text-right mt-1">
+                  <button type="button" onClick={() => router.push("/forgot-password")}
+                    className="text-xs font-medium transition-colors" style={{ color: "var(--accent)" }}>
+                    パスワードを忘れた方はこちら
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <p role="alert" className="text-sm text-red-500 bg-red-50 rounded-lg p-2 text-center">{error}</p>
+              )}
+
+              <button type="submit" className="btn-primary text-center w-full mt-1" disabled={loading}
+                aria-busy={loading}>
+                {loading ? "ログイン中…" : "ログイン"}
+              </button>
+            </form>
+          )}
         </div>
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>

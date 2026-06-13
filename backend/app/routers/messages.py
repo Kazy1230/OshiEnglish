@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_admin
+from app.core.uploads import validate_image_content
 from app.models.message import Message
 from app.models.customer import Customer
 from app.models.character import Character
@@ -592,6 +593,7 @@ def send_reward(
     raw = file.file.read()
     if len(raw) > _MAX_IMAGE_SIZE:
         raise HTTPException(status_code=400, detail="画像サイズが大きすぎます（8MBまで）")
+    validate_image_content(raw, ext)
 
     filename = f"{uuid.uuid4().hex}{ext}"
     path = os.path.join(_REWARD_IMAGE_DIR, filename)

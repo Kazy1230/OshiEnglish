@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user
+from app.core.uploads import validate_image_content
 from app.models.character import Character
 from app.models.customer import Customer
 from app.models.article import Article
@@ -115,6 +116,7 @@ async def upload_character_image(
     contents = await file.read()
     if len(contents) > _MAX_IMAGE_SIZE:
         raise HTTPException(status_code=400, detail="画像サイズは5MB以下にしてください")
+    validate_image_content(contents, ext)
 
     # 古い画像があれば削除
     if char.image_url:

@@ -45,6 +45,12 @@ class Customer(Base):
     # 管理者がDM対応の中で「重要だと感じたこと」（誕生日・苦手分野への不安など）を記録するメモ。
     # DM返信下書き生成プロンプトに織り込むことで、担当者が増えても細かい情報を踏まえた返信ができるようにする。
     admin_memo = Column(Text, nullable=True)
+    # ログインセキュリティ: 連続失敗回数とアカウントロック解除時刻（時間経過で自動解除）
+    failed_login_attempts = Column(Integer, nullable=False, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    # 管理者向け二段階認証（メール認証コード）
+    two_factor_code = Column(String(10), nullable=True)
+    two_factor_code_expires = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     assigned_admin = relationship("Customer", remote_side=[id], foreign_keys=[assigned_admin_id])

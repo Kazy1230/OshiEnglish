@@ -14,6 +14,7 @@ from app.core.credentials import generate_temp_password, generate_username
 from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
 from app.core.email import send_email
+from app.core.rate_limit import enforce_rate_limit
 from app.models.order import Order
 from app.models.customer import Customer
 from app.models.character import Character
@@ -49,13 +50,17 @@ def _get_preset_character(db: Session, order: Order):
 
 
 @router.post("/create-checkout-session", tags=["公開フォーム"])
-def create_checkout_session(data: CreateCheckoutSessionRequest, db: Session = Depends(get_db)):
+def create_checkout_session(data: CreateCheckoutSessionRequest, request: Request, db: Session = Depends(get_db)):
     """申し込みフォーム送信後、決済画面（Stripe Checkout）へのURLを発行する。
 
     公式キャラクターを選択した場合はキャラ作成費用が無料のため、Stripe決済を行わず
     その場でアカウントを発行する。
     Stripeが未設定の場合（公式キャラ以外）は503を返し、フロントエンドは従来のDM案内にフォールバックする。
+
+    カードテスティング等の悪用対策として、同一IPからの呼び出し回数を制限する。
     """
+    enforce_rate_limit(request, "create-checkout-session", limit=10, window_seconds=3600)
+
     order = db.query(Order).filter(Order.id == data.order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="申し込み情報が見つかりません")

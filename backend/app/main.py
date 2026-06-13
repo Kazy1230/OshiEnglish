@@ -156,6 +156,14 @@ _ensure_column("articles", "template_character_id", "INT NULL")
 # - DM返信下書き生成プロンプトに織り込み、運用スタッフ間で顧客の細かい情報を共有する
 _ensure_column("customers", "admin_memo", "TEXT NULL")
 
+# 簡易マイグレーション㉒: ログインセキュリティ強化
+# - 連続ログイン失敗回数とアカウントロック解除時刻（時間経過で自動解除）
+# - 管理者向け二段階認証（メール認証コード）の発行コードと有効期限
+_ensure_column("customers", "failed_login_attempts", "INT NOT NULL DEFAULT 0")
+_ensure_column("customers", "locked_until", "DATETIME NULL")
+_ensure_column("customers", "two_factor_code", "VARCHAR(10) NULL")
+_ensure_column("customers", "two_factor_code_expires", "DATETIME NULL")
+
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
 ACCESS_LOG_RETENTION_DAYS = 180

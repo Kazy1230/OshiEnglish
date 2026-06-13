@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user
 from app.core.receipt import generate_receipt_pdf, format_amount
+from app.core.rate_limit import enforce_rate_limit
 from app.models.order import Order
 from app.models.customer import Customer
 from pydantic import BaseModel
@@ -163,12 +164,16 @@ class PublicFormSubmit(BaseModel):
 
 
 @router.post("/form-submit", status_code=201, tags=["公開フォーム"])
-def submit_public_form(data: PublicFormSubmit, db: Session = Depends(get_db)):
+def submit_public_form(data: PublicFormSubmit, request: Request, db: Session = Depends(get_db)):
     """申し込みフォームページからの送信（認証・Webhook Secret 不要の公開エンドポイント）。
 
     受け取ったデータを orders テーブルに status="new" で保存する。
     管理画面の「受注管理」タブで確認・対応できる。
+
+    カードテスティング等の悪用対策として、同一IPからの呼び出し回数を制限する。
     """
+    enforce_rate_limit(request, "form-submit", limit=5, window_seconds=3600)
+
     if not data.nickname.strip():
         raise HTTPException(status_code=400, detail="ニックネームは必須です")
     email = data.email.strip()

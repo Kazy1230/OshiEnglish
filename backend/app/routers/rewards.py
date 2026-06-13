@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user
+from app.core.uploads import validate_image_content
 from app.core.intimacy import compute_intimacy_level
 from app.core.rewards import get_article_request_count
 from app.models.character import Character
@@ -189,6 +190,7 @@ async def admin_upload_reward_image(
     contents = await file.read()
     if len(contents) > _MAX_IMAGE_SIZE:
         raise HTTPException(status_code=400, detail="画像サイズは5MB以下にしてください")
+    validate_image_content(contents, ext)
 
     _delete_image_file(item.image_url)
 

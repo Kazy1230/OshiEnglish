@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import secrets
 from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -10,12 +11,22 @@ from app.core.security import verify_password, create_access_token, hash_passwor
 from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
 from app.core.email import send_email
+from app.core.rate_limit import enforce_rate_limit
 from app.models.customer import Customer
 from pydantic import BaseModel
 from pydantic import field_validator
 
+logger = logging.getLogger(__name__)
+
 # パスワード再発行リンクの有効期限
 RESET_TOKEN_EXPIRE_MINUTES = 60
+
+# ログイン失敗によるアカウントロック設定（時間経過で自動解除）
+LOGIN_MAX_ATTEMPTS = 10
+LOGIN_LOCKOUT_MINUTES = 30
+
+# 管理者向け二段階認証（メール認証コード）の有効期限
+TWO_FACTOR_CODE_EXPIRE_MINUTES = 10
 
 router = APIRouter(prefix="/auth", tags=["認証"])
 
@@ -23,6 +34,70 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     is_password_reset_required: bool
+
+class LoginResponse(BaseModel):
+    access_token: str | None = None
+    token_type: str | None = None
+    is_password_reset_required: bool | None = None
+    # True の場合、別途 /auth/verify-2fa への認証コード送信が必要（管理者ログイン時）
+    requires_2fa: bool = False
+
+class Verify2FARequest(BaseModel):
+    username: str
+    code: str
+
+
+def _is_locked(user: Customer) -> bool:
+    return bool(user.locked_until and user.locked_until > datetime.utcnow())
+
+
+def _record_failed_attempt(db: Session, user: Customer):
+    user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+    if user.failed_login_attempts >= LOGIN_MAX_ATTEMPTS:
+        user.locked_until = datetime.utcnow() + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+    db.commit()
+
+
+def _reset_login_security(user: Customer):
+    user.failed_login_attempts = 0
+    user.locked_until = None
+
+
+def _apply_login_bonus(db: Session, user: Customer):
+    if user.is_admin:
+        return
+    today = date.today()
+    if user.last_login_bonus_date != today:
+        settings_row = get_intimacy_settings(db)
+        user.intimacy_points = (user.intimacy_points or 0) + settings_row.points_per_login
+        user.last_login_bonus_date = today
+        check_and_unlock_rewards(db, user)
+
+
+def _notify_password_changed(user: Customer):
+    """パスワード変更・再設定時に通知メールを送る（不正なアカウント変更の早期検知のため）。"""
+    if not user.email:
+        return
+    send_email(
+        to=user.email,
+        subject="【推しEnglish】パスワードが変更されました",
+        html=(
+            f"<p>{user.username} 様</p>"
+            "<p>このアカウントのパスワードが変更されました。</p>"
+            "<p>心当たりがない場合は、お早めにサポートまでご連絡ください。</p>"
+        ),
+    )
+
+
+def _issue_token_response(db: Session, user: Customer) -> dict:
+    _apply_login_bonus(db, user)
+    token = create_access_token({"sub": str(user.id), "is_admin": user.is_admin})
+    db.commit()
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "is_password_reset_required": user.is_password_reset_required,
+    }
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
@@ -49,15 +124,31 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError("パスワードは8文字以上にしてください")
         return v
 
-@router.post("/login", response_model=TokenResponse)
-async def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@router.post("/login", response_model=LoginResponse)
+async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     ブルートフォース対策：
     - 認証失敗時に意図的に0.5秒遅延させる
     - ユーザーが存在するかどうかを区別しないエラーメッセージ
+    - 連続10回失敗したアカウントは30分間ロックする（時間経過で自動解除）
+    - 同一IPからのログイン試行回数を制限する（不審なIPアドレスからのアクセス制限）
+
+    管理者アカウントはパスワード認証に加え、メールに送信する認証コードによる
+    二段階認証（2FA）が必要（メールアドレス未設定の場合は2FAをスキップする）。
     """
+    enforce_rate_limit(request, "login", limit=20, window_seconds=3600)
+
     user = db.query(Customer).filter(Customer.username == form.username).first()
+
+    if user and _is_locked(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ログイン試行回数が多いため、アカウントが一時的にロックされています。しばらくしてから再度お試しください"
+        )
+
     if not user or not verify_password(form.password, user.hashed_password):
+        if user:
+            _record_failed_attempt(db, user)
         await asyncio.sleep(0.5)  # タイミング攻撃・ブルートフォース抑止
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -66,22 +157,65 @@ async def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depen
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="アカウントが無効です")
 
-    # ログインボーナス：1日1回だけ親密度ポイントを加算する（連打・連続ログインでの稼ぎを防ぐ）
-    if not user.is_admin:
-        today = date.today()
-        if user.last_login_bonus_date != today:
-            settings_row = get_intimacy_settings(db)
-            user.intimacy_points = (user.intimacy_points or 0) + settings_row.points_per_login
-            user.last_login_bonus_date = today
-            check_and_unlock_rewards(db, user)
+    _reset_login_security(user)
 
-    token = create_access_token({"sub": str(user.id), "is_admin": user.is_admin})
-    db.commit()
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "is_password_reset_required": user.is_password_reset_required,
-    }
+    if user.is_admin and user.email:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        user.two_factor_code = code
+        user.two_factor_code_expires = datetime.utcnow() + timedelta(minutes=TWO_FACTOR_CODE_EXPIRE_MINUTES)
+        db.commit()
+        send_email(
+            to=user.email,
+            subject="【推しEnglish】管理者ログイン認証コード",
+            html=(
+                f"<p>管理者ログインのための認証コードです。</p>"
+                f"<p style='font-size:24px;font-weight:bold;'>{code}</p>"
+                f"<p>このコードの有効期限は{TWO_FACTOR_CODE_EXPIRE_MINUTES}分です。"
+                "心当たりがない場合は、このメールを無視してください。</p>"
+            ),
+        )
+        return {"requires_2fa": True}
+
+    if user.is_admin and not user.email:
+        logger.warning(f"[2FA] 管理者アカウント(username={user.username})にメールアドレスが未設定のため2FAをスキップしました")
+
+    return _issue_token_response(db, user)
+
+
+@router.post("/verify-2fa", response_model=TokenResponse)
+async def verify_2fa(req: Verify2FARequest, request: Request, db: Session = Depends(get_db)):
+    """管理者ログインの二段階認証コードを検証し、アクセストークンを発行する。"""
+    enforce_rate_limit(request, "verify-2fa", limit=20, window_seconds=3600)
+
+    user = db.query(Customer).filter(Customer.username == req.username).first()
+
+    if user and _is_locked(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ログイン試行回数が多いため、アカウントが一時的にロックされています。しばらくしてから再度お試しください"
+        )
+
+    valid = (
+        user
+        and user.two_factor_code
+        and user.two_factor_code == req.code
+        and user.two_factor_code_expires
+        and user.two_factor_code_expires > datetime.utcnow()
+    )
+    if not valid:
+        if user:
+            _record_failed_attempt(db, user)
+        await asyncio.sleep(0.5)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="認証コードが正しくないか、有効期限が切れています"
+        )
+
+    user.two_factor_code = None
+    user.two_factor_code_expires = None
+    _reset_login_security(user)
+
+    return _issue_token_response(db, user)
 
 @router.post("/change-password")
 def change_password(
@@ -94,6 +228,7 @@ def change_password(
     current_user.hashed_password = hash_password(req.new_password)
     current_user.is_password_reset_required = False
     db.commit()
+    _notify_password_changed(current_user)
     return {"message": "パスワードを変更しました"}
 
 @router.post("/forgot-password")
@@ -138,6 +273,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     user.reset_token = None
     user.reset_token_expires = None
     db.commit()
+    _notify_password_changed(user)
     return {"message": "パスワードを再設定しました"}
 
 
