@@ -151,8 +151,6 @@ export default function RewardsPage() {
             <h1 className="text-white font-black text-sm sm:text-base">🎁 ご褒美コレクション</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => router.push("/pricing")} aria-label="料金"
-              className="text-xs text-white/80 hover:text-white transition-colors">💴 料金</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <button onClick={() => { clearToken(); router.push("/login"); }}
               className="text-xs text-white/50 hover:text-white transition-colors">ログアウト</button>

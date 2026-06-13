@@ -9,6 +9,16 @@ export const TOPIC_SUGGESTIONS = [
   "ライティング添削", "スピーキング添削",
 ];
 
+export const TOPIC_PRICES: Record<string, string> = {
+  "TOEIC Part5": "¥500",
+  "TOEIC Part7": "¥500",
+  "仮定法": "¥500",
+  "関係代名詞": "¥500",
+  "現在完了形": "¥500",
+  "ライティング添削": "¥1,000",
+  "スピーキング添削": "¥1,000",
+};
+
 export function RequestArticleModal({ theme: t, onClose, onSent }: {
   theme: ReturnType<typeof resolveTheme>;
   onClose: () => void;
@@ -51,17 +61,20 @@ export function RequestArticleModal({ theme: t, onClose, onSent }: {
           className="w-full text-sm rounded-xl px-3 py-2 outline-none mb-2"
           style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text, fontFamily: t.fontFamily }}
         />
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1.5 mb-1">
           {TOPIC_SUGGESTIONS.map(s => (
             <button key={s} type="button" onClick={() => setTopic(s)}
               className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
               style={topic === s
                 ? { background: t.accent, color: "white" }
                 : { background: t.card, color: t.accent, border: `1px solid ${t.border}` }}>
-              {s}
+              {s}（{TOPIC_PRICES[s]}）
             </button>
           ))}
         </div>
+        <p className="text-[11px] mb-3" style={{ color: t.accent }}>
+          ※ 記事・問題は1項目¥500、ライティング・スピーキングの添削は¥1,000です。テーマを直接入力した場合も同様の料金が目安です。
+        </p>
 
         <label className="text-xs font-bold block mb-1" style={{ color: t.accent }}>メッセージ（任意）</label>
         <textarea

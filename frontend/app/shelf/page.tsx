@@ -148,8 +148,6 @@ export default function ShelfPage() {
           <div className="flex items-center gap-2 sm:gap-4">
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🎁 ご褒美</button>
-            <button onClick={() => router.push("/pricing")} aria-label="料金"
-              className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">💴 料金</button>
             <button onClick={() => router.push("/purchases")} aria-label="購入履歴"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🧾 購入履歴</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />

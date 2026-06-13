@@ -49,10 +49,6 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative" style={{ background: "var(--bg)" }}>
-      <div className="absolute top-4 left-4">
-        <button onClick={() => router.push("/pricing")}
-          className="text-sm font-bold transition-colors" style={{ color: "var(--accent)" }}>💴 料金</button>
-      </div>
       <div className="absolute top-4 right-4">
         <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onSurface" />
       </div>

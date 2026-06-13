@@ -206,8 +206,6 @@ function ChatPageInner() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0">🎁 ご褒美</button>
-            <button onClick={() => router.push("/pricing")} aria-label="料金"
-              className="text-xs text-white/80 hover:text-white transition-colors flex-shrink-0">💴 料金</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <button onClick={() => { clearToken(); router.push("/login"); }}
               className="text-xs text-white/50 hover:text-white transition-colors flex-shrink-0">ログアウト</button>
