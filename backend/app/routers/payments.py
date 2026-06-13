@@ -4,7 +4,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -128,19 +127,9 @@ def _issue_account(db: Session, order: Order):
     if preset_character:
         # 公式キャラクターを選択した場合は、即日チャット開始できるようそのキャラクターを直接割り当てる
         customer.character_id = preset_character.id
-    else:
-        # character_id自動割当: 担当顧客数が最も少ないキャラクターに割り当てる（負荷分散）。
-        # 顧客専用のキャラクターは後ほど運営者がLLM下書き＋承認のうえ作成し、
-        # customers.character_id を更新して案内メールを送る（PATCH /customers/{id}）。
-        char_counts = (
-            db.query(Character.id, func.count(Customer.id))
-            .outerjoin(Customer, Customer.character_id == Character.id)
-            .group_by(Character.id)
-            .order_by(func.count(Customer.id).asc(), Character.id.asc())
-            .all()
-        )
-        if char_counts:
-            customer.character_id = char_counts[0][0]
+    # 公式キャラ以外（オーダーメイド）の場合は character_id を割り当てない。
+    # 顧客専用のキャラクターは後ほど運営者がLLM下書き＋承認のうえ作成し、
+    # customers.character_id を更新して案内メールを送る（PATCH /customers/{id}）。
 
     check_and_unlock_rewards(db, customer)
 
