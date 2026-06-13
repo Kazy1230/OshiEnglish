@@ -147,6 +147,15 @@ _ensure_column("characters", "chat_error_message", "VARCHAR(300) NULL")
 _ensure_column("articles", "request_message_id", "INT NULL")
 _ensure_index("articles", "ix_articles_request_message_id", "(request_message_id)")
 
+# 簡易マイグレーション⑳: 「最初の1つ無料」ウェルカム記事のテンプレート化
+# - LLM呼び出しをやめ、事前に用意したテンプレート記事を本棚にコピーする方式に変更
+_ensure_column("articles", "is_welcome_template", "TINYINT(1) NOT NULL DEFAULT 0")
+_ensure_column("articles", "template_character_id", "INT NULL")
+
+# 簡易マイグレーション㉑: 管理者がDM対応で記録する「重要メモ」
+# - DM返信下書き生成プロンプトに織り込み、運用スタッフ間で顧客の細かい情報を共有する
+_ensure_column("customers", "admin_memo", "TEXT NULL")
+
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
 ACCESS_LOG_RETENTION_DAYS = 180

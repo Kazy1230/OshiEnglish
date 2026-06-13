@@ -31,6 +31,12 @@ class Article(Base):
     example_sentences = Column(JSON, nullable=True)  # 例文リスト
     status = Column(String(20), default="draft")     # draft / review / published
     is_llm_drafted = Column(Boolean, default=False)
+    # 「最初の1つ無料」ウェルカム記事のテンプレートかどうか。
+    # テンプレート記事は customer_id=NULL のまま保持し、claim時に内容をコピーして顧客の本棚に追加する。
+    is_welcome_template = Column(Boolean, default=False, nullable=False)
+    # is_welcome_template=True の場合のみ使用。対象キャラクター（公式キャラ向けテンプレート）。
+    # NULLの場合は「キャラクタービルダー使用（カスタムキャラ）」向けの汎用テンプレートを表す。
+    template_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

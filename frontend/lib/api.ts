@@ -77,8 +77,8 @@ export const api = {
   submitWrittenExercise: (id: number, answer: string) =>
     apiFetch(`/articles/${id}/submit-written`, { method: "POST", body: JSON.stringify({ answer }) }),
   getCharacterTheme: (id: number) => apiFetch(`/characters/theme/${id}`),
-  claimFreeContent: (data: { kind: "article" | "exercise"; exam_category: string; part?: string; exercise_format?: string }) =>
-    apiFetch("/articles/me/free-content", { method: "POST", body: JSON.stringify(data) }),
+  claimWelcomeArticle: () =>
+    apiFetch("/articles/me/claim-welcome", { method: "POST" }),
   getCharacterBlogPosts: (characterId: number) => apiFetch(`/articles/character/${characterId}/blog-posts`),
 
   // 顧客：チャット（キャラクターとのメッセージ）
@@ -99,10 +99,6 @@ export const api = {
   adminCreateArticle: (data: object) => apiFetch("/articles/admin/", { method: "POST", body: JSON.stringify(data) }),
   adminUpdateArticle: (id: number, data: object) => apiFetch(`/articles/admin/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteArticle: (id: number) => apiFetch(`/articles/admin/${id}`, { method: "DELETE" }),
-  adminGenerateContent: (data: {
-    article_type: string; character_id: number; theme?: string; level?: string;
-    exercise_format?: string; exercise_category?: string;
-  }) => apiFetch("/articles/admin/generate", { method: "POST", body: JSON.stringify(data) }),
 
   // 管理者：顧客
   adminGetCustomers: () => apiFetch("/customers/"),
@@ -189,8 +185,8 @@ export const api = {
   adminDraftReply: (customerId: number) =>
     apiFetch(`/messages/admin/${customerId}/draft-reply`, { method: "POST" }),
   adminListExerciseSubmissions: () => apiFetch("/messages/admin/exercise-submissions"),
-  adminDraftExerciseFeedback: (messageId: number) =>
-    apiFetch(`/messages/admin/exercise-submissions/${messageId}/draft-feedback`, { method: "POST" }),
+  adminUpdateMemo: (customerId: number, adminMemo: string) =>
+    apiFetch(`/messages/admin/${customerId}/memo`, { method: "PATCH", body: JSON.stringify({ admin_memo: adminMemo }) }),
   adminUpdateRequestStatus: (messageId: number, status: string) =>
     apiFetch(`/messages/admin/request/${messageId}?status=${encodeURIComponent(status)}`, { method: "PATCH" }),
   adminGetCustomerRequests: (customerId: number) =>

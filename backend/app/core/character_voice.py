@@ -54,6 +54,7 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
     favorites = mem.get("favorites") or []
     episodes = mem.get("episodes") or []
     birthday = mem.get("birthday")
+    admin_memo = (customer.admin_memo or "").strip()
 
     tone_block = render_tone_profile(character.tone_profile if character else None)
 
@@ -88,6 +89,8 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
         lines.append(f"■ 好きなもの: {'、'.join(favorites)}")
     if episodes:
         lines.append(f"■ これまでのエピソード: {' / '.join(episodes)}")
+    if admin_memo:
+        lines.append(f"■ 運営からの引き継ぎメモ（重要・必ず踏まえること）: {admin_memo}")
 
     lines += [
         "",
@@ -102,76 +105,7 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
     return "\n".join(lines)
 
 
-def build_exercise_feedback_system_prompt(
-    character,
-    customer,
-    intimacy: dict,
-    exercise_title: str,
-    exercise_prompt: str,
-    evaluation_notes: str | None,
-    submission_text: str,
-) -> str:
-    """記述式演習の解答に対する添削DMの下書き生成用システムプロンプトを組み立てる。"""
-    tone_block = render_tone_profile(character.tone_profile if character else None)
-
-    lines = [
-        f"あなたは英語学習サービスのキャラクター「{character.name if character else 'キャラクター'}」になりきって、"
-        "生徒が提出した記述式演習の解答を添削する運営者をサポートするアシスタントです。",
-        "以下の設定・演習問題・解答を踏まえ、このキャラクターらしい「添削DM」の下書きを1案だけ作成してください。",
-        "",
-        "==================================================",
-        "【キャラクター設定】",
-        "==================================================",
-        f"■ 名前: {character.name if character else ''}",
-        f"■ 説明: {character.description or '' if character else ''}",
-    ]
-    if tone_block:
-        lines.append(tone_block)
-
-    lines += [
-        "",
-        "==================================================",
-        "【相手の生徒について】",
-        "==================================================",
-        f"■ 名前: {customer.username}",
-        f"■ 関係性の段階: Lv.{intimacy['level']}（{intimacy['stage_label']}） — {intimacy['stage_hint']}",
-    ]
-    level_tone = render_level_tone(character.tone_profile if character else None, intimacy["level"])
-    if level_tone:
-        lines.append(f"■ この親密度レベルでの口調・態度: {level_tone}")
-
-    lines += [
-        "",
-        "==================================================",
-        "【演習問題】",
-        "==================================================",
-        f"■ タイトル: {exercise_title}",
-        f"■ お題・設問: {exercise_prompt}",
-    ]
-    if evaluation_notes:
-        lines.append(f"■ 採点観点メモ（運営内部用・生徒には見せない）: {evaluation_notes}")
-
-    lines += [
-        "",
-        "==================================================",
-        "【生徒の解答】",
-        "==================================================",
-        submission_text,
-        "",
-        "==================================================",
-        "【出力形式】",
-        "==================================================",
-        "・実際にDMとしてそのまま送信できる本文のみを出力してください。",
-        "・前置き、説明、見出し記号（##など）、引用符（「」など）は不要です。",
-        "・関係性の段階に合った呼び方・距離感の口調にしてください。",
-        "・良かった点 → 改善するとよい点（具体的な表現の修正例を含む） → 励ましの一言、という流れで、"
-        "DMとして自然な3〜6文程度にまとめてください。",
-        "・採点観点メモがある場合はその観点を踏まえつつ、メモの内容をそのまま引用しないでください。",
-    ]
-    return "\n".join(lines)
-
-
-def build_dm_reply_messages(messages, limit: int = 20) -> list[dict]:
+def build_dm_reply_messages(messages, limit: int = 5) -> list[dict]:
     """Message一覧（古い→新しい順）から、Anthropic Messages API用の会話履歴を組み立てる。
 
     customer→user, character→assistant にマッピングし、

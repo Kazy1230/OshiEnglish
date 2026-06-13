@@ -37,10 +37,7 @@ export function ArticlesTab() {
   const [filterCustomer, setFilterCustomer] = useState("");
   // ブログ記事LLMプロンプト用：オプションで特定の生徒を意識した文体を反映する
   const [blogPromptCustomerId, setBlogPromptCustomerId] = useState("");
-  // AIコンテンツ生成（テーマ・レベルを指定してAnthropic APIで下書きを生成する）
-  const [genTheme, setGenTheme] = useState("");
-  const [genLevel, setGenLevel] = useState("normal");
-  const [generating, setGenerating] = useState(false);
+  // 外部LLMの下書きをもとに作成したかどうか（コピー用プロンプト → 外部LLM → 貼り戻しのフローを使った場合にチェック）
   const [isLlmDrafted, setIsLlmDrafted] = useState(false);
   // 依頼記事：選択中の顧客の対応中リクエスト一覧（紐付け選択用）
   const [openRequests, setOpenRequests] = useState<any[]>([]);
@@ -84,8 +81,6 @@ export function ArticlesTab() {
     setShowForm(false);
     setEditingArticle(null);
     setForm(emptyArticleForm);
-    setGenTheme("");
-    setGenLevel("normal");
     setIsLlmDrafted(false);
   }
 
@@ -139,41 +134,6 @@ export function ArticlesTab() {
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
     }
-  }
-
-  async function handleGenerate() {
-    if (!form.character_id) { toast("先にキャラクターを選択してください", "error"); return; }
-    if (form.article_type === "exercise" && !form.customer_id) { toast("先に顧客を選択してください", "error"); return; }
-    setGenerating(true);
-    try {
-      const result = await api.adminGenerateContent({
-        article_type: form.article_type,
-        character_id: Number(form.character_id),
-        theme: genTheme || undefined,
-        level: genLevel,
-        exercise_format: form.article_type === "exercise" ? form.exercise_format : undefined,
-        exercise_category: form.article_type === "exercise" ? (form.exercise_category || undefined) : undefined,
-      });
-      if (form.article_type === "exercise") {
-        setForm({
-          ...form,
-          title: result.title || form.title,
-          exercise_data_text: JSON.stringify(result.exercise_data, null, 2),
-        });
-      } else {
-        setForm({
-          ...form,
-          title: result.title || form.title,
-          content: result.content || form.content,
-          tips: (result.tips || []).join("\n"),
-          example_sentences: (result.example_sentences || []).join("\n"),
-        });
-      }
-      setIsLlmDrafted(true);
-      toast("AIでコンテンツを生成しました。内容を確認・編集してから保存してください", "success");
-    } catch (err: any) {
-      toast(err.message || "生成に失敗しました", "error");
-    } finally { setGenerating(false); }
   }
 
   async function changeStatus(id: number, status: string) {
@@ -261,29 +221,10 @@ export function ArticlesTab() {
               {editingArticle && "（記事タイプは作成後に変更できません）"}
             </p>
             {(form.article_type === "request" || form.article_type === "blog" || form.article_type === "exercise") && (
-              <div className="mt-2 p-3 rounded-xl flex flex-col gap-2" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>✨ AIでコンテンツを生成</p>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-                  <input value={genTheme} onChange={e => setGenTheme(e.target.value)}
-                    placeholder={form.article_type === "exercise"
-                      ? "追加で指定したいトピック・希望（任意）"
-                      : "テーマ・文法トピック（空欄でおまかせ）"} />
-                  <select value={genLevel} onChange={e => setGenLevel(e.target.value)} style={{ width: "auto" }}>
-                    <option value="easy">初級</option>
-                    <option value="normal">中級</option>
-                    <option value="hard">上級</option>
-                  </select>
-                </div>
-                <button type="button" onClick={handleGenerate} disabled={generating || !form.character_id}
-                  className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start disabled:opacity-50"
-                  style={{ borderColor: "var(--primary)", color: "var(--primary)", background: "var(--card-bg, #fff)" }}>
-                  {generating ? "✨ 生成中..." : "✨ AIで生成する"}
-                  {!form.character_id ? "（先にキャラクターを選択）" : ""}
-                </button>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  Anthropic APIでコンテンツの下書きを生成し、下のフォームに反映します。内容を確認・編集してから保存してください。
-                </p>
-              </div>
+              <label className="mt-2 flex items-center gap-2 text-xs" style={{ color: "var(--muted)" }}>
+                <input type="checkbox" checked={isLlmDrafted} onChange={e => setIsLlmDrafted(e.target.checked)} />
+                外部LLMの下書きをもとに作成した（コピー用プロンプトを使って生成 → 確認・編集して入力）
+              </label>
             )}
             {form.article_type === "blog" && (
               <div className="mt-2 flex flex-col gap-2">

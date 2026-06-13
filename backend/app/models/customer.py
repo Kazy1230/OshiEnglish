@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, JSON, DateTime, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, JSON, DateTime, Date, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -42,6 +42,9 @@ class Customer(Base):
     assigned_admin_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     # 対応優先度（SLA管理用）。normal / high の2段階。
     priority = Column(String(20), default="normal", nullable=False)
+    # 管理者がDM対応の中で「重要だと感じたこと」（誕生日・苦手分野への不安など）を記録するメモ。
+    # DM返信下書き生成プロンプトに織り込むことで、担当者が増えても細かい情報を踏まえた返信ができるようにする。
+    admin_memo = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     assigned_admin = relationship("Customer", remote_side=[id], foreign_keys=[assigned_admin_id])

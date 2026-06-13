@@ -412,27 +412,6 @@ function RequestCard({ theme: t, onClick }: {
   );
 }
 
-const FREE_CONTENT_EXAM_PARTS: Record<string, { label: string; format: "multiple_choice" | "written_response" }[]> = {
-  TOEIC: [
-    { label: "Part 5（短文穴埋め問題）", format: "multiple_choice" },
-    { label: "Part 6（長文穴埋め問題）", format: "multiple_choice" },
-    { label: "Part 7（読解問題）", format: "multiple_choice" },
-  ],
-  "英検": [
-    { label: "リーディング", format: "multiple_choice" },
-    { label: "ライティング", format: "written_response" },
-  ],
-  IELTS: [
-    { label: "リーディング", format: "multiple_choice" },
-    { label: "ライティング", format: "written_response" },
-  ],
-  TOEFL: [
-    { label: "リーディング", format: "multiple_choice" },
-    { label: "ライティング", format: "written_response" },
-  ],
-};
-const FREE_CONTENT_EXAM_TYPES = Object.keys(FREE_CONTENT_EXAM_PARTS);
-
 function WelcomeCard({ theme: t, email, freeContentClaimed, onClaimed }: {
   theme: ReturnType<typeof resolveTheme>;
   email?: string | null;
@@ -440,26 +419,14 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, onClaimed }: {
   onClaimed: (article: { id: number; title: string; article_type: string }) => void;
 }) {
   const router = useRouter();
-  const [kind, setKind] = useState<"article" | "exercise">("article");
-  const [examCategory, setExamCategory] = useState(FREE_CONTENT_EXAM_TYPES[0]);
-  const [partIndex, setPartIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  const parts = FREE_CONTENT_EXAM_PARTS[examCategory] || [];
-  const part = parts[partIndex];
-
   async function handleClaim() {
-    if (!part) return;
     setSubmitting(true);
     try {
-      const article = await api.claimFreeContent({
-        kind,
-        exam_category: examCategory,
-        part: part.label,
-        exercise_format: kind === "exercise" ? part.format : undefined,
-      });
+      const article = await api.claimWelcomeArticle();
       onClaimed(article);
-      toast("無料コンテンツを本棚に追加しました！", "success");
+      toast("無料記事を本棚に追加しました！", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "コンテンツの作成に失敗しました", "error");
     } finally {
@@ -493,8 +460,7 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, onClaimed }: {
             🎁 最初の1つ無料！
           </p>
           <p className="text-sm mb-3" style={{ color: t.text }}>
-            記事と演習問題から好きな方を選んで、試験種別とパートを指定すると、
-            あなた専用のコンテンツを1つ無料で作成します。
+            ボタンを押すと、あなたの「推し」キャラクターからのウェルカム記事を1つ本棚に届けます。
           </p>
 
           {freeContentClaimed ? (
@@ -502,43 +468,11 @@ function WelcomeCard({ theme: t, email, freeContentClaimed, onClaimed }: {
               ✅ 無料コンテンツは利用済みです。本棚をご確認ください。
             </p>
           ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap gap-2">
-                {(["article", "exercise"] as const).map(k => (
-                  <button key={k} type="button" onClick={() => setKind(k)}
-                    className="text-xs px-3 py-1.5 rounded-full font-bold transition-all"
-                    style={kind === k
-                      ? { background: `linear-gradient(135deg, ${t.primary}, ${t.accent})`, color: "white" }
-                      : { background: t.card, color: t.text, border: `1px solid ${t.border}` }}>
-                    {k === "article" ? "📰 記事" : "🧩 演習問題"}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1" style={{ color: t.accent }}>試験種別</label>
-                  <select value={examCategory}
-                    onChange={e => { setExamCategory(e.target.value); setPartIndex(0); }}
-                    className="text-sm rounded-lg px-2 py-1.5"
-                    style={{ background: t.card, color: t.text, border: `1px solid ${t.border}` }}>
-                    {FREE_CONTENT_EXAM_TYPES.map(ex => <option key={ex} value={ex}>{ex}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1" style={{ color: t.accent }}>パート</label>
-                  <select value={partIndex} onChange={e => setPartIndex(Number(e.target.value))}
-                    className="text-sm rounded-lg px-2 py-1.5"
-                    style={{ background: t.card, color: t.text, border: `1px solid ${t.border}` }}>
-                    {parts.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <button onClick={handleClaim} disabled={submitting}
-                className="self-start text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md disabled:opacity-60"
-                style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-                {submitting ? "作成中…" : "無料で受け取る"}
-              </button>
-            </div>
+            <button onClick={handleClaim} disabled={submitting}
+              className="self-start text-sm px-4 py-2 rounded-full font-bold text-white transition-all hover:shadow-md disabled:opacity-60"
+              style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
+              {submitting ? "受け取り中…" : "無料で受け取る"}
+            </button>
           )}
         </div>
 

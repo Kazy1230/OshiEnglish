@@ -9,7 +9,6 @@ export function CorrectionsTab() {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<number | null>(null);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [draftingId, setDraftingId] = useState<number | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
 
   async function load() {
@@ -24,16 +23,6 @@ export function CorrectionsTab() {
   }
 
   useEffect(() => { load(); }, []);
-
-  async function handleDraft(messageId: number) {
-    setDraftingId(messageId);
-    try {
-      const { draft } = await api.adminDraftExerciseFeedback(messageId);
-      setDrafts(prev => ({ ...prev, [messageId]: draft }));
-    } catch (err: any) {
-      toast(err.message || "下書きの生成に失敗しました", "error");
-    } finally { setDraftingId(null); }
-  }
 
   async function handleSend(item: any) {
     const content = (drafts[item.message.id] || "").trim();
@@ -106,22 +95,16 @@ export function CorrectionsTab() {
 
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>添削チャット</p>
-                      <button type="button" onClick={() => handleDraft(id)} disabled={draftingId === id}
-                        className="text-xs px-2.5 py-1 rounded-lg font-bold transition-all disabled:opacity-50"
-                        style={{ color: "var(--primary)", border: "1px solid var(--primary)" }}>
-                        {draftingId === id ? "✨ 生成中..." : "✨ 添削下書き生成"}
-                      </button>
                     </div>
                     <textarea
                       value={drafts[id] || ""}
                       onChange={e => setDrafts(prev => ({ ...prev, [id]: e.target.value }))}
                       rows={6}
-                      placeholder="「添削下書き生成」で下書きを作成するか、直接入力してください"
+                      placeholder="添削内容を入力してください"
                       className="w-full p-3 rounded-lg border text-sm"
                       style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}
                     />
                     <p className="text-xs -mt-1" style={{ color: "var(--muted)" }}>
-                      ※「添削下書き生成」はAIが提案する文章です。内容を確認・編集してから送信してください。
                       送信した内容はそのまま「{item.character_name || "キャラクター"}」からのメッセージとして生徒に届きます。
                     </p>
                     <div className="flex justify-end">

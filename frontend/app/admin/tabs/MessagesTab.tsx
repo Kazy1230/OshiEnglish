@@ -145,12 +145,15 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [draftingReply, setDraftingReply] = useState(false);
+  const [memo, setMemo] = useState("");
+  const [savingMemo, setSavingMemo] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
       const d = await api.adminGetThread(customerId);
       setData(d);
+      setMemo(d.customer.admin_memo || "");
     } catch (err: any) {
       toast(err.message || "読み込みに失敗しました", "error");
     } finally { setLoading(false); }
@@ -248,6 +251,16 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
     } finally { setDraftingReply(false); }
   }
 
+  async function handleSaveMemo() {
+    setSavingMemo(true);
+    try {
+      await api.adminUpdateMemo(customerId, memo.trim());
+      toast("メモを保存しました", "success");
+    } catch (err: any) {
+      toast(err.message || "保存に失敗しました", "error");
+    } finally { setSavingMemo(false); }
+  }
+
   async function handleAssignmentChange(patch: { assigned_admin_id?: number | null; priority?: string }) {
     setSavingAssignment(true);
     try {
@@ -329,6 +342,21 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
           <option value="normal">通常</option>
           <option value="high">🔴 優先</option>
         </select>
+      </div>
+
+      {/* 重要メモ：誕生日・苦手分野への不安など、DM返信下書き生成に反映させたい情報を記録する */}
+      <div className="card flex flex-col gap-2" style={{ borderLeft: `4px solid ${cBorder}` }}>
+        <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>
+          📝 重要メモ（DM返信の下書き生成に反映されます）
+        </p>
+        <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2}
+          placeholder="例：誕生日は8/15。英語の発音に苦手意識がある。前回TOEICの結果について話した。"
+          className="w-full p-2 rounded-lg border text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }} />
+        <button type="button" onClick={handleSaveMemo} disabled={savingMemo}
+          className="self-end text-xs px-3 py-1.5 rounded-lg font-bold text-white disabled:opacity-50" style={{ background: cAccent }}>
+          {savingMemo ? "保存中..." : "メモを保存"}
+        </button>
       </div>
 
       {/* 親密度パネル：会話で育っていく関係性を可視化し、手動調整も行えるようにする */}

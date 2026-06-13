@@ -10,12 +10,6 @@ from app.models.customer import Customer
 from app.models.character import Character
 from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
-from app.core.llm import generate_text, LLMError
-from app.core.content_generation import (
-    build_article_generation_prompt,
-    build_exercise_generation_prompt,
-    parse_json_response,
-)
 from pydantic import BaseModel, model_validator
 from typing import Optional
 
@@ -352,8 +346,6 @@ def submit_written_exercise(
 
 # ===== 管理者向け =====
 
-_VALID_EXERCISE_FORMATS = ("multiple_choice", "written_response")
-
 
 def _validate_exercise_data(exercise_format: Optional[str], exercise_data: Optional[dict]):
     if not exercise_data:
@@ -509,75 +501,49 @@ def admin_get_all_articles(
         for a in articles
     ]
 
-_VALID_FREE_CONTENT_EXAM_CATEGORIES = ("TOEIC", "英検", "IELTS", "TOEFL")
-
-
-class FreeContentRequest(BaseModel):
-    kind: str  # article（記事）/ exercise（演習問題）
-    exam_category: str  # TOEIC / 英検 / IELTS / TOEFL
-    part: Optional[str] = None  # 例: "Part 5"
-    exercise_format: Optional[str] = None  # kind=exercise時のみ：multiple_choice / written_response
-
-
-@router.post("/me/free-content", status_code=status.HTTP_201_CREATED)
-def claim_free_content(
-    data: FreeContentRequest,
+@router.post("/me/claim-welcome", status_code=status.HTTP_201_CREATED)
+def claim_welcome_article(
     current_user: Customer = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """ウェルカムページ向け：「最初の1つ無料」キャンペーンで記事・演習問題を1件だけ生成し、本棚に追加する。
+    """ウェルカムページ向け：「最初の1つ無料」キャンペーンとして、事前に用意したテンプレート記事を
+    1件だけ本棚にコピーする（LLM呼び出しは行わない）。
 
-    キャラ作成完了前（character_id未設定）の顧客でも体験できるよう、
-    その場合は最初に登録されているキャラクターの口調で生成する。
+    公式キャラ（is_preset=True）の場合はそのキャラクター専用のテンプレート記事を、
+    それ以外（キャラクタービルダーで作成したカスタムキャラ）の場合は
+    汎用テンプレート記事（template_character_id=NULL）をコピーする。
     """
     if current_user.free_content_claimed:
         raise HTTPException(status_code=400, detail="無料コンテンツは既にご利用いただいています")
 
-    if data.exam_category not in _VALID_FREE_CONTENT_EXAM_CATEGORIES:
-        raise HTTPException(status_code=400, detail="exam_category は 'TOEIC' / '英検' / 'IELTS' / 'TOEFL' のいずれかを指定してください")
-
     character = None
     if current_user.character_id:
         character = db.query(Character).filter(Character.id == current_user.character_id).first()
-    if not character:
-        character = db.query(Character).order_by(Character.id).first()
-    if not character:
-        raise HTTPException(status_code=404, detail="キャラクターが見つかりません")
 
-    category = f"{data.exam_category} {data.part}".strip() if data.part else data.exam_category
-
-    if data.kind == "exercise":
-        if data.exercise_format not in _VALID_EXERCISE_FORMATS:
-            raise HTTPException(status_code=400, detail="exercise_format は 'multiple_choice' か 'written_response' を指定してください")
-        system_prompt = build_exercise_generation_prompt(character, data.exercise_format, category, None, "normal")
-    elif data.kind == "article":
-        system_prompt = build_article_generation_prompt(character, "request", category, "normal")
-    else:
-        raise HTTPException(status_code=400, detail="kind は 'article' か 'exercise' を指定してください")
-
-    try:
-        raw = generate_text(
-            system_prompt,
-            [{"role": "user", "content": "上記の条件でコンテンツを生成してください。"}],
-            max_tokens=4096,
-        )
-        result = parse_json_response(raw)
-    except LLMError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    template = None
+    if character and character.is_preset:
+        template = db.query(Article).filter(
+            Article.is_welcome_template == True,  # noqa: E712
+            Article.template_character_id == character.id,
+        ).first()
+    if not template:
+        template = db.query(Article).filter(
+            Article.is_welcome_template == True,  # noqa: E712
+            Article.template_character_id.is_(None),
+        ).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="ウェルカム記事のテンプレートが見つかりません")
 
     article = Article(
         customer_id=current_user.id,
-        character_id=character.id,
-        article_type="exercise" if data.kind == "exercise" else "request",
-        exercise_format=data.exercise_format if data.kind == "exercise" else None,
-        exercise_category=category if data.kind == "exercise" else None,
-        exercise_data=result.get("exercise_data") if data.kind == "exercise" else None,
-        title=result.get("title", category),
-        content=result.get("exercise_data", {}).get("instructions", "") if data.kind == "exercise" else result.get("content", ""),
-        tips=result.get("tips") if data.kind == "article" else None,
-        example_sentences=result.get("example_sentences") if data.kind == "article" else None,
+        character_id=character.id if character else template.character_id,
+        article_type=template.article_type,
+        title=template.title,
+        content=template.content,
+        tips=template.tips,
+        example_sentences=template.example_sentences,
         status="published",
-        is_llm_drafted=True,
+        is_llm_drafted=False,
     )
     db.add(article)
     current_user.free_content_claimed = True
@@ -585,48 +551,6 @@ def claim_free_content(
     db.refresh(article)
 
     return {"id": article.id, "title": article.title, "article_type": article.article_type}
-
-
-class ContentGenerateRequest(BaseModel):
-    article_type: str  # request（記事）/ blog（ブログ記事）/ exercise（演習問題）
-    character_id: int
-    theme: Optional[str] = None  # テーマ・文法トピック・追加の出題指定など
-    level: Optional[str] = None  # easy / normal / hard
-    exercise_format: Optional[str] = None  # exercise時のみ：multiple_choice / written_response
-    exercise_category: Optional[str] = None  # exercise時のみ：出題カテゴリ
-
-
-@router.post("/admin/generate", tags=["管理者"])
-def admin_generate_content(data: ContentGenerateRequest, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
-    """管理者向け：テーマ・レベル・種類（記事／演習問題）を指定し、Anthropic APIでコンテンツの下書きを生成する。
-
-    生成結果はそのまま保存されるわけではなく、管理者が確認・編集したうえで
-    既存の /admin/ （記事作成）で保存する（半自動化であり全自動化ではない）。
-    """
-    character = db.query(Character).filter(Character.id == data.character_id).first()
-    if not character:
-        raise HTTPException(status_code=404, detail="キャラクターが見つかりません")
-
-    if data.article_type == "exercise":
-        if data.exercise_format not in _VALID_EXERCISE_FORMATS:
-            raise HTTPException(status_code=400, detail="exercise_format は 'multiple_choice' か 'written_response' を指定してください")
-        system_prompt = build_exercise_generation_prompt(
-            character, data.exercise_format, data.exercise_category, data.theme, data.level,
-        )
-    elif data.article_type in ("request", "blog"):
-        system_prompt = build_article_generation_prompt(character, data.article_type, data.theme or "", data.level)
-    else:
-        raise HTTPException(status_code=400, detail="article_type は 'request' / 'blog' / 'exercise' のいずれかを指定してください")
-
-    try:
-        raw = generate_text(
-            system_prompt,
-            [{"role": "user", "content": "上記の条件でコンテンツを生成してください。"}],
-            max_tokens=4096,
-        )
-        return parse_json_response(raw)
-    except LLMError as e:
-        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.post("/admin/", tags=["管理者"], status_code=status.HTTP_201_CREATED)

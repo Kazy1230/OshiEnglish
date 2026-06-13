@@ -16,7 +16,6 @@ from app.core.llm import generate_text, LLMError
 from app.core.character_voice import (
     build_dm_reply_system_prompt,
     build_dm_reply_messages,
-    build_exercise_feedback_system_prompt,
 )
 from pydantic import BaseModel
 
@@ -359,48 +358,6 @@ def list_exercise_submissions(admin=Depends(get_current_admin), db: Session = De
     return result
 
 
-@router.post("/admin/exercise-submissions/{message_id}/draft-feedback")
-def draft_exercise_feedback(message_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
-    """管理者向け：記述式演習の解答提出に対する「添削DM」の下書きをAIに生成させる。
-
-    キャラクターのプロフィール（DBのcharacterテーブル）と演習問題のお題・採点観点メモ、
-    生徒の解答をシステムプロンプトに組み込んで生成する。生成された文章は
-    そのまま送信されるわけではなく、管理者が確認・編集したうえで
-    既存の /admin/{customer_id}/reply で送信する（半自動化であり全自動化ではない）。
-    """
-    sub = db.query(Message).filter(
-        Message.id == message_id,
-        Message.is_exercise_submission == True,  # noqa: E712
-    ).first()
-    if not sub:
-        raise HTTPException(status_code=404, detail="提出メッセージが見つかりません")
-
-    customer = db.query(Customer).filter(Customer.id == sub.customer_id).first()
-    if not customer:
-        raise HTTPException(status_code=404, detail="顧客が見つかりません")
-
-    character = db.query(Character).filter(Character.id == sub.character_id).first() if sub.character_id else None
-    article = db.query(Article).filter(Article.id == sub.article_id).first() if sub.article_id else None
-    exercise_data = (article.exercise_data or {}) if article else {}
-
-    system_prompt = build_exercise_feedback_system_prompt(
-        character,
-        customer,
-        intimacy_info(customer.intimacy_points),
-        exercise_title=article.title if article else "演習問題",
-        exercise_prompt=exercise_data.get("prompt") or "",
-        evaluation_notes=exercise_data.get("evaluation_notes"),
-        submission_text=_strip_submission_prefix(sub.content),
-    )
-
-    try:
-        draft = generate_text(system_prompt, [{"role": "user", "content": "添削DMの下書きを作成してください。"}])
-    except LLMError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-    return {"draft": draft}
-
-
 @router.get("/admin/{customer_id}")
 def get_thread_admin(
     customer_id: int,
@@ -433,6 +390,7 @@ def get_thread_admin(
                      "character_name": customer.character.name if customer.character else None,
                      "character_color_scheme": customer.character.color_scheme if customer.character else None,
                      "character_memory": customer.character_memory,
+                     "admin_memo": customer.admin_memo,
                      "tone_profile": customer.character.tone_profile if customer.character else None,
                      "character_description": customer.character.description if customer.character else None,
                      "assigned_admin_id": customer.assigned_admin_id,
@@ -517,7 +475,7 @@ def draft_reply(customer_id: int, admin=Depends(get_current_admin), db: Session 
 
     character = db.query(Character).filter(Character.id == customer.character_id).first() if customer.character_id else None
 
-    history, _ = _get_messages_page(db, customer_id, limit=20, before_id=None)
+    history, _ = _get_messages_page(db, customer_id, limit=5, before_id=None)
 
     system_prompt = build_dm_reply_system_prompt(character, customer, intimacy_info(customer.intimacy_points))
     conversation = build_dm_reply_messages(history)
@@ -528,6 +486,25 @@ def draft_reply(customer_id: int, admin=Depends(get_current_admin), db: Session 
         raise HTTPException(status_code=502, detail=str(e))
 
     return {"draft": draft}
+
+
+class AdminMemoUpdate(BaseModel):
+    admin_memo: str
+
+
+@router.patch("/admin/{customer_id}/memo")
+def update_admin_memo(customer_id: int, data: AdminMemoUpdate, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """管理者向け：DM対応で「重要だと感じたこと」を記録するメモを更新する。
+
+    ここに記録した内容はDM返信下書き生成プロンプトに織り込まれる。
+    """
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="顧客が見つかりません")
+
+    customer.admin_memo = data.admin_memo.strip() or None
+    db.commit()
+    return {"admin_memo": customer.admin_memo}
 
 
 class MessageEdit(BaseModel):

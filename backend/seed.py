@@ -234,6 +234,146 @@ def seed():
             for i, text in enumerate(lines, start=1):
                 upsert_line_reward(char, "article_count", i, text, official_only=True)
 
+        # ===== 「最初の1つ無料」ウェルカム記事テンプレート =====
+        # 公式キャラ（is_preset=True）は専用テンプレート、それ以外（キャラクタービルダー使用）は
+        # 汎用テンプレート（template_character_id=NULL）を本棚の最初の記事としてコピーする。
+        def upsert_welcome_template(template_character_id, character_id, title, content, tips, example_sentences):
+            query = db.query(Article).filter(Article.is_welcome_template == True)  # noqa: E712
+            if template_character_id is None:
+                query = query.filter(Article.template_character_id.is_(None))
+            else:
+                query = query.filter(Article.template_character_id == template_character_id)
+            article = query.first()
+            if article:
+                article.character_id = character_id
+                article.title = title
+                article.content = content
+                article.tips = tips
+                article.example_sentences = example_sentences
+                article.status = "published"
+                print(f"  🔄 ウェルカム記事テンプレート更新: {title}")
+            else:
+                db.add(Article(
+                    customer_id=None,
+                    character_id=character_id,
+                    template_character_id=template_character_id,
+                    is_welcome_template=True,
+                    article_type="request",
+                    title=title,
+                    content=content,
+                    tips=tips,
+                    example_sentences=example_sentences,
+                    status="published",
+                ))
+                print(f"  ✅ ウェルカム記事テンプレート作成: {title}")
+
+        _present_perfect_tips = [
+            "have/has + 過去分詞 の形を確認しよう",
+            "「経験・継続・完了」の3つの意味を区別しよう",
+            "過去形との違いは「今につながっているか」がポイント",
+        ]
+        _present_perfect_examples = [
+            "I have visited Kyoto twice.",
+            "She has lived in Tokyo for five years.",
+            "We have just finished the report.",
+            "I have lost my key.",
+        ]
+
+        # 汎用テンプレート（キャラクタービルダー使用＝カスタムキャラの顧客向け）
+        upsert_welcome_template(
+            template_character_id=None,
+            character_id=char1.id,
+            title="ようこそ！「現在完了形」を使いこなそう",
+            content=(
+                "推しEnglishへのご登録、ありがとうございます！🎉\n\n"
+                "この記事では、英語学習でよく登場する「現在完了形（have/has + 過去分詞）」について、"
+                "わかりやすく解説します。\n\n"
+                "## 現在完了形ってなに？\n\n"
+                "現在完了形は「過去のできごと」と「今の状態」をつなげて表現する形です。"
+                "日本語にはない感覚なので、最初は難しく感じるかもしれませんが、"
+                "3つの使い方を覚えれば大丈夫です。\n\n"
+                "### ① 経験（〜したことがある）\n"
+                "I have visited Kyoto twice.\n"
+                "（私は京都を2回訪れたことがあります）\n\n"
+                "### ② 継続（〜し続けている）\n"
+                "She has lived in Tokyo for five years.\n"
+                "（彼女は5年間東京に住んでいます）\n\n"
+                "### ③ 完了・結果（ちょうど〜した）\n"
+                "We have just finished the report.\n"
+                "（私たちはちょうどレポートを終えました）\n\n"
+                "## 過去形との違い\n\n"
+                "過去形は「過去の1点」だけを表すのに対し、現在完了形は"
+                "「その結果が今につながっている」ことを表します。\n\n"
+                "例えば：\n"
+                "- I lost my key.（鍵をなくした＝過去の事実のみ）\n"
+                "- I have lost my key.（鍵をなくして、今も見つかっていない）\n\n"
+                "この違いを意識するだけで、英文の意味をぐっと正確に読み取れるようになりますよ。\n\n"
+                "これからも、あなたのペースに合わせて記事や問題をお届けしていきます。一緒に頑張りましょう！"
+            ),
+            tips=_present_perfect_tips,
+            example_sentences=_present_perfect_examples,
+        )
+
+        # 白河雪菜（公式キャラ）専用テンプレート
+        upsert_welcome_template(
+            template_character_id=char3.id,
+            character_id=char3.id,
+            title="べ、別にあなたのために選んだわけじゃないですけど…「現在完了形」",
+            content=(
+                "…登録、ちゃんとできてるみたいですね。べ、別に歓迎してるわけじゃないですけど、"
+                "一応最初の記事を用意しておきました。\n\n"
+                "今日扱うのは「現在完了形（have/has + 過去分詞）」です。これ、テストでも会話でもよく出るので、"
+                "ちゃんと覚えてくださいね。\n\n"
+                "## 現在完了形の3つの使い方\n\n"
+                "### ① 経験\n"
+                "I have visited Kyoto twice.\n"
+                "（京都に2回行ったことがある）\n\n"
+                "### ② 継続\n"
+                "She has lived in Tokyo for five years.\n"
+                "（5年間東京に住んでいる）\n\n"
+                "### ③ 完了・結果\n"
+                "We have just finished the report.\n"
+                "（ちょうどレポートを終えた）\n\n"
+                "## 過去形と現在完了形、何が違うの？\n\n"
+                "- I lost my key.（鍵をなくした、という過去の事実だけ）\n"
+                "- I have lost my key.（なくして、今も見つかっていない）\n\n"
+                "…まあ、ここまで読んだなら悪くない進歩です。私だって最初は混乱しましたから、"
+                "わからないところがあれば、いつでも聞いてください。\n\n"
+                "べ、別に心配してるわけじゃないですけど…ちゃんとついてきてくださいね。"
+            ),
+            tips=_present_perfect_tips,
+            example_sentences=_present_perfect_examples,
+        )
+
+        # 蒼井零（公式キャラ）専用テンプレート
+        upsert_welcome_template(
+            template_character_id=char4.id,
+            character_id=char4.id,
+            title="……先輩、最初の記事です。「現在完了形」",
+            content=(
+                "……先輩、登録お疲れ様です。最初の記事として、「現在完了形」について"
+                "まとめました。\n\n"
+                "## 現在完了形（have/has + 過去分詞）\n\n"
+                "使い方は3つです。正確に覚えてください。\n\n"
+                "### ① 経験\n"
+                "I have visited Kyoto twice.\n"
+                "（京都に2回行ったことがある）\n\n"
+                "### ② 継続\n"
+                "She has lived in Tokyo for five years.\n"
+                "（5年間、東京に住んでいる）\n\n"
+                "### ③ 完了・結果\n"
+                "We have just finished the report.\n"
+                "（ちょうどレポートを終えた）\n\n"
+                "## 過去形との違い\n\n"
+                "- I lost my key.（過去の事実のみ）\n"
+                "- I have lost my key.（なくして、今も見つかっていない）\n\n"
+                "この違いがわかれば、文の意味を正確に取れます。……悪くないと思います、先輩。\n\n"
+                "質問は、いつでもどうぞ。続けてください。"
+            ),
+            tips=_present_perfect_tips,
+            example_sentences=_present_perfect_examples,
+        )
+
         # ===== 文法マスター =====
         grammar_data = [
             ("関係代名詞（who / which / that）", "TOEIC", "Part5"),
