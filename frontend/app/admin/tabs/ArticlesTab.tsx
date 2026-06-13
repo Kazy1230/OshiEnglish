@@ -122,7 +122,12 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
     const isWelcome = form.article_type === "welcome";
     const payload: any = {
       article_type: form.article_type,
-      character_id: Number(form.character_id),
+      // ウェルカムページ：「対象キャラ」が空欄（汎用テンプレート）の場合は、
+      // 記事データ上の必須項目を埋めるための内部値として最初のキャラクターを使う
+      // （顧客への表示には影響しない。表示上の紐付けは template_character_id で制御する）
+      character_id: isWelcome
+        ? Number(form.template_character_id || characters[0]?.id)
+        : Number(form.character_id),
       title: form.title,
       content: form.content,
       status: form.status,
@@ -603,13 +608,15 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
                 </p>
               </div>
             )}
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター</label>
-              <select value={form.character_id} onChange={e => setForm({ ...form, character_id: e.target.value })} required>
-                <option value="">選択してください</option>
-                {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
+            {form.article_type !== "welcome" && (
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター</label>
+                <select value={form.character_id} onChange={e => setForm({ ...form, character_id: e.target.value })} required>
+                  <option value="">選択してください</option>
+                  {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>ステータス</label>
               <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>

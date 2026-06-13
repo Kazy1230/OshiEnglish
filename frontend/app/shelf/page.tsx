@@ -370,7 +370,7 @@ function BookCard({ article, index, theme: t, onClick }: {
       <div className="p-4 pt-3 flex flex-col flex-1 pl-5">
         <div className="flex items-center justify-between gap-2 mb-2">
           <p className="text-xs font-bold" style={{ color: `hsl(${hue},50%,45%)` }}>
-            #{article.id.toString().padStart(3, "0")}
+            #{(index + 1).toString().padStart(3, "0")}
           </p>
           {badgeText && (
             <span className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
