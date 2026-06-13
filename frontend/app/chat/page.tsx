@@ -321,7 +321,7 @@ function ChatPageInner() {
               </p>
             ) : (
               <div className="flex-1">
-                <p>
+                <p onClick={() => router.push("/rewards")} className="cursor-pointer hover:opacity-70 transition-opacity">
                   {(() => {
                     const tmpl = theme?.reward_progress_template || DEFAULT_REWARD_PROGRESS_TEMPLATE;
                     const filled = fillTemplate(tmpl, {

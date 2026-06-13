@@ -342,10 +342,13 @@ def get_payment_session(session_id: str, db: Session = Depends(get_db)):
     order.issued_password = None
     db.commit()
 
+    granted_credits = 20 if _get_preset_character(db, order) else 500
+
     return {
         "status": "issued",
         "username": order.issued_username,
         "temporary_password": password,
+        "granted_credits": granted_credits,
     }
 
 

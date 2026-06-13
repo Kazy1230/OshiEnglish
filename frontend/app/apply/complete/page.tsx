@@ -10,6 +10,7 @@ function CompleteContent() {
   const sessionId = searchParams.get("session_id");
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [credentials, setCredentials] = useState<{ username: string; temporary_password: string } | null>(null);
+  const [grantedCredits, setGrantedCredits] = useState<number>(500);
 
   useEffect(() => {
     if (!sessionId) { setStatus("error"); return; }
@@ -22,6 +23,7 @@ function CompleteContent() {
         if (cancelled) return;
         if (res.status === "issued") {
           setCredentials({ username: res.username, temporary_password: res.temporary_password });
+          if (typeof res.granted_credits === "number") setGrantedCredits(res.granted_credits);
           setStatus("issued");
         } else if (res.status === "already_viewed") {
           setStatus("already_viewed");
@@ -66,7 +68,7 @@ function CompleteContent() {
               </div>
               <div className="text-left p-3 rounded-lg mb-3" style={{ background: "var(--accentLight, #f0f7ee)", border: "1px solid var(--border)" }}>
                 <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>
-                  🎁 500クレジットを付与しました
+                  🎁 {grantedCredits}クレジットを付与しました
                 </p>
                 <p className="text-xs mt-1" style={{ color: "var(--text)" }}>
                   記事・問題のリクエストやDMの送信にご利用いただけます。ログイン後、ヘッダーの🔶アイコンから残高を確認できます。
