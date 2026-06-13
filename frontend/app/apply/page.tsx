@@ -1141,12 +1141,12 @@ export default function ApplyPage() {
                 {charChoice === "preset" ? (
                   <p style={{ color: theme.text, fontSize: ".88rem", lineHeight: 1.8,
                     fontFamily: theme.fontFamily, margin: "0 0 1rem" }}>
-                    公式キャラクターはキャラ作成費無料です。このまま進むとすぐにアカウントが発行されます。
+                    公式キャラクターはキャラ作成費無料です。このまま進むとすぐにアカウントが発行され、<strong>20クレジット</strong>がプレゼントされます。
                   </p>
                 ) : (
                   <p style={{ color: theme.text, fontSize: ".88rem", lineHeight: 1.8,
                     fontFamily: theme.fontFamily, margin: "0 0 1rem" }}>
-                    お支払いを完了すると、すぐにアカウントが発行されます。
+                    キャラ作成費 <strong>¥500</strong> のお支払いで、<strong>500クレジット</strong>が付与されます（記事・問題のリクエストやDMにご利用いただけます）。お支払いを完了すると、すぐにアカウントが発行されます。
                   </p>
                 )}
                 <button
@@ -1291,9 +1291,18 @@ export default function ApplyPage() {
               {s1Valid && (
                 <Section
                   title="💛あなたの推し先生は？"
-                  hint="後から変更できますので、気軽に選んでください"
+                  hint="後から変更できますので、気軽に選んでください。すべてのプランにクレジットが付帯し、DMやリクエスト記事などにご利用いただけます。"
                   theme={theme}
                 >
+                  <div className="yt-slide-up" style={{
+                    borderRadius: theme.inputRadius, padding: ".9rem 1.1rem", marginBottom: ".3rem",
+                    background: theme.accentLight, border: `1px solid ${theme.border}`,
+                  }}>
+                    <p style={{ fontSize: ".8rem", color: theme.text, lineHeight: 1.8, margin: 0, fontFamily: theme.fontFamily }}>
+                      💰 <strong>公式キャラクター</strong>を選ぶとキャラ作成費が無料になり、<strong>20クレジット</strong>を即プレゼント。<br />
+                      ✍️ <strong>オリジナルキャラクター</strong>を作る場合はキャラ作成費 <strong>¥500</strong>（<strong>500クレジット</strong>付与・実質チャージ）。
+                    </p>
+                  </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
                     {/* 推しキャラから選ぶ（プリセット） */}
                     {PRESET_CHARACTERS.map((p, i) => {
@@ -1346,7 +1355,7 @@ export default function ApplyPage() {
                             display: "flex", flexWrap: "wrap", gap: ".3rem .5rem", margin: "0 0 .6rem", padding: 0,
                             listStyle: "none",
                           }}>
-                            {["キャラ作成無料", "即日スタート", "限定称号・壁紙あり", "隠しセリフ多数", "公式インスタあり"].map(b => (
+                            {["キャラ作成無料", "20クレジット付与", "即日スタート", "限定称号・壁紙あり", "隠しセリフ多数", "公式インスタあり"].map(b => (
                               <li key={b} style={{
                                 fontSize: ".7rem", fontWeight: 700, padding: ".15rem .55rem",
                                 borderRadius: "99px", background: theme.accentLight, color: theme.text,
@@ -1394,7 +1403,7 @@ export default function ApplyPage() {
                           質問に答えて作る
                         </p>
                         <p style={{ fontSize: ".78rem", color: theme.muted, margin: ".2rem 0 0", lineHeight: 1.5, fontFamily: theme.fontFamily, transition: `color ${T}` }}>
-                          性別・関係性・性格を3ステップで選ぶ。一番おすすめ！
+                          性別・関係性・性格を3ステップで選ぶ。一番おすすめ！（キャラ作成費 ¥500・500クレジット付与）
                         </p>
                       </div>
                     </div>
@@ -1418,7 +1427,7 @@ export default function ApplyPage() {
                           テキストで自由に定義する
                         </p>
                         <p style={{ fontSize: ".78rem", color: theme.muted, margin: ".2rem 0 0", lineHeight: 1.5, fontFamily: theme.fontFamily, transition: `color ${T}` }}>
-                          こだわりのキャラを自分で書いて伝える。上級者向け。
+                          こだわりのキャラを自分で書いて伝える。上級者向け。（キャラ作成費 ¥500・500クレジット付与）
                         </p>
                       </div>
                     </div>

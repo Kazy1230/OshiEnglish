@@ -83,8 +83,23 @@ function CreditsPageInner() {
 
         <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
           1クレジット＝1円。500クレジット単位で購入できます。
-          DM送信は1クレジット、記事・問題のリクエストは200〜400クレジットを消費します。
         </p>
+
+        {/* クレジットの使い道 */}
+        <div className="rounded-xl p-4 mb-6" style={{ background: t.card, border: `1px solid ${t.border}` }}>
+          <p className="text-sm font-bold mb-2" style={{ color: t.primary }}>
+            💳 クレジットの使い道
+          </p>
+          <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
+            <li>キャラクターへのDM送信：<strong>1クレジット</strong></li>
+            <li>記事・問題のリクエスト：依頼時に<strong>50クレジット</strong>、記事が届いて開封する時に残り<strong>150〜350クレジット</strong>（合計200〜400クレジット）</li>
+            <li>キャラクターから届く特別記事（テンプレ記事）の開封：<strong>50クレジット</strong>（届くこと自体は無料）</li>
+          </ul>
+          <button type="button" onClick={() => router.push("/pricing")}
+            className="text-xs font-bold mt-2" style={{ color: t.accent }}>
+            料金プランの詳細を見る →
+          </button>
+        </div>
 
         <div className="rounded-xl p-4 mb-6" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
           <p className="text-sm font-bold mb-1" style={{ color: t.primary }}>
@@ -96,6 +111,7 @@ function CreditsPageInner() {
           </p>
         </div>
 
+        <p className="text-sm font-bold mb-3" style={{ color: t.primary }}>クレジットを購入する</p>
         <div className="flex flex-col gap-3">
           {CREDIT_PACKS.map(credits => (
             <button key={credits} type="button" onClick={() => handlePurchase(credits)} disabled={purchasing !== null}

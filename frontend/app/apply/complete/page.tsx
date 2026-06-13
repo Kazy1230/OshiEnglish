@@ -64,6 +64,14 @@ function CompleteContent() {
                 <p className="text-xs mb-1" style={{ color: "var(--muted)" }}>仮パスワード</p>
                 <p className="font-mono font-bold break-all" style={{ color: "var(--text)" }}>{credentials.temporary_password}</p>
               </div>
+              <div className="text-left p-3 rounded-lg mb-3" style={{ background: "var(--accentLight, #f0f7ee)", border: "1px solid var(--border)" }}>
+                <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>
+                  🎁 500クレジットを付与しました
+                </p>
+                <p className="text-xs mt-1" style={{ color: "var(--text)" }}>
+                  記事・問題のリクエストやDMの送信にご利用いただけます。ログイン後、ヘッダーの💰アイコンから残高を確認できます。
+                </p>
+              </div>
               <p className="text-sm font-bold mb-2" style={{ color: "#e11d48" }}>
                 ⚠️ この情報はこの画面でのみ表示され、二度と表示されません
               </p>
