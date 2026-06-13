@@ -93,7 +93,7 @@ function CreditsPageInner() {
           <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
             <li>キャラクターへのDM送信：<strong>1クレジット</strong></li>
             <li>記事・問題のリクエスト：依頼時に<strong>50クレジット</strong>、記事が届いて開封する時に残り<strong>150〜350クレジット</strong>（合計200〜400クレジット）</li>
-            <li>キャラクターから届く特別記事（テンプレ記事）の開封：<strong>50クレジット</strong>（届くこと自体は無料）</li>
+            <li>キャラクターから届く特別記事（定期便）の開封：<strong>50クレジット</strong>（届くこと自体は無料）</li>
           </ul>
           <button type="button" onClick={() => router.push("/pricing")}
             className="text-xs font-bold mt-2" style={{ color: t.accent }}>
@@ -107,7 +107,7 @@ function CreditsPageInner() {
           </p>
           <p className="text-sm leading-relaxed" style={{ color: t.text }}>
             毎日ログインすると10クレジットを獲得できます（残高が50クレジットを超えない範囲）。
-            無課金でも、記事・問題のリクエストや、キャラクターから届くテンプレ記事の開封に活用できます。
+            無課金でも、記事・問題のリクエストや、キャラクターから届く定期便の開封に活用できます。
           </p>
         </div>
 

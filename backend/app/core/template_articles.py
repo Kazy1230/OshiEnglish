@@ -1,13 +1,14 @@
+import random
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from app.models.article import Article
 from app.models.customer import Customer
-from app.core.credits import TEMPLATE_UNLOCK_COST, TEMPLATE_INTERVAL_DAYS
+from app.core.credits import TEMPLATE_UNLOCK_COST, TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS
 
 
 def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
-    """テンプレ記事プール（article_type="template", customer_id=NULL）から、
-    配布間隔（TEMPLATE_INTERVAL_DAYS）が経過していれば未配布のテンプレートを1件コピーして
+    """定期便プール（article_type="template", customer_id=NULL）から、
+    配布間隔（3〜5日のランダム）が経過していれば未配布の記事を1件コピーして
     顧客の本棚に追加する（無料配布・開封時にunlock_costを消費）。
 
     呼び出し元で変更があった場合のみ db.commit() すること。
@@ -17,7 +18,8 @@ def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
         last = customer.last_template_article_at
         if last.tzinfo is None:
             last = last.replace(tzinfo=timezone.utc)
-        if (now - last) < timedelta(days=TEMPLATE_INTERVAL_DAYS):
+        interval_days = random.randint(TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS)
+        if (now - last) < timedelta(days=interval_days):
             return
 
     received_ids = [
@@ -37,7 +39,7 @@ def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
     template = query.order_by(Article.id).first()
 
     if not template:
-        return  # 配布できるテンプレートが無ければスキップ（last_template_article_atは更新しない）
+        return  # 配布できる定期便記事が無ければスキップ（last_template_article_atは更新しない）
 
     db.add(Article(
         customer_id=customer.id,

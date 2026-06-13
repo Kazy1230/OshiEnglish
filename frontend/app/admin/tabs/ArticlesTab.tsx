@@ -12,6 +12,7 @@ import {
   buildSpeakingFeedbackPrompt,
   buildPersonalizedLLMPrompt,
   buildWelcomePagePrompt,
+  buildTemplateArticlePrompt,
   getCustomerDisplayName,
 } from "../lib/promptBuilders";
 
@@ -173,7 +174,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
         return;
       }
     } else if (isTemplate) {
-      // テンプレ記事プール：customer_id等はサーバー側で自動的にクリアされる
+      // 定期便プール：customer_id等はサーバー側で自動的にクリアされる
     } else if (isFeedback) {
       // ライティング/スピーキングFB：顧客は必須、文法マスター不要
       payload.customer_id = Number(form.customer_id);
@@ -284,7 +285,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 ["writing_feedback", "✍️ ライティングFB",      "#e67e22"],
                 ["speaking_feedback","🎤 スピーキングFB",      "#16a085"],
                 ["welcome",          "🏠 ウェルカムページ",    "#2980b9"],
-                ["template",         "🗂 テンプレ記事プール",  "#8e44ad"],
+                ["template",         "🗂 定期便プール",        "#8e44ad"],
               ] as [string, string, string][]).map(([type, label, color]) => (
                 <button key={type} type="button"
                   disabled={!!editingArticle}
@@ -309,7 +310,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 : form.article_type === "welcome"
                 ? "ウェルカムページ：新規登録した顧客の本棚に最初に届くテンプレート記事です。「対象キャラ」を指定すると、その公式キャラを選んだ顧客専用のテンプレートになります。空欄のまま保存すると、キャラビルダー利用者など対象キャラ未指定の顧客向けの汎用テンプレートになります。"
                 : form.article_type === "template"
-                ? "テンプレ記事プール：customer_idを指定せずに保管する「特別記事」のひな形です。3日ごとに1本、各顧客の本棚に無料で自動配布されます（開封には50クレジット必要・unlock_costで変更可）。"
+                ? "定期便プール：customer_idを指定せずに保管する「特別記事」のひな形です。3〜5日に1本のランダムな間隔で、各顧客の本棚に無料で自動配布されます（開封には50クレジット必要・unlock_costで変更可）。"
                 : "依頼記事：特定の顧客からの依頼に応じて作成する、通常の文法解説記事です。"}
               {editingArticle && "（記事タイプは作成後に変更できません）"}
             </p>
@@ -576,6 +577,30 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
                 顧客を選択すると、テンプレートではなくその顧客の本棚に直接届く個別ウェルカムページとして登録されます。
                 「最初の1つ無料」を既に利用済みでテンプレートが自動配布されない既存顧客に、後からウェルカムページを届けたい場合に使用してください。
+              </p>
+            </div>
+          )}
+
+          {/* ── 定期便（テンプレートプール）専用セクション ── */}
+          {form.article_type === "template" && (
+            <div>
+              <button type="button"
+                className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+                style={{ borderColor: "#8e44ad", color: "#8e44ad", background: "var(--card-bg, #fff)" }}
+                disabled={!form.character_id}
+                onClick={() => {
+                  const c = characters.find(ch => String(ch.id) === String(form.character_id));
+                  if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
+                  const topic = window.prompt("今回取り上げたいテーマ・表現があれば入力してください（空欄でもOK）", "") || undefined;
+                  navigator.clipboard.writeText(buildTemplateArticlePrompt(c, topic));
+                  toast("定期便用LLMプロンプトをコピーしました", "success");
+                }}>
+                📋 定期便用LLMプロンプトをコピー
+                {!form.character_id && "（先にキャラクターを選択）"}
+              </button>
+              <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                通常の依頼記事より軽い（日本語800〜1200文字程度・1ページ構成）記事を作成するためのプロンプトです。
+                LLMの出力を「本文」「例文」「Tips」欄に分割して貼り付けてください。
               </p>
             </div>
           )}

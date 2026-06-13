@@ -44,7 +44,7 @@ class Customer(Base):
     # クレジット残高（1クレジット=1円）。DM送信や記事・問題リクエストの消費、
     # Stripeでのクレジット購入・キャラ作成特典で増減する。
     credit_balance = Column(Integer, nullable=False, default=0)
-    # テンプレ記事（無料配布・開封課金）の最終配布日時。一定間隔ごとに1本ずつ本棚に追加するための基準値。
+    # 定期便（無料配布・開封課金）の最終配布日時。一定間隔ごとに1本ずつ本棚に追加するための基準値。
     last_template_article_at = Column(DateTime(timezone=True), nullable=True)
     # サポート担当の割り当て（管理者・オペレーター複数人での分担運用のため）。
     # is_admin=True の customers.id を指す。未割り当ての場合は NULL。

@@ -269,13 +269,13 @@ export default function PricingPage() {
           </p>
         </section>
 
-        {/* テンプレ記事（定期配布） */}
+        {/* 定期便（定期配布） */}
         <section className="mb-8 rounded-xl p-4" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
           <h3 className="text-lg font-black mb-2" style={{ color: t.primary }}>
-            🎁 特別記事（テンプレ記事）の定期配布
+            🎁 特別記事（定期便）の定期配布
           </h3>
           <p className="text-sm leading-relaxed" style={{ color: t.text }}>
-            3日ごとに1本、キャラクターが用意した「特別記事」が無料で本棚に届きます。
+            3〜5日ごとに1本、キャラクターが用意した「特別記事」が無料で本棚に届きます。
           </p>
           <ul className="text-sm leading-relaxed list-disc pl-5 mt-2" style={{ color: t.text }}>
             <li>記事が届くこと自体は<strong>無料</strong>です（クレジットは消費しません）</li>

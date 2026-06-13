@@ -114,8 +114,8 @@ def get_my_articles(
     演習問題（選択式）の正解・解説は、一覧表示の時点では含めない
     （詳細表示・採点エンドポイントと同じ方針：自力で解いてから答え合わせをしてもらう）。
 
-    取得のたびに、テンプレ記事プールから配布間隔（TEMPLATE_INTERVAL_DAYS）に応じた
-    新しいテンプレ記事が無料で本棚に追加される（あれば）。
+    取得のたびに、定期便プールから配布間隔（3〜5日のランダム）に応じた
+    新しい定期便記事が無料で本棚に追加される（あれば）。
     """
     distribute_template_article_if_due(db, current_user)
     db.commit()
@@ -443,7 +443,7 @@ class ArticleCreate(BaseModel):
                 "article_type は 'request'（依頼記事）/ 'blog'（ブログ記事）/ 'exercise'（演習問題）"
                 "/ 'writing_feedback'（ライティングフィードバック）"
                 "/ 'speaking_feedback'（スピーキングフィードバック）"
-                "/ 'welcome'（ウェルカムページ）/ 'template'（テンプレ記事プール）のいずれかを指定してください"
+                "/ 'welcome'（ウェルカムページ）/ 'template'（定期便プール）のいずれかを指定してください"
             )
         if self.article_type == "request":
             if self.customer_id is None or self.grammar_master_id is None:
@@ -491,9 +491,9 @@ class ArticleCreate(BaseModel):
             else:
                 self.is_welcome_template = True
         elif self.article_type == "template":
-            # テンプレ記事プール：customer_id=NULLで保管し、配布時にコピーして各顧客の本棚に追加する。
+            # 定期便プール：customer_id=NULLで保管し、配布時にコピーして各顧客の本棚に追加する。
             if not self.content:
-                raise ValueError("テンプレ記事には本文の入力が必須です")
+                raise ValueError("定期便記事には本文の入力が必須です")
             self.customer_id = None
             self.grammar_master_id = None
             self.exercise_format = None
@@ -619,7 +619,7 @@ def admin_create_article(
     # 開封コスト（unlock_cost）の決定：
     # 1. 管理者が明示的に指定していればそれを使う
     # 2. 記事リクエストに紐付く場合は、合意した総額（credit_cost）から依頼時の固定費を引いた残額
-    # 3. テンプレ記事の場合は、デフォルトの開封コストを使う
+    # 3. 定期便記事の場合は、デフォルトの開封コストを使う
     if data.unlock_cost is not None:
         article.unlock_cost = data.unlock_cost
     elif data.request_message_id is not None:

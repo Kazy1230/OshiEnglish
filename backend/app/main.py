@@ -181,12 +181,12 @@ _ensure_column("messages", "suggested_action", "VARCHAR(50) NULL")
 # - credit_transactionsテーブル自体はcreate_all()で自動作成される
 _ensure_column("customers", "credit_balance", "INT NOT NULL DEFAULT 0")
 
-# 簡易マイグレーション㉖: 記事の開封課金・テンプレ記事の定期配布
+# 簡易マイグレーション㉖: 記事の開封課金・定期便の定期配布
 # - articles.unlock_cost: 開封に必要なクレジット（0=無料）
 # - articles.opened_at: 顧客が開封（課金）した日時。NULL=未開封
-# - articles.template_source_id: テンプレ記事プールの元記事ID（重複配布防止）
+# - articles.template_source_id: 定期便プールの元記事ID（重複配布防止）
 # - messages.credit_cost: 記事・問題リクエスト時に合意した総消費クレジット
-# - customers.last_template_article_at: テンプレ記事の最終配布日時
+# - customers.last_template_article_at: 定期便の最終配布日時
 _ensure_column("articles", "unlock_cost", "INT NOT NULL DEFAULT 0")
 _ensure_column("articles", "opened_at", "DATETIME NULL")
 _ensure_column("articles", "template_source_id", "INT NULL")

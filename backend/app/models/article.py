@@ -43,7 +43,7 @@ class Article(Base):
     # ----- クレジットによる開封課金 -----
     unlock_cost = Column(Integer, nullable=False, default=0)   # 開封に必要なクレジット（0=無料）
     opened_at = Column(DateTime(timezone=True), nullable=True)  # 顧客が開封（課金）した日時。NULL=未開封
-    # テンプレ記事プール（article_type="template", customer_id=NULL）からこの記事の元になったテンプレートのID。
+    # 定期便プール（article_type="template", customer_id=NULL）からこの記事の元になったテンプレートのID。
     # 同じテンプレートを同じ顧客に重複配布しないための履歴として使う。
     template_source_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

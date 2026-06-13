@@ -72,7 +72,7 @@ def _reset_login_security(user: Customer):
 def _apply_login_bonus(db: Session, user: Customer) -> int:
     """ログインボーナス（親密度ポイント・クレジット）を1日1回付与する。
 
-    クレジットは、無課金の顧客でも記事リクエストやテンプレ記事の開封ができるように、
+    クレジットは、無課金の顧客でも記事リクエストや定期便の開封ができるように、
     残高がDAILY_LOGIN_BONUS_CAPに達するまで毎日DAILY_LOGIN_BONUS分付与する
     （例：残高39 -> 49、残高49 -> 50、残高50以上は付与しない）。
 

@@ -286,52 +286,54 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ヘッダー：顧客情報 + ご褒美状況 */}
-      <div className="card flex items-center justify-between flex-wrap gap-3" style={{ borderLeft: `4px solid ${cPrimary}` }}>
-        <div>
-          <p className="font-black" style={{ color: cPrimary }}>{data.customer.username}</p>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>
-            担当キャラクター：{data.customer.character_name || "未割当"}
-          </p>
-        </div>
-        <div className="text-xs flex items-center gap-3">
-          <span className="flex items-center gap-1.5" style={{ color: "var(--muted)" }}>
-            👤 担当者
-            <select
-              value={data.customer.assigned_admin_id ?? ""}
-              disabled={savingAssignment}
-              onChange={e => handleAssignmentChange({ assigned_admin_id: e.target.value === "" ? null : Number(e.target.value) })}
-              className="px-2 py-1 rounded-lg border"
-              style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
-              <option value="">未割当</option>
-              {operators.map(o => <option key={o.id} value={o.id}>{o.username}</option>)}
-            </select>
-          </span>
-          <span style={{ color: "var(--muted)" }}>
-            公開記事 <span className="font-black" style={{ color: cPrimary }}>{reward.published_articles}</span> 冊 ／
-            送付済みご褒美 <span className="font-black" style={{ color: cPrimary }}>{reward.sent_rewards}</span> 件
-          </span>
-          {reward.pending_rewards > 0 && (
-            <span className="px-2 py-1 rounded-full font-black text-white" style={{ background: cAccent }}>
-              🎁 ご褒美送付可能 ×{reward.pending_rewards}
+      {/* ヘッダー：顧客情報 + ご褒美状況、重要メモ */}
+      <div className="flex flex-wrap gap-4 items-stretch">
+        <div className="card flex flex-col gap-2 justify-center flex-1 min-w-[260px]" style={{ borderLeft: `4px solid ${cPrimary}` }}>
+          <div>
+            <p className="font-black" style={{ color: cPrimary }}>{data.customer.username}</p>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              担当キャラクター：{data.customer.character_name || "未割当"}
+            </p>
+          </div>
+          <div className="text-xs flex items-center gap-3 flex-wrap">
+            <span className="flex items-center gap-1.5" style={{ color: "var(--muted)" }}>
+              👤 担当者
+              <select
+                value={data.customer.assigned_admin_id ?? ""}
+                disabled={savingAssignment}
+                onChange={e => handleAssignmentChange({ assigned_admin_id: e.target.value === "" ? null : Number(e.target.value) })}
+                className="px-2 py-1 rounded-lg border"
+                style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
+                <option value="">未割当</option>
+                {operators.map(o => <option key={o.id} value={o.id}>{o.username}</option>)}
+              </select>
             </span>
-          )}
+            <span style={{ color: "var(--muted)" }}>
+              公開記事 <span className="font-black" style={{ color: cPrimary }}>{reward.published_articles}</span> 冊 ／
+              送付済みご褒美 <span className="font-black" style={{ color: cPrimary }}>{reward.sent_rewards}</span> 件
+            </span>
+            {reward.pending_rewards > 0 && (
+              <span className="px-2 py-1 rounded-full font-black text-white" style={{ background: cAccent }}>
+                🎁 ご褒美送付可能 ×{reward.pending_rewards}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* 重要メモ：誕生日・苦手分野への不安など、DM返信下書き生成に反映させたい情報を記録する */}
-      <div className="card flex flex-col gap-2" style={{ borderLeft: `4px solid ${cBorder}` }}>
-        <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>
-          📝 重要メモ（DM返信の下書き生成に反映されます）
-        </p>
-        <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2}
-          placeholder="例：誕生日は8/15。英語の発音に苦手意識がある。前回TOEICの結果について話した。"
-          className="w-full p-2 rounded-lg border text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }} />
-        <button type="button" onClick={handleSaveMemo} disabled={savingMemo}
-          className="self-end text-xs px-3 py-1.5 rounded-lg font-bold text-white disabled:opacity-50" style={{ background: cAccent }}>
-          {savingMemo ? "保存中..." : "メモを保存"}
-        </button>
+        {/* 重要メモ：誕生日・苦手分野への不安など、DM返信下書き生成に反映させたい情報を記録する */}
+        <div className="card flex flex-col gap-2 flex-1 min-w-[260px]" style={{ borderLeft: `4px solid ${cBorder}` }}>
+          <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>
+            📝 重要メモ（DM返信の下書き生成に反映されます）
+          </p>
+          <textarea value={memo} onChange={e => setMemo(e.target.value)} rows={2}
+            placeholder="例：誕生日は8/15。英語の発音に苦手意識がある。前回TOEICの結果について話した。"
+            className="w-full p-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }} />
+          <button type="button" onClick={handleSaveMemo} disabled={savingMemo}
+            className="self-end text-xs px-3 py-1.5 rounded-lg font-bold text-white disabled:opacity-50" style={{ background: cAccent }}>
+            {savingMemo ? "保存中..." : "メモを保存"}
+          </button>
+        </div>
       </div>
 
       {/* 親密度パネル：会話で育っていく関係性を可視化し、手動調整も行えるようにする */}
