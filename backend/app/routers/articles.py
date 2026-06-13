@@ -9,6 +9,7 @@ from app.models.access_log import AccessLog
 from app.models.customer import Customer
 from app.models.character import Character
 from app.core.intimacy import get_intimacy_settings
+from app.core.character_voice import customer_display_name
 from app.core.rewards import check_and_unlock_rewards
 from pydantic import BaseModel, model_validator
 from typing import Optional
@@ -494,7 +495,7 @@ def admin_get_all_articles(
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "updated_at": a.updated_at.isoformat() if a.updated_at else None,
             # 結合データ
-            "customer_name": a.customer.username if a.customer else None,
+            "customer_name": customer_display_name(a.customer) if a.customer else None,
             "character_name": a.character.name if a.character else None,
             "grammar_topic": a.grammar_master.topic_name if a.grammar_master else None,
         }

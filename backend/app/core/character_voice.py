@@ -48,6 +48,16 @@ def render_level_tone(tone_profile: dict | None, level: int) -> str:
     return str(text).strip()
 
 
+def customer_display_name(customer) -> str:
+    """キャラクターが生徒を呼ぶ際に使う名前を返す。
+
+    customers.username はログインID（メールアドレス等）として使われるため、
+    character_memory.nickname（運営が設定した呼び名）があればそれを優先する。
+    """
+    mem = customer.character_memory or {}
+    return (mem.get("nickname") or "").strip() or customer.username
+
+
 def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
     """指定キャラクター・生徒に対するDM返信下書き生成用のシステムプロンプトを組み立てる。"""
     mem = customer.character_memory or {}
@@ -77,7 +87,7 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
         "==================================================",
         "【相手の生徒について】",
         "==================================================",
-        f"■ 名前: {customer.username}",
+        f"■ 名前: {customer_display_name(customer)}",
         f"■ 関係性の段階: Lv.{intimacy['level']}（{intimacy['stage_label']}） — {intimacy['stage_hint']}",
     ]
     level_tone = render_level_tone(character.tone_profile if character else None, intimacy["level"])

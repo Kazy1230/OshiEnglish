@@ -15,6 +15,7 @@ export function CustomersTab() {
   const [editUsername, setEditUsername] = useState<string>("");
   const [editEmail, setEditEmail] = useState<string>("");
   // 「キャラクターが顧客のことを覚えている」演出用メモ（誕生日・好きなもの・エピソードなど）
+  const [editNickname, setEditNickname] = useState<string>("");
   const [editBirthday, setEditBirthday] = useState<string>("");
   const [editFavorites, setEditFavorites] = useState<string>("");
   const [editEpisodes, setEditEpisodes] = useState<string>("");
@@ -55,6 +56,7 @@ export function CustomersTab() {
       subscription_plan: editPlan,
       is_active: editActive,
       character_memory: {
+        nickname: editNickname.trim() || null,
         birthday: editBirthday.trim() || null,
         favorites: editFavorites.split("\n").map(s => s.trim()).filter(Boolean),
         episodes: editEpisodes.split("\n").map(s => s.trim()).filter(Boolean),
@@ -216,6 +218,7 @@ export function CustomersTab() {
                       setEditPlan(c.subscription_plan ?? "buy_once");
                       setEditActive(c.is_active ?? true);
                       const mem = c.character_memory ?? {};
+                      setEditNickname(mem.nickname ?? "");
                       setEditBirthday(mem.birthday ?? "");
                       setEditFavorites((mem.favorites ?? []).join("\n"));
                       setEditEpisodes((mem.episodes ?? []).join("\n"));
@@ -289,6 +292,13 @@ export function CustomersTab() {
                       （誕生日を覚えている・好きなものに触れる・前回のやりとりを踏まえるなど、「特別感」の演出に使用）。
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>呼び名（キャラクターが呼ぶ名前・記事生成に使用）</label>
+                        <input value={editNickname} onChange={e => setEditNickname(e.target.value)} placeholder="例：ゆうきさん（未入力時はユーザー名を使用）" />
+                        <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                          ※ ユーザー名はログインID（メールアドレス等）のため、キャラクターからの呼びかけや記事・プロンプト生成にはここで設定した呼び名が使われます。
+                        </p>
+                      </div>
                       <div>
                         <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>誕生日（例: 08-15）</label>
                         <input value={editBirthday} onChange={e => setEditBirthday(e.target.value)} placeholder="MM-DD" />

@@ -109,6 +109,9 @@ def _issue_account(db: Session, order: Order):
         email=order.email,
         is_password_reset_required=True,
         subscription_plan="buy_once",
+        # username（ログインID）はメールアドレスのため、キャラクターが呼ぶ名前・
+        # 記事生成プロンプトには申込フォームで入力された呼び名（nickname）を使う
+        character_memory={"nickname": order.customer_name} if order.customer_name else None,
     )
     db.add(customer)
     db.flush()

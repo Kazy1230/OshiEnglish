@@ -11,6 +11,7 @@ import {
   buildWritingFeedbackPrompt,
   buildSpeakingFeedbackPrompt,
   buildPersonalizedLLMPrompt,
+  getCustomerDisplayName,
 } from "../lib/promptBuilders";
 
 const emptyArticleForm = {
@@ -463,7 +464,7 @@ export function ArticlesTab() {
                     try { progress = await api.adminGetCustomerProgress(cu.id); } catch { /* 進捗データが取得できなくても続行 */ }
                     navigator.clipboard.writeText(buildPersonalizedLLMPrompt(c, cu, topic, progress));
                     const lvLabel = cu.intimacy ? `Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : "";
-                    toast(`「${cu.username}さん」専用プロンプトをコピーしました（${lvLabel}・覚えているメモ・進捗を反映）`, "success");
+                    toast(`「${getCustomerDisplayName(cu)}さん」専用プロンプトをコピーしました（${lvLabel}・覚えているメモ・進捗を反映）`, "success");
                   }}>
                   🎁 この生徒専用のパーソナライズLLMプロンプトをコピー
                   {(!form.character_id || !form.customer_id)

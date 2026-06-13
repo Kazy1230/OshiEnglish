@@ -1,9 +1,17 @@
 ﻿import { getCharVoiceLines } from "@/lib/charCopy";
 export type SuggestedQuestion = { category: string; icon: string; text: string };
 
+/** キャラクターが生徒を呼ぶ際・記事生成プロンプトに使う名前を返す。
+ * customer.username はログインID（メールアドレス等）として使われるため、
+ * character_memory.nickname（運営が設定した呼び名）があればそれを優先する。 */
+export function getCustomerDisplayName(customer: any, fallback: string = "お客さん"): string {
+  const nickname = customer?.character_memory?.nickname;
+  return (nickname && String(nickname).trim()) || customer?.username || fallback;
+}
+
 export function buildSuggestedQuestions(customer: any, character: any): SuggestedQuestion[] {
   const mem = customer?.character_memory ?? {};
-  const name = customer?.username ?? "お客さん";
+  const name = getCustomerDisplayName(customer);
   const month = new Date().getMonth() + 1; // 1〜12
 
   const seasonal: SuggestedQuestion[] = [];
@@ -73,7 +81,7 @@ ${renderToneProfile(tp)}
 ==================================================
 【相手の生徒について】
 ==================================================
-■ 名前: ${customer?.username ?? ""}
+■ 名前: ${getCustomerDisplayName(customer, "")}
 ■ 誕生日: ${mem.birthday ?? "（不明）"}
 ■ 好きなもの: ${favorites.length ? favorites.join("、") : "（不明）"}
 ■ これまでのエピソード: ${episodes.length ? episodes.join(" / ") : "（記録なし）"}
@@ -335,7 +343,7 @@ ${intimacyBlock ? `\n${intimacyBlock}` : ""}
 【★最重要：品質基準（これを満たさない記事は不合格です）】
 ==================================================
 この記事は「キャラクターIPを活かした、隅々まで役立つ参考書の1ページ」を目指します。${customer ? `
-この記事は「${customer.username ?? ""}」さん向けに書かれます。上記の親密度ブロックに従い、書き方・語りかけ方・距離感を必ず合わせてください。` : ""}
+この記事は「${getCustomerDisplayName(customer)}」さん向けに書かれます。上記の親密度ブロックに従い、書き方・語りかけ方・距離感を必ず合わせてください。` : ""}
 以下の4点を必ず満たしてください。
 
 1. ボリューム: 解説本文（===CONTENT===の中身）だけで日本語3000文字程度を確保する。
@@ -459,8 +467,8 @@ ${intimacyBlock ? `\n${intimacyBlock}` : ""}
 6. 文末は「${char.name}」らしい、ふっと力が抜けるような締めの一言で終える。
 7. タイトルも「ブログ記事っぽい」軽いものにする（「〜について解説」のような堅いタイトルは禁止）。${customer ? `
 8. 【親密度の反映】上記の「★重要：現在の親密度レベルに合わせた距離感・書き方」セクションを
-   必ず参照し、「${customer.username ?? ""}」さんとの関係の深さに見合ったトーン・距離感で書いてください。
-   このブログは特に「${customer.username ?? ""}」さんを意識して書いている、という体で構いません。
+   必ず参照し、「${getCustomerDisplayName(customer)}」さんとの関係の深さに見合ったトーン・距離感で書いてください。
+   このブログは特に「${getCustomerDisplayName(customer)}」さんを意識して書いている、という体で構いません。
    ただし直接名前を本文に出すかどうかはテーマに合わせて判断してください（出しても出さなくても可）。` : ""}
 
 ==================================================
@@ -500,7 +508,7 @@ export function buildIntimacyBlock(customer: any): string {
   const level: number = intimacy.level ?? 0;
   const stageLabel: string = intimacy.stage_label ?? "敬語期";
   const points: number = intimacy.points ?? 0;
-  const username: string = customer?.username ?? "（生徒名）";
+  const username: string = getCustomerDisplayName(customer, "（生徒名）");
 
   // 呼び方ガイドライン（レベルごと）
   const nameGuides: Record<number, string> = {
@@ -590,7 +598,7 @@ export function buildPersonalizedLLMPrompt(char: any, customer: any, topic?: str
   }
 
   return `あなたは英文法解説記事のライターです。以下のキャラクターになりきって、
-「${customer?.username ?? "（顧客名）"}さん」という"特定の生徒"に向けた、世界に一つだけの記事を書いてください。
+「${getCustomerDisplayName(customer, "（顧客名）")}さん」という"特定の生徒"に向けた、世界に一つだけの記事を書いてください。
 これは量産型の解説記事ではなく、「このキャラクターが、この生徒のことをちゃんと覚えていて、
 気にかけながら書いてくれている」ことが伝わる、特別感のある記事を目指します。
 出力フォーマットは厳密に守ってください（後工程で管理画面の入力欄にそのまま貼り付けるため）。
@@ -610,7 +618,7 @@ ${topic ?? "（ここに依頼された文法項目を記入）"}
 ==================================================
 【★最重要：この生徒についてキャラクターが覚えていること（必ず活用すること）】
 ==================================================
-■ 生徒の名前: ${customer?.username ?? "（不明）"}
+■ 生徒の名前: ${getCustomerDisplayName(customer, "（不明）")}
 　→ 記事の中で、呼びかけや語りかけの形で自然に名前を呼んでください（タイトル・本文どちらでもOK）。
 　　呼び方は、下記【現在の親密度レベルに合わせた距離感・書き方】の「生徒の呼び方」に従うこと。
 
@@ -682,7 +690,7 @@ ${buildIntimacyBlock(customer)}
 （ここに解説本文をMarkdownで。日本語3000文字程度。
 　見出しは「## 」「### 」、重要語句は **太字**、英単語は \`コード表記\`、ポイントは「> 」引用ブロックを使用。
 　約1500文字ごとの見出し直前に \`<!--PAGE-->\` を1〜2箇所挿入。
-　冒頭か締めのどこかで「${customer?.username ?? "（生徒名）"}」への語りかけを必ず入れる）
+　冒頭か締めのどこかで「${getCustomerDisplayName(customer, "（生徒名）")}」への語りかけを必ず入れる）
 
 ===EXAMPLES===
 （例文を3〜4本、改行区切りで。各行は下記の形式で統一する）
@@ -848,7 +856,7 @@ ${codeBlockNote}`.trim();
 export function buildWritingFeedbackPrompt(char: any, customer?: any, originalPrompt?: string, submission?: string): string {
   const tp = char.tone_profile ?? {};
   const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
-  const username: string = customer?.username ?? "（生徒名）";
+  const username: string = getCustomerDisplayName(customer, "（生徒名）");
 
   return `あなたは英語ライティングのフィードバック記事を書くライターです。
 以下のキャラクター「${char.name}」になりきって、生徒が提出したライティングの答案に対する
@@ -945,7 +953,7 @@ ${submission ?? "（ここに生徒が提出したライティングの答案を
 export function buildSpeakingFeedbackPrompt(char: any, customer?: any, originalPrompt?: string, submission?: string): string {
   const tp = char.tone_profile ?? {};
   const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
-  const username: string = customer?.username ?? "（生徒名）";
+  const username: string = getCustomerDisplayName(customer, "（生徒名）");
 
   return `あなたは英語スピーキングのフィードバック記事を書くライターです。
 以下のキャラクター「${char.name}」になりきって、生徒が提出したスピーキングの内容に対する
