@@ -73,6 +73,14 @@ def get_customer_logs(
 
     last_access = logs[0].accessed_at if logs else None
 
+    # ログ一覧に記事タイトルを付与するため一括取得
+    article_titles: dict[int, str] = {}
+    if all_log_article_ids:
+        for a_id, a_title in db.query(Article.id, Article.title).filter(
+            Article.id.in_(all_log_article_ids)
+        ).all():
+            article_titles[a_id] = a_title
+
     return {
         "customer_id": customer_id,
         "username": customer.username,
@@ -89,6 +97,7 @@ def get_customer_logs(
         "logs": [
             {
                 "article_id": l.article_id,
+                "article_title": article_titles.get(l.article_id),
                 "accessed_at": l.accessed_at.isoformat() if l.accessed_at else None,
                 "ip": l.ip_address,
             }

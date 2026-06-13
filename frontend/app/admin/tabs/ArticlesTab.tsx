@@ -188,21 +188,29 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
   }
 
   async function changeStatus(id: number, status: string) {
-    const result = await api.adminUpdateArticle(id, { status });
-    setArticles(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-    const label: Record<string, string> = { draft: "下書き", review: "確認中", published: "公開" };
-    if (status === "published" && result?.notification_sent) {
-      toast(`「${label[status]}」に変更しました ✅ 顧客への通知チャットを自動送信しました`, "success");
-    } else {
-      toast(`ステータスを「${label[status]}」に変更しました`, "success");
+    try {
+      const result = await api.adminUpdateArticle(id, { status });
+      setArticles(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+      const label: Record<string, string> = { draft: "下書き", review: "確認中", published: "公開" };
+      if (status === "published" && result?.notification_sent) {
+        toast(`「${label[status]}」に変更しました ✅ 顧客への通知チャットを自動送信しました`, "success");
+      } else {
+        toast(`ステータスを「${label[status]}」に変更しました`, "success");
+      }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
     }
   }
 
   async function deleteArticle(id: number) {
     if (!confirm("この記事を削除しますか？")) return;
-    await api.adminDeleteArticle(id);
-    setArticles(prev => prev.filter(a => a.id !== id));
-    toast("記事を削除しました", "info");
+    try {
+      await api.adminDeleteArticle(id);
+      setArticles(prev => prev.filter(a => a.id !== id));
+      toast("記事を削除しました", "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    }
   }
 
   const statusColor: Record<string, string> = { draft: "#f5f5f5", review: "#fff8e1", published: "#e8fdf0" };

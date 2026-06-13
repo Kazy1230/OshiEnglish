@@ -7,6 +7,7 @@ export function LogsTab() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [logData, setLogData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
     api.adminGetCustomers().then(c => setCustomers(c.filter((cu: any) => !cu.is_admin))).finally(() => setLoading(false));
@@ -15,8 +16,13 @@ export function LogsTab() {
   async function loadLogs(id: number) {
     setSelectedId(id);
     setLogData(null);
-    const data = await api.adminGetCustomerLogs(id);
-    setLogData(data);
+    setLogsLoading(true);
+    try {
+      const data = await api.adminGetCustomerLogs(id);
+      setLogData(data);
+    } finally {
+      setLogsLoading(false);
+    }
   }
 
   if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
@@ -41,13 +47,14 @@ export function LogsTab() {
 
         {/* ログ詳細 */}
         <div className="flex-1">
-          {!logData && <p style={{ color: "var(--muted)" }}>顧客を選択してください</p>}
-          {logData && (
+          {selectedId === null && <p style={{ color: "var(--muted)" }}>顧客を選択してください</p>}
+          {logsLoading && <p style={{ color: "var(--muted)" }}>読み込み中…</p>}
+          {logData && !logsLoading && (
             <div className="flex flex-col gap-4">
               {/* サマリー */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
-                  { label: "全記事数", value: logData.total_articles },
+                  { label: "依頼記事数", value: logData.total_articles },
                   { label: "閲覧済み", value: `${logData.read_count}冊` },
                   { label: "閲覧率", value: `${logData.read_rate}%` },
                 ].map(s => (
@@ -56,6 +63,14 @@ export function LogsTab() {
                     <p className="text-2xl font-black mt-1" style={{ color: "var(--primary)" }}>{s.value}</p>
                   </div>
                 ))}
+                {logData.total_exercises > 0 && (
+                  <div className="card text-center">
+                    <p className="text-xs" style={{ color: "var(--muted)" }}>演習問題 取り組み</p>
+                    <p className="text-2xl font-black mt-1" style={{ color: "var(--primary)" }}>
+                      {logData.exercise_accessed_count} / {logData.total_exercises}
+                    </p>
+                  </div>
+                )}
               </div>
               {logData.last_access && (
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
@@ -71,13 +86,13 @@ export function LogsTab() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
-                      <th className="text-left py-1 font-medium text-xs" style={{ color: "var(--muted)" }}>記事ID</th>
+                      <th className="text-left py-1 font-medium text-xs" style={{ color: "var(--muted)" }}>記事</th>
                       <th className="text-left py-1 font-medium text-xs" style={{ color: "var(--muted)" }}>アクセス日時</th>
                     </tr></thead>
                     <tbody>
                       {logData.logs.map((l: any, i: number) => (
                         <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                          <td className="py-1 font-medium" style={{ color: "var(--primary)" }}>#{l.article_id}</td>
+                          <td className="py-1 font-medium" style={{ color: "var(--primary)" }}>{l.article_title || `#${l.article_id}`}</td>
                           <td className="py-1 text-xs" style={{ color: "var(--muted)" }}>{new Date(l.accessed_at).toLocaleString("ja-JP")}</td>
                         </tr>
                       ))}

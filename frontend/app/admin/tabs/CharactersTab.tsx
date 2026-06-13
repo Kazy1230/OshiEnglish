@@ -162,9 +162,13 @@ export function CharactersTab() {
 
   async function deleteCharacter(id: number, name: string) {
     if (!confirm(`「${name}」を削除しますか？\n紐付き顧客のキャラクターが未設定になります。`)) return;
-    await api.adminDeleteCharacter(id);
-    await reload();
-    toast(`「${name}」を削除しました`, "info");
+    try {
+      await api.adminDeleteCharacter(id);
+      await reload();
+      toast(`「${name}」を削除しました`, "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    }
   }
 
   const [uploadingId, setUploadingId] = useState<number | null>(null);

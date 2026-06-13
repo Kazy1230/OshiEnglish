@@ -62,7 +62,7 @@ export function GrammarTab() {
       <div>
         <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>試験カテゴリ</label>
         <select value={form.exam_category} onChange={e => setForm({ ...form, exam_category: e.target.value })}>
-          <option>TOEIC</option><option>IELTS</option><option>英検</option><option>一般</option>
+          <option>TOEIC</option><option>IELTS</option><option>英検</option><option>TOEFL</option><option>一般</option>
         </select>
       </div>
       <div>

@@ -25,6 +25,8 @@ export function CustomersTab() {
   const [reissueResult, setReissueResult] = useState<{ username: string; temporary_password: string; message: string } | null>(null);
   const [refundingId, setRefundingId] = useState<number | null>(null);
   const [refundResult, setRefundResult] = useState<{ message: string } | null>(null);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
 
   const reload = () => Promise.all([api.adminGetCustomers(), api.adminGetCharacters()])
     .then(([c, ch]) => { setCustomers(c); setCharacters(ch); });
@@ -68,10 +70,17 @@ export function CustomersTab() {
       updateData.username = editUsername.trim();
     }
     updateData.email = editEmail.trim() || null;
-    await api.adminUpdateCustomer(customerId, updateData);
-    await reload();
-    setEditingId(null);
-    toast("顧客情報を更新しました", "success");
+    setSavingId(customerId);
+    try {
+      await api.adminUpdateCustomer(customerId, updateData);
+      await reload();
+      setEditingId(null);
+      toast("顧客情報を更新しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
+    } finally {
+      setSavingId(null);
+    }
   }
 
   async function handleDelete(c: any) {
@@ -143,12 +152,15 @@ export function CustomersTab() {
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>👤 顧客管理</h2>
         <button className="btn-accent" onClick={() => setShowForm(!showForm)}>
           {showForm ? "キャンセル" : "+ 顧客を追加"}
         </button>
       </div>
+
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ユーザー名・メールアドレスで検索"
+        className="mb-6 w-full sm:w-72" />
 
       {showForm && (
         <form onSubmit={handleCreate} className="card mb-6 flex flex-col gap-3">
@@ -186,8 +198,18 @@ export function CustomersTab() {
         </form>
       )}
 
+      {(() => {
+        const filteredCustomers = customers.filter(c => !c.is_admin).filter(c => {
+          if (!search.trim()) return true;
+          const q = search.trim().toLowerCase();
+          return c.username?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q);
+        });
+        if (filteredCustomers.length === 0) {
+          return <p className="text-sm" style={{ color: "var(--muted)" }}>該当する顧客が見つかりません</p>;
+        }
+        return (
       <div className="flex flex-col gap-3">
-        {customers.filter(c => !c.is_admin).map(c => {
+        {filteredCustomers.map(c => {
           const charName = characters.find(ch => ch.id === c.character_id)?.name;
           const isEditing = editingId === c.id;
           return (
@@ -318,13 +340,17 @@ export function CustomersTab() {
                     </div>
                   </div>
 
-                  <button className="btn-accent text-xs py-2 px-4 self-start" onClick={() => saveCharacter(c.id)}>保存</button>
+                  <button className="btn-accent text-xs py-2 px-4 self-start disabled:opacity-50" disabled={savingId === c.id} onClick={() => saveCharacter(c.id)}>
+                    {savingId === c.id ? "保存中…" : "保存"}
+                  </button>
                 </div>
               )}
             </div>
           );
         })}
       </div>
+        );
+      })()}
     </div>
   );
 }

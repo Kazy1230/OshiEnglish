@@ -28,6 +28,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [msgBadge, setMsgBadge] = useState(0);
   const [ordersBadge, setOrdersBadge] = useState(0);
+  const [correctionsBadge, setCorrectionsBadge] = useState(0);
   const [mode, toggleMode] = useDarkMode();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -73,6 +74,15 @@ export default function AdminPage() {
           || o.pending_corrections?.length > 0
         ).length);
       } catch (err) { reportError("admin:adminGetOrders(badge)", err); }
+
+      try {
+        const [corrections, exerciseSubmissions] = await Promise.all([
+          api.adminListCorrectionRequests(),
+          api.adminListExerciseSubmissions(),
+        ]);
+        if (cancelled) return;
+        setCorrectionsBadge(corrections.length + exerciseSubmissions.length);
+      } catch (err) { reportError("admin:correctionsBadge", err); }
     }
     loadBadge();
     const interval = setInterval(loadBadge, 30000);
@@ -147,6 +157,12 @@ export default function AdminPage() {
                 <span className="ml-auto min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md flex-shrink-0"
                   style={{ background: "#ff3b30" }}>
                   {ordersBadge > 99 ? "99+" : ordersBadge}
+                </span>
+              )}
+              {t.key === "corrections" && correctionsBadge > 0 && (
+                <span className="ml-auto min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-md flex-shrink-0"
+                  style={{ background: "#ff3b30" }}>
+                  {correctionsBadge > 99 ? "99+" : correctionsBadge}
                 </span>
               )}
             </button>

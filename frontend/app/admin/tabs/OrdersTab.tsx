@@ -68,17 +68,25 @@ export function OrdersTab() {
   const statusColor: Record<string, string> = { new: "#fff8e1", in_progress: "#e8f4fd", delivered: "#e8fdf0" };
 
   async function updateStatus(id: number, status: string) {
-    await api.adminUpdateOrder(id, { status });
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-    const label: Record<string,string> = { new:"新規", in_progress:"対応中", delivered:"納品済" };
-    toast(`ステータスを「${label[status]}」に変更しました`, "success");
+    try {
+      await api.adminUpdateOrder(id, { status });
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+      const label: Record<string,string> = { new:"新規", in_progress:"対応中", delivered:"納品済" };
+      toast(`ステータスを「${label[status]}」に変更しました`, "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
+    }
   }
 
   async function saveNote(id: number) {
-    await api.adminUpdateOrder(id, { notes: noteText });
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, notes: noteText } : o));
-    setEditingNoteId(null);
-    toast("メモを保存しました", "success");
+    try {
+      await api.adminUpdateOrder(id, { notes: noteText });
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, notes: noteText } : o));
+      setEditingNoteId(null);
+      toast("メモを保存しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    }
   }
 
   // 「対応が必要な受注」：未納品、またはキャラ作成・記事依頼・添削の対応待ちが残っている受注
@@ -245,10 +253,11 @@ export function OrdersTab() {
                           defaultValue=""
                           onChange={e => {
                             const val = e.target.value;
-                            handleLinkCustomer(o.id, val ? Number(val) : null);
+                            if (val === "__unlink__") { handleLinkCustomer(o.id, null); return; }
+                            if (val) handleLinkCustomer(o.id, Number(val));
                           }}>
                           <option value="">— 選択 —</option>
-                          <option value="">🚫 紐づけ解除</option>
+                          <option value="__unlink__">🚫 紐づけ解除</option>
                           {customers.map(cu => (
                             <option key={cu.id} value={cu.id}>{cu.username}</option>
                           ))}
@@ -295,9 +304,13 @@ export function OrdersTab() {
                     <button className="text-xs py-1 px-3 rounded-lg" style={{ color: "#c0392b" }}
                       onClick={async () => {
                         if (!confirm("この受注を削除しますか？")) return;
-                        await api.adminDeleteOrder(o.id);
-                        setOrders(prev => prev.filter(x => x.id !== o.id));
-                        toast("受注を削除しました", "info");
+                        try {
+                          await api.adminDeleteOrder(o.id);
+                          setOrders(prev => prev.filter(x => x.id !== o.id));
+                          toast("受注を削除しました", "info");
+                        } catch (err: unknown) {
+                          toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+                        }
                       }}>削除</button>
                   )}
                 </div>
