@@ -425,6 +425,7 @@ def adjust_intimacy(customer_id: int, data: IntimacyAdjust, admin=Depends(get_cu
 
     before = customer.intimacy_points or 0
     customer.intimacy_points = max(0, before + data.delta)
+    check_and_unlock_rewards(db, customer)
     db.commit()
     db.refresh(customer)
 
@@ -461,6 +462,7 @@ def reply_as_character(customer_id: int, data: ReplyCreate, admin=Depends(get_cu
     )
     db.add(msg)
     customer.intimacy_points = (customer.intimacy_points or 0) + POINTS_PER_CHARACTER_REPLY
+    check_and_unlock_rewards(db, customer)
     db.commit()
     db.refresh(msg)
     return serialize_message(msg)

@@ -304,7 +304,8 @@ function ShelfContent() {
       {/* 添削提出ポップアップ（お題不要のライティング/スピーキング添削） */}
       {correctionModalType && (
         <CorrectionSubmissionModal theme={t} initialType={correctionModalType}
-          onClose={() => setCorrectionModalType(null)} />
+          onClose={() => setCorrectionModalType(null)}
+          onBack={() => { setCorrectionModalType(null); setShowRequestModal(true); }} />
       )}
 
       {/* 退会確認モーダル */}

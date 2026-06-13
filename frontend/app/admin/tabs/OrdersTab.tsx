@@ -20,6 +20,7 @@ export function OrdersTab() {
   const [linkingOrderId, setLinkingOrderId] = useState<number | null>(null);
   const [promptOrderId,  setPromptOrderId]  = useState<number | null>(null);
   const [generatedPrompt, setGeneratedPrompt] = useState<string>("");
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     Promise.all([api.adminGetOrders(), api.adminGetCustomers()])
@@ -80,6 +81,14 @@ export function OrdersTab() {
     toast("メモを保存しました", "success");
   }
 
+  // 「対応が必要な受注」：未納品、またはキャラ作成・記事依頼・添削の対応待ちが残っている受注
+  function needsAttention(o: any): boolean {
+    return o.status !== "delivered"
+      || !!o.character_creation_pending
+      || (o.pending_article_requests?.length ?? 0) > 0
+      || (o.pending_corrections?.length ?? 0) > 0;
+  }
+
   const filtered = orders.filter(o => {
     const matchText = !filterText ||
       o.customer_name?.toLowerCase().includes(filterText.toLowerCase()) ||
@@ -89,6 +98,22 @@ export function OrdersTab() {
     const matchStatus = !filterStatus || o.status === filterStatus;
     return matchText && matchStatus;
   });
+
+  // 対応が必要な受注を先頭にまとめ、対応完了済みの受注は下部に表示する
+  const sorted = [...filtered].sort((a, b) => {
+    const an = needsAttention(a) ? 0 : 1;
+    const bn = needsAttention(b) ? 0 : 1;
+    return an - bn;
+  });
+  const attentionCount = filtered.filter(needsAttention).length;
+
+  function toggleExpanded(id: number) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
 
@@ -162,9 +187,38 @@ export function OrdersTab() {
         <span className="text-xs self-center" style={{ color: "var(--muted)" }}>{filtered.length} / {orders.length} 件</span>
       </div>
 
+      {filtered.length > 0 && (
+        <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+          🔴 対応が必要な受注: <b style={{ color: "var(--accent)" }}>{attentionCount}</b> 件
+          {attentionCount < filtered.length && "（対応完了済みの受注は下部にまとめて表示しています）"}
+        </p>
+      )}
+
       {orders.length === 0 ? <p style={{ color: "var(--muted)" }}>受注はありません</p> : (
         <div className="flex flex-col gap-3">
-          {filtered.map(o => (
+          {sorted.map(o => {
+            const attention = needsAttention(o);
+            const expanded = expandedIds.has(o.id);
+            if (!attention && !expanded) {
+              // 対応完了済みの受注：簡易表示（クリックで詳細展開）
+              return (
+                <button key={o.id} onClick={() => toggleExpanded(o.id)}
+                  className="card flex items-center justify-between gap-3 text-left hover:opacity-80 transition-opacity"
+                  style={{ background: statusColor[o.status] || "white" }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold truncate" style={{ color: "var(--primary)" }}>{o.customer_name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(0,0,0,0.08)" }}>{statusLabel[o.status]}</span>
+                    {o.customer_id && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: "#e8fdf0", color: "#1a7a3c" }}>
+                        🔗 {o.customer_username ?? `ID:${o.customer_id}`}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs flex-shrink-0" style={{ color: "var(--accent)" }}>詳細を見る ▾</span>
+                </button>
+              );
+            }
+            return (
             <div key={o.id} className="card flex flex-col gap-2" style={{ background: statusColor[o.status] || "white" }}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -231,6 +285,10 @@ export function OrdersTab() {
                   )}
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
+                  {!attention && (
+                    <button className="text-xs px-2 py-0.5 rounded" style={{ color: "var(--muted)" }}
+                      onClick={() => toggleExpanded(o.id)}>▲ 折りたたむ</button>
+                  )}
                   {o.status === "new" && <button className="btn-accent text-xs py-1 px-3" onClick={() => updateStatus(o.id, "in_progress")}>対応開始</button>}
                   {o.status === "in_progress" && <button className="btn-primary text-xs py-1 px-3" onClick={() => updateStatus(o.id, "delivered")}>納品完了</button>}
                   {o.status === "delivered" && (
@@ -328,7 +386,8 @@ export function OrdersTab() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

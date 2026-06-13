@@ -8,6 +8,7 @@ import {
   buildImagePrompt,
   buildCharacterDesignPrompt,
   IMAGE_SIZE_PX,
+  parseExerciseJsonInput,
 } from "../lib/promptBuilders";
 
 const FONT_STYLE_OPTIONS = [
@@ -37,6 +38,8 @@ export function CharactersTab() {
   const [editingChar, setEditingChar] = useState<any | null>(null);
   const [form, setForm] = useState(emptyCharForm);
   const [previewColors, setPreviewColors] = useState<any>(null);
+  const [toneProfileError, setToneProfileError] = useState(false);
+  const [colorSchemeError, setColorSchemeError] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
   const [promptCustomerIdByChar, setPromptCustomerIdByChar] = useState<Record<number, string>>({});
@@ -69,7 +72,21 @@ export function CharactersTab() {
 
   function handleColorSchemeChange(val: string) {
     setForm(f => ({ ...f, color_scheme: val }));
-    try { setPreviewColors(JSON.parse(val)); } catch { setPreviewColors(null); }
+    if (!val.trim()) { setPreviewColors(null); setColorSchemeError(false); return; }
+    try {
+      setPreviewColors(parseExerciseJsonInput(val));
+      setColorSchemeError(false);
+    } catch {
+      setPreviewColors(null);
+      setColorSchemeError(true);
+    }
+  }
+
+  function handleToneProfileChange(val: string) {
+    setForm(f => ({ ...f, tone_profile: val }));
+    if (!val.trim()) { setToneProfileError(false); return; }
+    try { parseExerciseJsonInput(val); setToneProfileError(false); }
+    catch { setToneProfileError(true); }
   }
 
   function startEdit(c: any) {
@@ -89,6 +106,8 @@ export function CharactersTab() {
       linked_customer_id: "",
     });
     try { setPreviewColors(c.color_scheme); } catch { setPreviewColors(null); }
+    setToneProfileError(false);
+    setColorSchemeError(false);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -98,15 +117,17 @@ export function CharactersTab() {
     setEditingChar(null);
     setForm(emptyCharForm);
     setPreviewColors(null);
+    setToneProfileError(false);
+    setColorSchemeError(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     let tone_profile = null;
     let color_scheme = null;
-    try { tone_profile = form.tone_profile ? JSON.parse(form.tone_profile) : null; }
+    try { tone_profile = form.tone_profile ? parseExerciseJsonInput(form.tone_profile) : null; }
     catch { toast("tone_profileはJSON形式で入力してください", "error"); return; }
-    try { color_scheme = form.color_scheme ? JSON.parse(form.color_scheme) : null; }
+    try { color_scheme = form.color_scheme ? parseExerciseJsonInput(form.color_scheme) : null; }
     catch { toast("color_schemeはJSON形式で入力してください", "error"); return; }
     const greetingsList = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
     const payload = {
@@ -327,8 +348,11 @@ export function CharactersTab() {
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
               tone_profile（JSON）— LLMに渡すプロンプトの核心
             </label>
-            <textarea rows={4} value={form.tone_profile} onChange={e => setForm({ ...form, tone_profile: e.target.value })}
+            <textarea rows={4} value={form.tone_profile} onChange={e => handleToneProfileChange(e.target.value)}
               placeholder={'{"speech_style":"...", "keywords":["..."], "personality":"..."}'} style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+            {toneProfileError && (
+              <p className="text-xs mt-1" style={{ color: "#c0392b" }}>⚠️ JSON形式として読み取れません。カンマの付け忘れや引用符の閉じ忘れがないか確認してください</p>
+            )}
           </div>
 
           <div>
@@ -356,6 +380,9 @@ export function CharactersTab() {
             </div>
             <textarea rows={3} value={form.color_scheme} onChange={e => handleColorSchemeChange(e.target.value)}
               placeholder={'{"primary":"#4a0e0e","accent":"#c0392b","bg":"#fdf6f6",...}'} style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+            {colorSchemeError && (
+              <p className="text-xs mt-1" style={{ color: "#c0392b" }}>⚠️ JSON形式として読み取れません。カンマの付け忘れや引用符の閉じ忘れがないか確認してください</p>
+            )}
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
               キー: primary / accent / bg / text / card / border / example_bg / tips_bg
             </p>

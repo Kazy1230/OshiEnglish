@@ -234,7 +234,19 @@ export function buildCharacterPromptFromOrder(order: any): string {
 export function parseExerciseJsonInput(raw: string): any {
   let text = raw.trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) text = fenced[1].trim();
+  if (fenced) {
+    text = fenced[1].trim();
+  } else {
+    // コードブロックがない場合、LLMの説明文に埋まったJSON本体（{...} または [...]）だけを抜き出す
+    const start = text.search(/[{[]/);
+    if (start > 0) {
+      const endChar = text[start] === "{" ? "}" : "]";
+      const end = text.lastIndexOf(endChar);
+      if (end > start) text = text.slice(start, end + 1);
+    }
+  }
+  // LLMが出力しがちな末尾の余分なカンマ（trailing comma）を除去
+  text = text.replace(/,(\s*[}\]])/g, "$1");
   return JSON.parse(text);
 }
 

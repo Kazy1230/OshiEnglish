@@ -6,11 +6,14 @@ import { resolveTheme } from "@/lib/theme";
 
 type CorrectionType = "writing" | "speaking";
 
-export function CorrectionSubmissionModal({ theme: t, initialType, onClose, onSent }: {
+export function CorrectionSubmissionModal({ theme: t, initialType, onClose, onSent, onBack }: {
   theme: ReturnType<typeof resolveTheme>;
   initialType?: CorrectionType;
   onClose: () => void;
   onSent?: () => void;
+  /** リクエストポップアップ（RequestArticleModal）のカテゴリ選択から遷移してきた場合に渡す。
+   * 渡された場合「キャンセル」ではなく「戻る」として表示し、リクエストポップアップに戻す。 */
+  onBack?: () => void;
 }) {
   const [type, setType] = useState<CorrectionType>(initialType ?? "writing");
   const [text, setText] = useState("");
@@ -243,10 +246,10 @@ export function CorrectionSubmissionModal({ theme: t, initialType, onClose, onSe
         </p>
 
         <div className="flex justify-end gap-2 mt-2">
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={onBack ?? onClose}
             className="text-sm px-4 py-2 rounded-xl font-bold transition-all"
             style={{ border: `1px solid ${t.border}`, color: t.text }}>
-            キャンセル
+            {onBack ? "← 戻る" : "キャンセル"}
           </button>
           <button type="button" onClick={handleSubmit} disabled={sending}
             className="text-sm px-4 py-2 rounded-xl font-bold text-white transition-all disabled:opacity-50"

@@ -51,6 +51,17 @@ type RewardStatus = {
   next_reward_target: number;
 };
 
+type UnlockedRewardItem = {
+  id: number;
+  category: "line" | "title" | "wallpaper";
+  category_label: string;
+  text_content: string | null;
+  icon: string | null;
+  image_url: string | null;
+};
+
+const REWARD_CATEGORY_ICON: Record<UnlockedRewardItem["category"], string> = { line: "💬", title: "🏅", wallpaper: "🖼️" };
+
 type Me = { username: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null; theme_config?: { wallpaper_url?: string } | null };
 
 function formatTime(iso: string) {
@@ -85,8 +96,19 @@ function ChatPageInner() {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [correctionModalType, setCorrectionModalType] = useState<"writing" | "speaking" | "ask" | null>(null);
   const [mode, toggleMode] = useDarkMode();
+  const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; stage_label: string } | null>(null);
+  const [celebratingReward, setCelebratingReward] = useState<UnlockedRewardItem | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prependingRef = useRef(false);
+  const prevLevelRef = useRef<number | null>(null);
+
+  async function checkRewardUnlocks() {
+    try {
+      const rewards = await api.getMyRewards();
+      const newItem = rewards.items.find((i: any) => i.unlocked && i.is_new);
+      if (newItem) setCelebratingReward(newItem);
+    } catch { /* 演出のチェックは失敗してもブロックしない */ }
+  }
 
   async function load() {
     const thread = await api.getMyThread();
@@ -95,6 +117,26 @@ function ChatPageInner() {
     setHasMore(!!thread.has_more);
     setReward(thread.reward_status);
     setIntimacy(thread.intimacy ?? null);
+
+    if (thread.intimacy) {
+      if (prevLevelRef.current !== null && thread.intimacy.level > prevLevelRef.current) {
+        setLevelUpInfo({ level: thread.intimacy.level, stage_label: thread.intimacy.stage_label });
+      }
+      prevLevelRef.current = thread.intimacy.level;
+    }
+
+    await checkRewardUnlocks();
+  }
+
+  async function dismissLevelUp() {
+    setLevelUpInfo(null);
+  }
+
+  async function dismissCelebratingReward() {
+    const current = celebratingReward;
+    if (!current) return;
+    setCelebratingReward(null);
+    try { await api.ackRewardUnlock(current.id); } catch { /* 演出の確認は失敗してもブロックしない */ }
   }
 
   async function loadOlder() {
@@ -198,7 +240,7 @@ function ChatPageInner() {
   const wallpaperUrl = me?.theme_config?.wallpaper_url;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{
+    <div className="h-screen flex flex-col overflow-hidden" style={{
       background: wallpaperUrl
         ? `linear-gradient(rgba(255,255,255,0.82), rgba(255,255,255,0.82)), url(${API_ORIGIN}${wallpaperUrl})`
         : t.bg,
@@ -224,7 +266,6 @@ function ChatPageInner() {
             )}
             <div className="min-w-0">
               <p className="text-white font-black text-sm truncate">{charName}</p>
-              <p className="text-white/60 text-[11px]">チャット・記事リクエスト</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -408,8 +449,68 @@ function ChatPageInner() {
       {correctionModalType && (
         <CorrectionSubmissionModal theme={t}
           initialType={correctionModalType === "ask" ? undefined : correctionModalType}
-          onClose={() => setCorrectionModalType(null)} onSent={load} />
+          onClose={() => setCorrectionModalType(null)} onSent={load}
+          onBack={correctionModalType === "ask" ? undefined : () => { setCorrectionModalType(null); setShowRequestModal(true); }} />
       )}
+
+      {/* 親密度レベルアップ演出 */}
+      {!levelUpInfo && celebratingReward && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.6)" }} onClick={dismissCelebratingReward}>
+          <div className="reward-unlock-pop max-w-sm w-full rounded-2xl p-6 text-center"
+            style={{ background: t.card, border: `2px solid ${t.accent}` }}
+            onClick={e => e.stopPropagation()}>
+            <div className="text-5xl mb-3 reward-unlock-bounce">🎉</div>
+            <p className="text-sm font-bold mb-1" style={{ color: "var(--muted)" }}>新しい報酬を解放しました！</p>
+            <p className="text-lg font-black mb-3" style={{ color: t.primary }}>
+              {REWARD_CATEGORY_ICON[celebratingReward.category]} {celebratingReward.category_label}
+            </p>
+            {celebratingReward.category === "line" && (
+              <p className="text-sm" style={{ color: t.text }}>「{celebratingReward.text_content}」</p>
+            )}
+            {celebratingReward.category === "title" && (
+              <p className="text-base font-bold" style={{ color: t.text }}>
+                {celebratingReward.icon ? `${celebratingReward.icon} ` : ""}{celebratingReward.text_content}
+              </p>
+            )}
+            {celebratingReward.category === "wallpaper" && celebratingReward.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`${API_ORIGIN}${celebratingReward.image_url}`} alt={celebratingReward.text_content || "壁紙"}
+                className="w-full rounded-lg" style={{ maxHeight: "200px", objectFit: "cover" }} />
+            )}
+            <button className="btn-primary w-full mt-4" onClick={dismissCelebratingReward}>確認しました</button>
+          </div>
+        </div>
+      )}
+
+      {levelUpInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.6)" }} onClick={dismissLevelUp}>
+          <div className="reward-unlock-pop max-w-sm w-full rounded-2xl p-6 text-center"
+            style={{ background: t.card, border: `2px solid ${t.accent}` }}
+            onClick={e => e.stopPropagation()}>
+            <div className="text-5xl mb-3 reward-unlock-bounce">💗</div>
+            <p className="text-sm font-bold mb-1" style={{ color: "var(--muted)" }}>{charName}との関係が深まりました！</p>
+            <p className="text-lg font-black mb-3" style={{ color: t.primary }}>
+              Lv.{levelUpInfo.level}「{levelUpInfo.stage_label}」
+            </p>
+            <button className="btn-primary w-full mt-4" onClick={dismissLevelUp}>確認しました</button>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @keyframes reward-unlock-pop {
+          from { opacity: 0; transform: scale(0.85); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes reward-unlock-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .reward-unlock-pop { animation: reward-unlock-pop 0.3s ease-out; }
+        .reward-unlock-bounce { animation: reward-unlock-bounce 0.8s ease-in-out infinite; }
+      `}</style>
       </>
       )}
     </div>
