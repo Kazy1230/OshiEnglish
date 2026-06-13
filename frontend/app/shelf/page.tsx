@@ -138,9 +138,6 @@ function ShelfContent() {
       backgroundAttachment: "fixed",
       fontFamily: t.fontFamily,
     }}>
-      {/* 透かし */}
-      <div className="watermark"><span style={{ color: t.primary }}>{me?.display_name || me?.username}</span></div>
-
       {/* ヘッダー */}
       <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2">
@@ -156,8 +153,6 @@ function ShelfContent() {
           <div className="flex items-center gap-2 sm:gap-4">
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🎁 ご褒美</button>
-            <button onClick={() => router.push("/purchases")} aria-label="購入履歴"
-              className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🧾 購入履歴</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <span className="hidden sm:inline text-sm text-white/70">{me?.display_name || me?.username} さん</span>
             <button onClick={() => { clearToken(); router.push("/login"); }}

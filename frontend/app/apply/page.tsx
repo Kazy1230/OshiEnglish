@@ -544,12 +544,14 @@ function getBgPattern(
 
 // ─── 関係性オーバーレイ（霧 / 光芒 / スポットライト） ────────────────────────
 
-function RelationshipOverlay({ relationship, reduceMotion = false, isMobile = false }: {
-  relationship: Relationship | null; reduceMotion?: boolean; isMobile?: boolean;
+function RelationshipOverlay({ relationship, personality, reduceMotion = false, isMobile = false }: {
+  relationship: Relationship | null; personality?: Personality | null; reduceMotion?: boolean; isMobile?: boolean;
 }) {
   if (!relationship || relationship === "other") return null;
   // 視差効果を減らす設定の場合は、演出レイヤーごと描画しない
   if (reduceMotion) return null;
+  // クール：白い霧の演出はダークテーマと合わないため表示しない
+  if (personality === "cool") return null;
 
   const wrap: React.CSSProperties = {
     position: "absolute", inset: 0,
@@ -822,7 +824,7 @@ function PreviewCard({ gender, relationship, personality, persQuote, theme, redu
       }} />
 
       {/* 関係性オーバーレイ（霧 / 光芒 / スポットライト・このカードの中だけ） */}
-      <RelationshipOverlay relationship={relationship} reduceMotion={reduceMotion} isMobile={isMobile} />
+      <RelationshipOverlay relationship={relationship} personality={personality} reduceMotion={reduceMotion} isMobile={isMobile} />
 
       <div style={{ position: "relative", zIndex: 3, padding: "1.6rem 1.5rem" }}>
         <p style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".1em", color: theme.accent,
@@ -1109,7 +1111,7 @@ export default function ApplyPage() {
                 animation: reduceMotion ? "none" : "yt-pattern-in 0.9s ease forwards",
                 ...getBgPattern(gender, relationship, personality, theme.isDark, reduceMotion),
               }} />
-              <RelationshipOverlay relationship={relationship} reduceMotion={reduceMotion} isMobile={isMobile} />
+              <RelationshipOverlay relationship={relationship} personality={personality} reduceMotion={reduceMotion} isMobile={isMobile} />
             </>
           )}
           <div className="yt-pop" style={{
