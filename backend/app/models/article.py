@@ -41,6 +41,6 @@ class Article(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     customer = relationship("Customer", back_populates="articles")
-    character = relationship("Character", back_populates="articles")
+    character = relationship("Character", back_populates="articles", foreign_keys=[character_id])
     grammar_master = relationship("GrammarMaster", back_populates="articles")
     access_logs = relationship("AccessLog", back_populates="article")
