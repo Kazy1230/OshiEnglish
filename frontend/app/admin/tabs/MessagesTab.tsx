@@ -18,16 +18,14 @@ export function MessagesTab() {
 
   // 複数オペレーターでの分担運用のための絞り込み・並び替え
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "unassigned" | `${id}`
-  const [priorityFilter, setPriorityFilter] = useState<string>("all"); // "all" | "normal" | "high"
   const [sortBy, setSortBy] = useState<string>("urgency"); // "urgency" | "priority" | "oldest_reply"
 
   async function loadThreads() {
     setLoading(true);
     try {
-      const params: { assignedAdminId?: number | null; unassigned?: boolean; priority?: string; sort?: string } = { sort: sortBy };
+      const params: { assignedAdminId?: number | null; unassigned?: boolean; sort?: string } = { sort: sortBy };
       if (assigneeFilter === "unassigned") params.unassigned = true;
       else if (assigneeFilter !== "all") params.assignedAdminId = Number(assigneeFilter);
-      if (priorityFilter !== "all") params.priority = priorityFilter;
       const data = await api.adminListThreads(params);
       setThreads(data);
       if (selected === null && data.length > 0) setSelected(data[0].customer_id);
@@ -40,7 +38,7 @@ export function MessagesTab() {
     api.adminListOperators().then(setOperators).catch(() => {});
   }, []);
 
-  useEffect(() => { loadThreads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [assigneeFilter, priorityFilter, sortBy]);
+  useEffect(() => { loadThreads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [assigneeFilter, sortBy]);
 
   return (
     <div>
@@ -49,24 +47,17 @@ export function MessagesTab() {
         <button className="btn-ghost text-sm" onClick={loadThreads}>🔄 更新</button>
       </div>
 
-      {/* 担当者・優先度の絞り込み／並び替え（分担運用用） */}
+      {/* 担当者の絞り込み／並び替え（分担運用用） */}
       <div className="flex items-center gap-2 flex-wrap mb-4 text-sm">
         <select value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}
-          className="px-2 py-1.5 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
+          className="px-2 py-1.5 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)", width: "auto" }}>
           <option value="all">担当者：すべて</option>
           <option value="unassigned">未割当のみ</option>
           {operators.map(o => <option key={o.id} value={String(o.id)}>{o.username}</option>)}
         </select>
-        <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
-          className="px-2 py-1.5 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
-          <option value="all">優先度：すべて</option>
-          <option value="high">🔴 優先のみ</option>
-          <option value="normal">通常のみ</option>
-        </select>
         <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-          className="px-2 py-1.5 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
+          className="px-2 py-1.5 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)", width: "auto" }}>
           <option value="urgency">並び順：未対応優先</option>
-          <option value="priority">並び順：優先度順</option>
           <option value="oldest_reply">並び順：返信が古い順</option>
         </select>
       </div>
