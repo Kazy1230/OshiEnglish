@@ -187,7 +187,7 @@ def seed():
                 "example_bg": "#1e2a3d", "tips_bg": "#1a2230",
             },
             font_style="serif",
-            instagram_account="aoi_rei_aoi",
+            instagram_account="aoi_rei_rei_aoi",
             is_preset=True,
         )
 
