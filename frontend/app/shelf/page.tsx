@@ -243,8 +243,8 @@ export default function ShelfPage() {
           </p>
         </div>
 
-        {articles.length === 0 ? (
-          <div className="text-center py-12 px-4 sm:px-8 rounded-2xl border-2 border-dashed" style={{ borderColor: t.border, background: t.card }}>
+        {articles.length === 0 && (
+          <div className="text-center py-12 px-4 sm:px-8 rounded-2xl border-2 border-dashed mb-6" style={{ borderColor: t.border, background: t.card }}>
             <p className="text-5xl mb-4">📖</p>
             <p className="font-bold" style={{ color: t.primary, fontFamily: t.fontFamily }}>本棚はまだ空です</p>
             <p className="text-sm mt-2" style={{ color: t.accent }}>
@@ -272,33 +272,33 @@ export default function ShelfPage() {
               )}
             </button>
           </div>
-        ) : (
-          <>
-            {/* 本棚の色分けルールの凡例 */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 text-xs" style={{ color: t.accent }}>
-              <span className="font-bold" style={{ color: t.primary }}>表紙の色の見方：</span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(265,60%,55%)" }} />
-                🧩 演習問題（解いて提出）
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(210,60%,55%)" }} />
-                📰 ブログ（読みもの）
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(30,60%,55%)" }} />
-                文法解説記事（その他の色）
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">
-              {articles.map((article, i) => (
-                <BookCard key={article.id} article={article} index={i} theme={t}
-                  onClick={() => router.push(`/articles/${article.id}`)} />
-              ))}
-              <RequestCard theme={t} onClick={() => router.push("/chat?request=1")} />
-            </div>
-          </>
         )}
+
+        {articles.length > 0 && (
+          /* 本棚の色分けルールの凡例 */
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 text-xs" style={{ color: t.accent }}>
+            <span className="font-bold" style={{ color: t.primary }}>表紙の色の見方：</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(265,60%,55%)" }} />
+              🧩 演習問題（解いて提出）
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(210,60%,55%)" }} />
+              📰 ブログ（読みもの）
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "hsl(30,60%,55%)" }} />
+              文法解説記事（その他の色）
+            </span>
+          </div>
+        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">
+          {articles.map((article, i) => (
+            <BookCard key={article.id} article={article} index={i} theme={t}
+              onClick={() => router.push(`/articles/${article.id}`)} />
+          ))}
+          <RequestCard theme={t} onClick={() => router.push("/chat?request=1")} />
+        </div>
 
         {/* 退会リンク */}
         <div className="mt-12 text-center">
