@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { buildRewardWallpaperPrompt } from "../lib/promptBuilders";
 
 const CATEGORY_LABELS: Record<string, string> = { line: "隠しセリフ", title: "称号", wallpaper: "壁紙" };
 const CATEGORY_ICONS: Record<string, string> = { line: "✏️", title: "🏅", wallpaper: "🖼️" };
@@ -258,8 +259,16 @@ export function RewardsTab() {
                   </td>
                   <td className="py-2 text-right whitespace-nowrap">
                     {item.category === "wallpaper" && (
-                      <button className="text-xs px-2 py-0.5 rounded mr-1" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}
-                        onClick={() => triggerImageUpload(item.id)}>画像を{item.image_url ? "変更" : "アップロード"}</button>
+                      <>
+                        <button className="text-xs px-2 py-0.5 rounded mr-1" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}
+                          onClick={() => triggerImageUpload(item.id)}>画像を{item.image_url ? "変更" : "アップロード"}</button>
+                        <button className="text-xs px-2 py-0.5 rounded mr-1" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}
+                          onClick={() => {
+                            if (!currentCharacter) return;
+                            navigator.clipboard.writeText(buildRewardWallpaperPrompt(currentCharacter));
+                            toast("ご褒美の壁紙の画像生成プロンプトをコピーしました（著作権配慮・サイズ指定込み）", "success");
+                          }}>🎨 プロンプトをコピー</button>
+                      </>
                     )}
                     <button className="text-xs px-2 py-0.5 rounded mr-1" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}
                       onClick={() => startEdit(item)}>編集</button>

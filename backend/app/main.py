@@ -290,15 +290,20 @@ def _seed_welcome_articles():
 
     db = SessionLocal()
     try:
-        if db.query(Article).filter(Article.is_welcome_template == True).count() > 0:  # noqa: E712
-            return
-
         aoi = db.query(Character).filter(Character.id == 14).first()
         shirakawa = db.query(Character).filter(Character.id == 13).first()
         if not aoi or not shirakawa:
             return
 
-        templates = [
+        def _template_exists(template_character_id):
+            query = db.query(Article).filter(Article.is_welcome_template == True)  # noqa: E712
+            if template_character_id is None:
+                query = query.filter(Article.template_character_id.is_(None))
+            else:
+                query = query.filter(Article.template_character_id == template_character_id)
+            return query.first() is not None
+
+        all_templates = [
             Article(
                 character_id=aoi.id,
                 template_character_id=aoi.id,
@@ -383,8 +388,10 @@ def _seed_welcome_articles():
                 is_welcome_template=True,
             ),
         ]
-        db.add_all(templates)
-        db.commit()
+        templates = [t for t in all_templates if not _template_exists(t.template_character_id)]
+        if templates:
+            db.add_all(templates)
+            db.commit()
     finally:
         db.close()
 
