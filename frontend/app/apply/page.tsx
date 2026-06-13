@@ -161,9 +161,16 @@ interface DynamicCopy {
   relCards: Record<Relationship, string>;
   persSectionTitle: string; persHint: string;
   persQuotes: Record<Exclude<Personality, "other">, string>;
-  customLabelChar: string; customHint: string; customPlaceholder: string;
   successBody: string;
 }
+
+// 「テキストで自由に定義する」は性別選択を伴わない独立フローのため、
+// gender state の残り値に左右されない固定文言を使う。
+const CUSTOM_CHAR_COPY = {
+  label: "このキャラはどんな人ですか？",
+  hint: "口調・性格・こだわりを自由に書いてください。詳しいほど再現度が上がります！",
+  placeholder: "例：少し口が悪いけど本当は優しいタイプ。\n「ったく、しょうがないな」が口癖。ため口。\n間違えたときは厳しめ、できたときは素直に褒めてほしい。",
+};
 
 function getDynamicCopy(g: Gender | null, r: Relationship | null): DynamicCopy {
   const gk = g ?? "any";
@@ -203,13 +210,6 @@ function getDynamicCopy(g: Gender | null, r: Relationship | null): DynamicCopy {
     persSectionTitle: persTitleMap[rk][gk],
     persHint:         persHintMap[rk][gk],
     persQuotes,
-    customLabelChar: byG(g, { male: "どんな男性キャラですか？", female: "どんな女性キャラですか？", any: "このキャラはどんな人ですか？" }),
-    customHint: byG(g, { male: "口調・性格・こだわりを自由に書いてください。詳しいほど再現度が上がります！", female: "口調・性格・こだわりを自由に書いてください。詳しいほど再現度が上がります！", any: "口調・性格・こだわりを自由に書いてください。詳しいほど再現度が上がります！" }),
-    customPlaceholder: byG(g, {
-      male:   "例：クールで寡黙な男性。口数は少ないが頼りになる。\n「……まあ、いいだろう」が口癖。ため口で話す。\n間違えたときは一言だけ指摘、できたときは無言で頷く。",
-      female: "例：明るく元気な女性。失敗しても前向きに励ます。\n「大丈夫！絶対できるよ！」が口癖。\n褒め上手で、できたときは大げさに喜んでくれる。",
-      any:    "例：少し口が悪いけど本当は優しいタイプ。\n「ったく、しょうがないな」が口癖。ため口。\n間違えたときは厳しめ、できたときは素直に褒めてほしい。",
-    }),
     successBody: byG(g, {
       male:   "理想の彼との英語学習をご準備します。\nアカウント発行後はアプリ内チャットにてご連絡いたしますので、\nしばらくお待ちください ✨",
       female: "理想の彼女との英語学習をご準備します。\nアカウント発行後はアプリ内チャットにてご連絡いたしますので、\nしばらくお待ちください ✨",
@@ -1466,7 +1466,7 @@ export default function ApplyPage() {
                     {/* テキストで定義（旧自分で定義）*/}
                     <div
                       className="yt-card yt-pop d4"
-                      onClick={() => { setCharChoice("custom"); setPresetChar(null); }}
+                      onClick={() => { setCharChoice("custom"); setPresetChar(null); setGender(null); setRelationship(null); setPersonality(null); }}
                       style={{
                         borderRadius: theme.inputRadius, padding: "1rem 1.2rem",
                         borderColor: charChoice === "custom" ? theme.accent : theme.border,
@@ -1655,13 +1655,13 @@ export default function ApplyPage() {
                     </div>
                     <div>
                       <label style={{ display: "block", fontSize: ".82rem", color: theme.muted, marginBottom: ".35rem", fontFamily: theme.fontFamily, transition: `color ${T}` }}>
-                        {copy.customLabelChar} <span style={{ color: theme.accent }}>*</span>
+                        {CUSTOM_CHAR_COPY.label} <span style={{ color: theme.accent }}>*</span>
                       </label>
                       <p style={{ fontSize: ".78rem", color: theme.muted, lineHeight: 1.75, margin: "0 0 .5rem", fontFamily: theme.fontFamily, transition: `color ${T}` }}>
-                        {copy.customHint}
+                        {CUSTOM_CHAR_COPY.hint}
                       </p>
                       <textarea className="yt-input" value={charDesc} onChange={e => setCharDesc(e.target.value)}
-                        placeholder={copy.customPlaceholder}
+                        placeholder={CUSTOM_CHAR_COPY.placeholder}
                         rows={6} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.8 }} required />
                       {charDesc.trim().length > 0 && charDesc.trim().length < 10 && (
                         <p style={{ color: "#e11d48", fontSize: ".78rem", marginTop: ".35rem", fontFamily: theme.fontFamily }}>
