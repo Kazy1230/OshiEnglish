@@ -88,6 +88,7 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
             "exercise_count": exercise_counts.get(c.id, 0),      # 演習問題（公開済み）
             "character_memory": c.character_memory,
             "intimacy": intimacy_info(c.intimacy_points),
+            "credit_balance": c.credit_balance or 0,
         }
         for c in customers
     ]
