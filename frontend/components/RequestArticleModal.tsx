@@ -310,10 +310,14 @@ export function RequestArticleModal({ theme: t, onClose, onSent, onRequestCorrec
         <p className="font-black mb-1" style={{ color: t.primary, fontFamily: t.fontFamily }}>
           📋 {headLabel}の記事・問題をリクエスト
         </p>
-        <p className="text-[11px] mb-3" style={{ color: t.accent }}>
-          {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}（{creditCost}クレジット）
+        <p className="text-[11px] mb-3" style={{ color: t.text }}>
+          {category === "文法" ? "文法" : `${headLabel}：${part?.label}（${part?.content}）`}
           <br />
-          依頼時 {ARTICLE_REQUEST_FEE}クレジット ／ 記事が届いたら残り{(creditCost ?? 0) - ARTICLE_REQUEST_FEE}クレジットで読めます
+          <span className="font-black" style={{ color: t.accent, fontSize: "1.05em" }}>
+            今は{ARTICLE_REQUEST_FEE}クレジットだけでリクエストOK！
+          </span>
+          <br />
+          記事が届いたら、本棚で開封するときに残り{(creditCost ?? 0) - ARTICLE_REQUEST_FEE}クレジットを使って読めます
         </p>
 
         {category === "文法" && (
