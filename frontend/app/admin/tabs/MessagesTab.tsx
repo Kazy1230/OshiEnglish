@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { buildSuggestedQuestions, buildQuestionIdeaPrompt, buildRewardImagePrompt, type SuggestedQuestion } from "../lib/promptBuilders";
+import { buildSuggestedQuestions, buildQuestionIdeaPrompt, type SuggestedQuestion } from "../lib/promptBuilders";
 
 const API_ORIGIN_M = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
 
@@ -127,8 +127,6 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [suggestCorrection, setSuggestCorrection] = useState(false);
-  const [rewardMsg, setRewardMsg] = useState("");
-  const [uploadingReward, setUploadingReward] = useState(false);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [editMsgText, setEditMsgText] = useState("");
   const [msgBusyId, setMsgBusyId] = useState<number | null>(null);
@@ -274,19 +272,6 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
     } finally { setSavingAssignment(false); }
   }
 
-  async function handleRewardUpload(file: File) {
-    setUploadingReward(true);
-    try {
-      await api.adminSendReward(customerId, file, rewardMsg.trim() || undefined);
-      setRewardMsg("");
-      await load();
-      onChanged();
-      toast("🎁 ご褒美写真を送信しました！", "success");
-    } catch (err: any) {
-      toast(err.message || "送信に失敗しました", "error");
-    } finally { setUploadingReward(false); }
-  }
-
   if (loading || !data) return <div className="card py-12 text-center" style={{ color: "var(--muted)" }}>読み込み中...</div>;
 
   const reward = data.reward_status;
@@ -397,39 +382,6 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
           </p>
         </div>
       )}
-
-      {/* ご褒美送付パネル（達成時のみ強調表示） */}
-      <div className="card flex flex-col gap-2" style={reward.pending_rewards > 0 ? { border: `2px solid ${cAccent}`, background: cExampleBg } : { borderLeft: `4px solid ${cAccent}` }}>
-        <p className="text-xs" style={{ color: "var(--muted)" }}>
-          運営者が用意した画像をアップロードすると、キャラクターからのご褒美メッセージとして顧客のチャットに届きます。
-        </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input value={rewardMsg} onChange={e => setRewardMsg(e.target.value)}
-            placeholder="（任意）添えるメッセージ　例：5冊達成おめでとう！これからも頑張ろうね"
-            className="flex-1 min-w-[240px]" />
-          <label className="cursor-pointer text-sm px-4 py-2 rounded-lg font-bold text-white text-center transition-all hover:opacity-85"
-            style={{ background: cAccent, opacity: uploadingReward ? 0.6 : 1 }}>
-            {uploadingReward ? "送信中..." : "📤 画像を選んで送信"}
-            <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploadingReward}
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleRewardUpload(f); e.target.value = ""; }} />
-          </label>
-          <button
-            type="button"
-            className="text-xs px-3 py-2 rounded-lg border font-bold transition-all hover:shadow"
-            style={{ borderColor: cBorder, color: cAccent }}
-            onClick={() => {
-              const charForPrompt = {
-                name: data.customer.character_name,
-                description: data.customer.character_description,
-                tone_profile: data.customer.tone_profile,
-              };
-              navigator.clipboard.writeText(buildRewardImagePrompt(charForPrompt, data.customer));
-              toast("ご褒美写真の画像生成プロンプトをコピーしました（著作権配慮・サイズ指定込み）", "success");
-            }}>
-            🎨 ご褒美画像プロンプトをコピー
-          </button>
-        </div>
-      </div>
 
       {/* メッセージスレッド */}
       <div ref={messagesContainerRef} className="card flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: "48vh" }}>

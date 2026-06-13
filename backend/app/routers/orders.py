@@ -26,6 +26,7 @@ def serialize_order(
     pending_corrections: Optional[list] = None,
     pending_article_requests: Optional[list] = None,
     character_creation_pending: bool = False,
+    customer_character_id: Optional[int] = None,
 ) -> dict:
     return {
         "id": o.id,
@@ -37,6 +38,7 @@ def serialize_order(
         "notes": o.notes,
         "customer_id": o.customer_id,                   # 紐づいた顧客アカウントID（null = 未紐づけ）
         "customer_username": customer_username,          # 紐づいた顧客のユーザー名（表示用）
+        "customer_character_id": customer_character_id,  # 紐づいた顧客のキャラクターID（記事作成フォームの自動入力用）
         "form_submitted_at": o.form_submitted_at.isoformat() if o.form_submitted_at else None,
         "created_at": o.created_at.isoformat() if o.created_at else None,
         "updated_at": o.updated_at.isoformat() if o.updated_at else None,
@@ -116,6 +118,7 @@ def list_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db))
             corrections_map.get(o.customer_id, []),
             requests_map.get(o.customer_id, []),
             bool(o.customer_id) and character_id_map.get(o.customer_id) is None,
+            character_id_map.get(o.customer_id),
         )
         for o in orders
     ]

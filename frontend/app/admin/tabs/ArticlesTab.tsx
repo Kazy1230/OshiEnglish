@@ -29,9 +29,11 @@ const emptyArticleForm = {
   unlock_cost: "",
 };
 
-export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
+export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pendingArticleRequest, onConsumePendingArticleRequest }: {
   pendingCorrection?: any;
   onConsumePendingCorrection?: () => void;
+  pendingArticleRequest?: any;
+  onConsumePendingArticleRequest?: () => void;
 } = {}) {
   const [articles, setArticles] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -74,6 +76,22 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection }: {
     setShowForm(true);
     onConsumePendingCorrection?.();
   }, [pendingCorrection]);
+
+  // OrdersTabから「記事を作成」で遷移してきた場合、フォームに自動入力する
+  useEffect(() => {
+    if (!pendingArticleRequest) return;
+    const { order, request } = pendingArticleRequest;
+    setForm(f => ({
+      ...emptyArticleForm,
+      article_type: "request",
+      customer_id: order.customer_id ? String(order.customer_id) : "",
+      character_id: order.customer_character_id ? String(order.customer_character_id) : f.character_id,
+      request_message_id: request?.id ? String(request.id) : "",
+    }));
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    onConsumePendingArticleRequest?.();
+  }, [pendingArticleRequest]);
 
   // 依頼記事フォームで顧客が選択されたら、その顧客の対応中リクエスト一覧を取得する
   useEffect(() => {

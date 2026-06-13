@@ -231,12 +231,6 @@ export const api = {
     apiFetch(`/messages/admin/message/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
   adminDeleteMessage: (messageId: number) =>
     apiFetch(`/messages/admin/message/${messageId}`, { method: "DELETE" }),
-  adminSendReward: (customerId: number, file: File, message?: string) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    if (message) fd.append("message", message);
-    return apiUpload(`/messages/admin/${customerId}/reward`, fd);
-  },
 
   // 管理者：文法マスター
   adminGetGrammarMasters: () => apiFetch("/grammar-masters/"),

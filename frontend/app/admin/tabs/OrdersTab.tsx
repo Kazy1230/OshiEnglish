@@ -6,7 +6,7 @@ import { parseOrderCharSpec, buildCharacterPromptFromOrder } from "../lib/prompt
 
 const emptyOrderForm = { customer_name: "", contact: "", character_name: "", grammar_topic: "", status: "new", notes: "" };
 
-export function OrdersTab() {
+export function OrdersTab({ onCreateArticleFromRequest }: { onCreateArticleFromRequest?: (order: any, request: any) => void } = {}) {
   const [orders, setOrders] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -340,8 +340,16 @@ export function OrdersTab() {
                         </span>
                       )}
                       {o.pending_article_requests?.map((r: any) => (
-                        <span key={`req-${r.id}`} className="text-xs px-2 py-0.5 rounded-full font-medium self-start" style={{ background: "#e8f4fd", color: "#2471a3" }}>
+                        <span key={`req-${r.id}`} className="text-xs px-2 py-0.5 rounded-full font-medium self-start flex items-center gap-1.5" style={{ background: "#e8f4fd", color: "#2471a3" }}>
                           📝 記事依頼: {r.grammar_topic || "未指定"}（{r.request_status === "accepted" ? "対応中" : "未対応"}）
+                          {onCreateArticleFromRequest && (
+                            <button type="button"
+                              className="text-xs px-2 py-0.5 rounded-full font-bold"
+                              style={{ background: "#2471a3", color: "#fff" }}
+                              onClick={() => onCreateArticleFromRequest(o, r)}>
+                              📝 記事を作成 ▸
+                            </button>
+                          )}
                         </span>
                       ))}
                       {o.pending_corrections?.map((c: any) => (
