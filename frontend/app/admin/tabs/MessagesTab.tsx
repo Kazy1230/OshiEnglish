@@ -135,6 +135,7 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
+  const [suggestCorrection, setSuggestCorrection] = useState(false);
   const [rewardMsg, setRewardMsg] = useState("");
   const [uploadingReward, setUploadingReward] = useState(false);
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
@@ -177,8 +178,9 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
     if (!reply.trim() || sending) return;
     setSending(true);
     try {
-      await api.adminReplyMessage(customerId, reply.trim());
+      await api.adminReplyMessage(customerId, reply.trim(), suggestCorrection ? "request_correction" : undefined);
       setReply("");
+      setSuggestCorrection(false);
       await load();
       onChanged();
     } catch (err: any) {
@@ -629,6 +631,10 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
             {sending ? "送信中..." : "返信する"}
           </button>
         </div>
+        <label className="text-xs flex items-center gap-1.5" style={{ color: "var(--muted)" }}>
+          <input type="checkbox" checked={suggestCorrection} onChange={e => setSuggestCorrection(e.target.checked)} />
+          📝「添削してもらう」ボタンをこのメッセージに付ける
+        </label>
       </form>
       <p className="text-xs -mt-2" style={{ color: "var(--muted)" }}>
         ※「下書き生成」はAIが提案する文章です。内容を確認・編集してから送信してください。

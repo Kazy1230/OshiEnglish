@@ -336,22 +336,6 @@ function ChatPageInner() {
         </div>
       )}
 
-      {/* 公式キャラクターのInstagramアカウント案内 */}
-      {theme?.is_preset && theme?.instagram_account && (
-        <div className="max-w-3xl mx-auto w-full px-4 pt-2">
-          <a href={`https://www.instagram.com/${theme.instagram_account}`} target="_blank" rel="noopener noreferrer"
-            className="rounded-xl px-4 py-2.5 flex items-center gap-3 text-xs transition-colors"
-            style={{ background: t.example_bg, border: `1px solid ${t.border}`, color: t.text }}>
-            <span className="text-lg flex-shrink-0">📷</span>
-            <span className="flex-1">
-              <span className="font-bold" style={{ color: t.accent }}>{charName}</span>
-              の公式Instagramをフォローしよう！
-            </span>
-            <span style={{ color: t.accent }}>→</span>
-          </a>
-        </div>
-      )}
-
       {/* メッセージスレッド */}
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-4 overflow-y-auto">
         {messages.length === 0 && (
@@ -384,27 +368,29 @@ function ChatPageInner() {
       <footer className="flex-shrink-0 border-t transition-colors"
         style={{ background: t.card, borderColor: t.border }}>
         <div className="max-w-3xl mx-auto w-full px-4 py-3">
-          <form onSubmit={handleSend} className="flex items-end gap-2">
+          <form onSubmit={handleSend} className="flex flex-col sm:flex-row items-end gap-2">
             <button type="button"
               onClick={() => setShowRequestModal(true)}
-              className="text-xs px-3 py-2 rounded-xl font-bold flex-shrink-0 transition-all"
+              className="text-xs px-3 py-2 rounded-xl font-bold flex-shrink-0 transition-all order-2 sm:order-1 self-start sm:self-auto"
               style={{ background: "transparent", color: t.accent, border: `1.5px solid ${t.accent}` }}>
               📋 記事をリクエスト
             </button>
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as any); } }}
-              placeholder={`${charName}にメッセージを送る...`}
-              rows={1}
-              className="flex-1 text-sm rounded-xl px-3 py-2 outline-none resize-none"
-              style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text, fontFamily: t.fontFamily, maxHeight: "6rem" }}
-            />
-            <button type="submit" disabled={sending || !text.trim()}
-              className="text-sm px-4 py-2 rounded-xl font-bold flex-shrink-0 transition-all disabled:opacity-40"
-              style={{ background: t.primary, color: "white" }}>
-              {sending ? "..." : "送信"}
-            </button>
+            <div className="flex items-end gap-2 w-full order-1 sm:order-2 sm:flex-1">
+              <textarea
+                value={text}
+                onChange={e => setText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as any); } }}
+                placeholder={`${charName}にメッセージを送る...`}
+                rows={1}
+                className="flex-1 text-sm rounded-xl px-3 py-2 outline-none resize-none"
+                style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text, fontFamily: t.fontFamily, maxHeight: "6rem" }}
+              />
+              <button type="submit" disabled={sending || !text.trim()}
+                className="text-sm px-4 py-2 rounded-xl font-bold flex-shrink-0 transition-all disabled:opacity-40"
+                style={{ background: t.primary, color: "white" }}>
+                {sending ? "..." : "送信"}
+              </button>
+            </div>
           </form>
           <p className="text-[11px] mt-1.5" style={{ color: t.accent }}>
             {theme?.chat_footer_note || DEFAULT_CHAT_FOOTER_NOTE}

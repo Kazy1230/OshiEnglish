@@ -8,3 +8,4 @@ from app.models.message import Message
 from app.models.service_item import ServiceItem
 from app.models.intimacy_settings import IntimacySettings
 from app.models.correction_request import CorrectionRequest
+from app.models.reward import RewardItem, CustomerReward

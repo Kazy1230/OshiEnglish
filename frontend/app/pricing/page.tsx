@@ -19,6 +19,22 @@ const TOEIC_ROWS = [
   { part: "Part 7", content: "1セット＋解説（長文読解）" },
 ];
 
+const EIKEN_GRADES = ["1級", "準1級", "2級", "準2級", "3級", "4級", "5級"] as const;
+type EikenGrade = typeof EIKEN_GRADES[number];
+
+function eikenRows(grade: EikenGrade) {
+  const base = [
+    { part: "リーディング（短文穴埋め・長文穴埋め・長文読解）", price: "各¥500" },
+    { part: "リスニング", price: "¥500" },
+  ];
+  if (grade === "4級" || grade === "5級") return base;
+  return [
+    ...base,
+    { part: "ライティング", price: "¥1,000" },
+    { part: "スピーキング", price: "¥1,000" },
+  ];
+}
+
 const IELTS_ROWS = [
   { part: "Reading Academic / General", price: "¥500" },
   { part: "Listening Section 1〜4", price: "各¥500" },
@@ -27,7 +43,10 @@ const IELTS_ROWS = [
   { part: "Speaking Part 1〜3", price: "¥1,000" },
 ];
 
-const TOEFL_ROWS = [
+const TOEFL_TYPES = ["iBT", "ITP"] as const;
+type ToeflType = typeof TOEFL_TYPES[number];
+
+const TOEFL_IBT_ROWS = [
   { part: "Reading", price: "¥500" },
   { part: "Listening", price: "¥500" },
   { part: "Writing Integrated Task", price: "¥1,000" },
@@ -35,9 +54,16 @@ const TOEFL_ROWS = [
   { part: "Speaking Task 1〜4", price: "¥1,000" },
 ];
 
+const TOEFL_ITP_ROWS = [
+  { part: "Listening", price: "¥500" },
+  { part: "Structure and Written Expression", price: "¥500" },
+  { part: "Reading", price: "¥500" },
+];
+
 const PLAN_ROWS = [
-  { plan: "スタータープラン", content: "キャラ作成＋記事1本", price: "¥2,000", note: "初回のみ" },
+  { plan: "スタータープラン", content: "オリジナルキャラクターの作成", price: "¥1,500", note: "初回のみ（公式キャラクターを選ぶと無料）" },
   { plan: "追加ユニット（記事）", content: "1本", price: "¥500〜", note: "種別により変動" },
+  { plan: "文法記事", content: "1項目・2,500〜3,000文字", price: "¥500", note: "" },
   { plan: "ライティング添削", content: "1回・マニュアル評価＋キャラフィードバック", price: "¥1,000", note: "全試験共通" },
   { plan: "スピーキング評価", content: "1回・マニュアル評価＋キャラフィードバック", price: "¥1,000", note: "全試験共通" },
 ];
@@ -46,6 +72,8 @@ export default function PricingPage() {
   const router = useRouter();
   const [mode, toggleMode] = useDarkMode();
   const [examTab, setExamTab] = useState<ExamTab>("TOEIC");
+  const [eikenGrade, setEikenGrade] = useState<EikenGrade>("2級");
+  const [toeflType, setToeflType] = useState<ToeflType>("iBT");
   const t = resolveTheme(null, mode);
   const loggedIn = !!getToken();
 
@@ -67,23 +95,23 @@ export default function PricingPage() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <h2 className="text-2xl font-black mb-2" style={{ color: t.primary }}>💴 料金プラン</h2>
+        <h2 className="text-2xl font-black mb-2" style={{ color: t.primary }}>料金プラン</h2>
         <p className="text-sm mb-6" style={{ color: "var(--muted)" }}>
-          推しEnglishの料金体系のご案内です。まずはスタータープランでキャラクターと最初の記事をお届けします。
-          その後は、必要なユニットを必要な分だけ追加していただけます。
+          まずはキャラクターを迎えて、最初のレッスンを始めましょう。
+          その後は、必要なものを必要な分だけ追加していけます。
         </p>
 
         {/* 公式キャラクターのメリット */}
         <section className="mb-8 rounded-xl p-4" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
           <h3 className="text-lg font-black mb-1" style={{ color: t.primary }}>
-            ⭐ 公式キャラクター（白河雪菜・蒼井零）を選ぶと…
+            公式キャラクター（白河雪菜・蒼井零）を選ぶと…
           </h3>
           <p className="text-sm mb-3" style={{ color: t.text }}>
             お申し込み時に「白河雪菜」または「蒼井零」を選択すると、以下の特典がすべて付いてきます。
           </p>
           <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
             <li><strong>キャラ作成費無料</strong>：オリジナルキャラ作成費（¥1,500）が0円になります</li>
-            <li><strong>即日チャット開始</strong>：すでにDB登録済みのため、ログイン直後からすぐにチャットできます</li>
+            <li><strong>すぐにチャット開始</strong>：ログイン直後からすぐにチャットできます</li>
             <li><strong>限定称号・壁紙あり</strong>：公式キャラを選んだ方だけが解放できる称号・壁紙が用意されています</li>
             <li><strong>隠しセリフ多数</strong>：オリジナルキャラより多くの隠しセリフが用意されています</li>
             <li><strong>公式Instagramあり</strong>：チャット画面・本棚から各キャラクターの公式Instagramをフォローできます</li>
@@ -101,14 +129,14 @@ export default function PricingPage() {
                   <p className="text-lg font-black whitespace-nowrap" style={{ color: t.accent }}>{row.price}</p>
                 </div>
                 <p className="text-sm mb-1" style={{ color: t.text }}>{row.content}</p>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>{row.note}</p>
+                {row.note && <p className="text-xs" style={{ color: "var(--muted)" }}>{row.note}</p>}
               </div>
             ))}
           </div>
         </section>
 
         {/* 試験種別タブ */}
-        <section className="mb-8">
+        <section className="mb-4">
           <h3 className="text-lg font-black mb-3" style={{ color: t.primary }}>試験対策ユニット</h3>
           <div className="flex flex-wrap gap-2 mb-4">
             {EXAM_TABS.map(tab => (
@@ -134,11 +162,37 @@ export default function PricingPage() {
           )}
 
           {examTab === "英検" && (
-            <div className="flex flex-col gap-3">
-              <InfoRow t={t} label="リーディング" value="短文穴埋め・長文穴埋め・長文読解（各¥500）" />
-              <InfoRow t={t} label="リスニング" value="級別に問題数が異なる（各¥500）" />
-              <InfoRow t={t} label="ライティング・スピーキング" value="各¥1,000（マニュアル＋キャラフィードバック）" />
-            </div>
+            <>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {EIKEN_GRADES.map(grade => (
+                  <button key={grade} type="button" onClick={() => setEikenGrade(grade)}
+                    className="text-xs px-3 py-1 rounded-full font-bold transition-all"
+                    style={eikenGrade === grade
+                      ? { background: t.accent, color: "white" }
+                      : { background: t.card, color: t.text, border: `1px solid ${t.border}` }}>
+                    {grade}
+                  </button>
+                ))}
+              </div>
+              <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${t.border}` }}>
+                <table className="w-full text-sm" style={{ background: t.card }}>
+                  <thead>
+                    <tr style={{ background: t.example_bg }}>
+                      <Th t={t}>パート</Th>
+                      <Th t={t}>価格</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eikenRows(eikenGrade).map(row => (
+                      <tr key={row.part} style={{ borderTop: `1px solid ${t.border}` }}>
+                        <Td t={t} bold>{row.part}</Td>
+                        <Td t={t} accent>{row.price}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {examTab === "IELTS" && (
@@ -163,58 +217,38 @@ export default function PricingPage() {
           )}
 
           {examTab === "TOEFL" && (
-            <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${t.border}` }}>
-              <table className="w-full text-sm" style={{ background: t.card }}>
-                <thead>
-                  <tr style={{ background: t.example_bg }}>
-                    <Th t={t}>パート</Th>
-                    <Th t={t}>価格</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {TOEFL_ROWS.map(row => (
-                    <tr key={row.part} style={{ borderTop: `1px solid ${t.border}` }}>
-                      <Td t={t} bold>{row.part}</Td>
-                      <Td t={t} accent>{row.price}</Td>
+            <>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {TOEFL_TYPES.map(type => (
+                  <button key={type} type="button" onClick={() => setToeflType(type)}
+                    className="text-xs px-3 py-1 rounded-full font-bold transition-all"
+                    style={toeflType === type
+                      ? { background: t.accent, color: "white" }
+                      : { background: t.card, color: t.text, border: `1px solid ${t.border}` }}>
+                    {type}
+                  </button>
+                ))}
+              </div>
+              <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${t.border}` }}>
+                <table className="w-full text-sm" style={{ background: t.card }}>
+                  <thead>
+                    <tr style={{ background: t.example_bg }}>
+                      <Th t={t}>パート</Th>
+                      <Th t={t}>価格</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {(toeflType === "iBT" ? TOEFL_IBT_ROWS : TOEFL_ITP_ROWS).map(row => (
+                      <tr key={row.part} style={{ borderTop: `1px solid ${t.border}` }}>
+                        <Td t={t} bold>{row.part}</Td>
+                        <Td t={t} accent>{row.price}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
-        </section>
-
-        {/* 文法記事 */}
-        <section className="mb-8">
-          <h3 className="text-lg font-black mb-3" style={{ color: t.primary }}>文法記事</h3>
-          <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${t.border}` }}>
-            <table className="w-full text-sm" style={{ background: t.card }}>
-              <thead>
-                <tr style={{ background: t.example_bg }}>
-                  <Th t={t}>種別</Th>
-                  <Th t={t}>規模</Th>
-                  <Th t={t}>価格</Th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style={{ borderTop: `1px solid ${t.border}` }}>
-                  <Td t={t} bold>文法記事</Td>
-                  <Td t={t}>1項目・2,500〜3,000文字</Td>
-                  <Td t={t} accent>¥500</Td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* 共通設定 */}
-        <section className="mb-4 rounded-xl p-4" style={{ background: t.tips_bg, border: `1px dashed ${t.border}` }}>
-          <h3 className="text-sm font-black mb-2" style={{ color: t.primary }}>共通設定</h3>
-          <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
-            <li>リスニング音声：ニュートラルTTS（キャラなし・OpenAI TTS）</li>
-            <li>支払い方法：Stripe（クレジットカード・Apple Pay・Google Pay）</li>
-            <li>キャラ提案：ヒアリング結果をもとにキャラが次のユニットを提案</li>
-          </ul>
         </section>
       </main>
     </div>

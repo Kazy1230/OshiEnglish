@@ -522,6 +522,8 @@ def admin_get_all_articles(
             "is_llm_drafted": a.is_llm_drafted,
             "is_welcome_template": a.is_welcome_template,
             "template_character_id": a.template_character_id,
+            "correction_request_id": a.correction_request_id,
+            "request_message_id": a.request_message_id,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "updated_at": a.updated_at.isoformat() if a.updated_at else None,
             # 結合データ
