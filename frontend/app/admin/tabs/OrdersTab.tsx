@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { parseOrderCharSpec, buildCharacterPromptFromOrder } from "../lib/promptBuilders";
@@ -21,6 +21,7 @@ export function OrdersTab() {
   const [promptOrderId,  setPromptOrderId]  = useState<number | null>(null);
   const [generatedPrompt, setGeneratedPrompt] = useState<string>("");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   useEffect(() => {
     Promise.all([api.adminGetOrders(), api.adminGetCustomers()])
@@ -123,6 +124,44 @@ export function OrdersTab() {
     });
   }
 
+  // 受注を展開し、該当カードまでスクロールする（やることリストからのジャンプ用）
+  function focusOrder(id: number) {
+    setExpandedIds(prev => new Set(prev).add(id));
+    setTimeout(() => cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }
+
+  // 「やることリスト」：受注単位ではなく、対応が必要なタスク単位でフラットに一覧化する
+  type TaskItem = { orderId: number; icon: string; label: string; color: string; bg: string };
+  const tasks: TaskItem[] = [];
+  for (const o of filtered) {
+    if (o.status === "new") {
+      tasks.push({ orderId: o.id, icon: "🆕", label: `${o.customer_name}：新規受注の対応を開始`, color: "#b8860b", bg: "#fff8e1" });
+    }
+    if (o.character_creation_pending) {
+      tasks.push({ orderId: o.id, icon: "🎨", label: `${o.customer_name}：キャラクター作成が未対応`, color: "#c0392b", bg: "#fdebe8" });
+    }
+    (o.pending_article_requests ?? []).forEach((r: any) => {
+      tasks.push({
+        orderId: o.id, icon: "📝",
+        label: `${o.customer_name}：記事依頼「${r.grammar_topic || "未指定"}」${r.request_status === "accepted" ? "（対応中・記事作成待ち）" : "（未対応）"}`,
+        color: "#2471a3", bg: "#e8f4fd",
+      });
+    });
+    (o.pending_corrections ?? []).forEach((c: any) => {
+      tasks.push({
+        orderId: o.id, icon: "✏️",
+        label: `${o.customer_name}：添削（${c.correction_type === "writing" ? "ライティング" : "スピーキング"}）${c.status === "in_progress" ? "（対応中）" : "（未対応）"}`,
+        color: "#a36a1f", bg: "#fdf3e8",
+      });
+    });
+    if (o.status === "in_progress"
+      && !o.character_creation_pending
+      && (o.pending_article_requests?.length ?? 0) === 0
+      && (o.pending_corrections?.length ?? 0) === 0) {
+      tasks.push({ orderId: o.id, icon: "✅", label: `${o.customer_name}：対応完了・納品処理を行ってください`, color: "#1a6ea8", bg: "#e8f4fd" });
+    }
+  }
+
   if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
 
   return (
@@ -195,11 +234,31 @@ export function OrdersTab() {
         <span className="text-xs self-center" style={{ color: "var(--muted)" }}>{filtered.length} / {orders.length} 件</span>
       </div>
 
+      {/* やることリスト：受注単位ではなく、タスク単位でフラットに対応事項を一覧化する */}
       {filtered.length > 0 && (
-        <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
-          🔴 対応が必要な受注: <b style={{ color: "var(--accent)" }}>{attentionCount}</b> 件
-          {attentionCount < filtered.length && "（対応完了済みの受注は下部にまとめて表示しています）"}
-        </p>
+        <div className="card mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold" style={{ color: "var(--primary)" }}>🔔 やることリスト</h3>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              対応が必要な受注: <b style={{ color: "var(--accent)" }}>{attentionCount}</b> 件 ／ タスク: <b style={{ color: "var(--accent)" }}>{tasks.length}</b> 件
+            </span>
+          </div>
+          {tasks.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--muted)" }}>🎉 現在対応が必要なタスクはありません</p>
+          ) : (
+            <div className="flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: "14rem" }}>
+              {tasks.map((t, i) => (
+                <button key={i} onClick={() => focusOrder(t.orderId)}
+                  className="text-left text-xs px-3 py-2 rounded-lg flex items-center gap-2 transition-opacity hover:opacity-80"
+                  style={{ background: t.bg, color: t.color }}>
+                  <span>{t.icon}</span>
+                  <span className="flex-1 font-medium">{t.label}</span>
+                  <span className="flex-shrink-0" style={{ opacity: 0.7 }}>対応する ▸</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {orders.length === 0 ? <p style={{ color: "var(--muted)" }}>受注はありません</p> : (
@@ -227,7 +286,7 @@ export function OrdersTab() {
               );
             }
             return (
-            <div key={o.id} className="card flex flex-col gap-2" style={{ background: statusColor[o.status] || "white" }}>
+            <div key={o.id} ref={el => { cardRefs.current[o.id] = el; }} className="card flex flex-col gap-2" style={{ background: statusColor[o.status] || "white" }}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
