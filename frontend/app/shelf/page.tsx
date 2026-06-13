@@ -9,6 +9,7 @@ import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { reportError } from "@/lib/reportError";
 import { toast } from "@/components/Toast";
+import { RequestArticleModal } from "@/components/RequestArticleModal";
 
 type Article = {
   id: number; title: string; character_id: number;
@@ -33,6 +34,7 @@ export default function ShelfPage() {
   const [mode, toggleMode] = useDarkMode();
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
@@ -297,7 +299,7 @@ export default function ShelfPage() {
             <BookCard key={article.id} article={article} index={i} theme={t}
               onClick={() => router.push(`/articles/${article.id}`)} />
           ))}
-          <RequestCard theme={t} onClick={() => router.push("/chat?request=1")} />
+          <RequestCard theme={t} onClick={() => setShowRequestModal(true)} />
         </div>
 
         {/* 退会リンク */}
@@ -308,6 +310,11 @@ export default function ShelfPage() {
           </button>
         </div>
       </main>
+
+      {/* 記事・問題・添削のリクエストポップアップ */}
+      {showRequestModal && (
+        <RequestArticleModal theme={t} onClose={() => setShowRequestModal(false)} />
+      )}
 
       {/* 退会確認モーダル */}
       {showWithdrawModal && (

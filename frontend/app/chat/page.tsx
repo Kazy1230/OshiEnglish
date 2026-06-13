@@ -12,6 +12,7 @@ import {
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { toast } from "@/components/Toast";
+import { RequestArticleModal } from "@/components/RequestArticleModal";
 
 const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
 
@@ -57,11 +58,6 @@ function formatTime(iso: string) {
   } catch { return ""; }
 }
 
-const TOPIC_SUGGESTIONS = [
-  "TOEIC Part5", "TOEIC Part7", "仮定法", "関係代名詞", "現在完了形",
-  "ライティング添削", "スピーキング添削",
-];
-
 export default function ChatPage() {
   return (
     <Suspense fallback={null}>
@@ -84,9 +80,7 @@ function ChatPageInner() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
-  const [requestMode, setRequestMode] = useState(false);
-  const [topic, setTopic] = useState("");
-  const [showRequestConfirm, setShowRequestConfirm] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
   const [mode, toggleMode] = useDarkMode();
   const bottomRef = useRef<HTMLDivElement>(null);
   const prependingRef = useRef(false);
@@ -134,10 +128,10 @@ function ChatPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  // 本棚の「次の記事をリクエストする」から遷移してきた場合は、自動でリクエストモードを開く
+  // 本棚の「次の記事をリクエストする」から遷移してきた場合は、自動でリクエストポップアップを開く
   useEffect(() => {
     if (searchParams.get("request") === "1") {
-      setRequestMode(true);
+      setShowRequestModal(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -155,30 +149,12 @@ function ChatPageInner() {
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (sending) return;
-    if (requestMode) {
-      if (!topic.trim()) return;
-      setShowRequestConfirm(true);
-      return;
-    }
     if (!text.trim()) return;
     setSending(true);
     try {
       await api.sendMyMessage({ content: text.trim() });
       setText("");
       await load();
-    } catch {
-      toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
-    } finally { setSending(false); }
-  }
-
-  async function sendRequest() {
-    setShowRequestConfirm(false);
-    setSending(true);
-    try {
-      await api.sendMyMessage({ content: text.trim() || undefined, grammar_topic: topic.trim() });
-      setText(""); setTopic(""); setRequestMode(false);
-      await load();
-      toast("記事をリクエストしました", "success");
     } catch {
       toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
     } finally { setSending(false); }
@@ -383,67 +359,28 @@ function ChatPageInner() {
 
       {/* 入力エリア */}
       <footer className="flex-shrink-0 border-t transition-colors"
-        style={{ background: requestMode ? t.tips_bg : t.card, borderColor: requestMode ? t.accent : t.border }}>
+        style={{ background: t.card, borderColor: t.border }}>
         <div className="max-w-3xl mx-auto w-full px-4 py-3">
-          {requestMode && (
-            <div className="mb-2 rounded-lg px-3 py-2 flex items-center justify-between gap-2"
-              style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-              <span className="text-xs font-black text-white">📋 記事リクエストモード中</span>
-              <button type="button" onClick={() => { setRequestMode(false); setTopic(""); }}
-                className="text-xs font-bold text-white/90 hover:text-white underline flex-shrink-0">
-                キャンセル
-              </button>
-            </div>
-          )}
-          {requestMode && (
-            <div className="mb-2 rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: t.card, border: `1px dashed ${t.border}` }}>
-              <span className="text-sm flex-shrink-0">📝</span>
-              <input
-                value={topic}
-                onChange={e => setTopic(e.target.value)}
-                placeholder="リクエストしたい記事・問題・添削のテーマ（例：仮定法過去）"
-                className="flex-1 text-sm bg-transparent outline-none"
-                style={{ color: t.text }}
-              />
-            </div>
-          )}
-          {requestMode && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {TOPIC_SUGGESTIONS.map(s => (
-                <button key={s} type="button" onClick={() => setTopic(s)}
-                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
-                  style={topic === s
-                    ? { background: t.accent, color: "white" }
-                    : { background: t.card, color: t.accent, border: `1px solid ${t.border}` }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
           <form onSubmit={handleSend} className="flex items-end gap-2">
             <button type="button"
-              onClick={() => setRequestMode(v => !v)}
+              onClick={() => setShowRequestModal(true)}
               className="text-xs px-3 py-2 rounded-xl font-bold flex-shrink-0 transition-all"
-              style={{
-                background: requestMode ? t.accent : "transparent",
-                color: requestMode ? "white" : t.accent,
-                border: `1.5px solid ${t.accent}`,
-              }}>
+              style={{ background: "transparent", color: t.accent, border: `1.5px solid ${t.accent}` }}>
               📋 記事をリクエスト
             </button>
             <textarea
               value={text}
               onChange={e => setText(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as any); } }}
-              placeholder={requestMode ? "（任意）伝えたいことがあれば添えてね" : `${charName}にメッセージを送る...`}
+              placeholder={`${charName}にメッセージを送る...`}
               rows={1}
               className="flex-1 text-sm rounded-xl px-3 py-2 outline-none resize-none"
               style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text, fontFamily: t.fontFamily, maxHeight: "6rem" }}
             />
-            <button type="submit" disabled={sending || (requestMode ? !topic.trim() : !text.trim())}
+            <button type="submit" disabled={sending || !text.trim()}
               className="text-sm px-4 py-2 rounded-xl font-bold flex-shrink-0 transition-all disabled:opacity-40"
               style={{ background: t.primary, color: "white" }}>
-              {sending ? "..." : (requestMode ? "リクエストする" : "送信")}
+              {sending ? "..." : "送信"}
             </button>
           </form>
           <p className="text-[11px] mt-1.5" style={{ color: t.accent }}>
@@ -452,33 +389,9 @@ function ChatPageInner() {
         </div>
       </footer>
 
-      {/* 記事リクエスト送信前の確認ダイアログ */}
-      {showRequestConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.4)" }}>
-          <div className="rounded-2xl p-5 max-w-sm w-full shadow-xl" style={{ background: t.card, border: `1px solid ${t.border}` }}>
-            <p className="font-black mb-2" style={{ color: t.primary, fontFamily: t.fontFamily }}>📋 記事リクエストを送信しますか？</p>
-            <p className="text-sm mb-4" style={{ color: t.text }}>
-              トピック：<span className="font-bold">{topic.trim()}</span>
-              {text.trim() && (
-                <>
-                  <br />メッセージ：{text.trim()}
-                </>
-              )}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setShowRequestConfirm(false)}
-                className="text-sm px-4 py-2 rounded-xl font-bold transition-all"
-                style={{ border: `1px solid ${t.border}`, color: t.text }}>
-                キャンセル
-              </button>
-              <button type="button" onClick={sendRequest} disabled={sending}
-                className="text-sm px-4 py-2 rounded-xl font-bold text-white transition-all disabled:opacity-50"
-                style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-                {sending ? "送信中..." : "リクエストする"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* 記事・問題・添削のリクエストポップアップ */}
+      {showRequestModal && (
+        <RequestArticleModal theme={t} onClose={() => setShowRequestModal(false)} onSent={load} />
       )}
       </>
       )}
