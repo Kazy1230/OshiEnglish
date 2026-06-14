@@ -448,6 +448,50 @@ def list_exercise_submissions(admin=Depends(get_current_admin), db: Session = De
     return result
 
 
+# ===================== 修正サジェスト一覧（メッセージ評価） =====================
+# 注意: GET /admin/{customer_id} よりも前に定義すること。
+# FastAPIはルート登録順に一致を試みるため、後で定義すると "/admin/feedback" が
+# "/admin/{customer_id}" (customer_id="feedback") にマッチしてしまい422になる。
+
+REACTION_EXAMPLE_CATEGORIES = ("mistake", "question", "correct_answer", "encouragement")
+
+
+def _serialize_feedback(f: MessageFeedback, db: Session) -> dict:
+    character = db.query(Character).filter(Character.id == f.character_id).first() if f.character_id else None
+    customer = db.query(Customer).filter(Customer.id == f.customer_id).first()
+    return {
+        "id": f.id,
+        "message_id": f.message_id,
+        "character_id": f.character_id,
+        "character_name": character.name if character else None,
+        "customer_id": f.customer_id,
+        "customer_name": customer.username if customer else None,
+        "rating": f.rating,
+        "message_content": f.message_content,
+        "status": f.status,
+        "created_at": f.created_at.isoformat() if f.created_at else None,
+    }
+
+
+@router.get("/admin/feedback")
+def list_message_feedback(
+    character_id: Optional[int] = None,
+    rating: Optional[str] = None,
+    admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """管理者向け：「修正サジェスト一覧」。未対応（status=pending）の👍👎評価を一覧表示する。"""
+    query = db.query(MessageFeedback).filter(MessageFeedback.status == "pending")
+    if character_id is not None:
+        query = query.filter(MessageFeedback.character_id == character_id)
+    if rating is not None:
+        if rating not in ("good", "bad"):
+            raise HTTPException(status_code=400, detail="ratingはgoodまたはbadで指定してください")
+        query = query.filter(MessageFeedback.rating == rating)
+    rows = query.order_by(MessageFeedback.created_at.desc()).all()
+    return [_serialize_feedback(f, db) for f in rows]
+
+
 @router.get("/admin/{customer_id}")
 def get_thread_admin(
     customer_id: int,
@@ -697,46 +741,7 @@ def get_customer_open_requests(customer_id: int, admin=Depends(get_current_admin
     return [serialize_message(m) for m in msgs]
 
 
-# ===================== 修正サジェスト一覧（メッセージ評価） =====================
-
-REACTION_EXAMPLE_CATEGORIES = ("mistake", "question", "correct_answer", "encouragement")
-
-
-def _serialize_feedback(f: MessageFeedback, db: Session) -> dict:
-    character = db.query(Character).filter(Character.id == f.character_id).first() if f.character_id else None
-    customer = db.query(Customer).filter(Customer.id == f.customer_id).first()
-    return {
-        "id": f.id,
-        "message_id": f.message_id,
-        "character_id": f.character_id,
-        "character_name": character.name if character else None,
-        "customer_id": f.customer_id,
-        "customer_name": customer.username if customer else None,
-        "rating": f.rating,
-        "message_content": f.message_content,
-        "status": f.status,
-        "created_at": f.created_at.isoformat() if f.created_at else None,
-    }
-
-
-@router.get("/admin/feedback")
-def list_message_feedback(
-    character_id: Optional[int] = None,
-    rating: Optional[str] = None,
-    admin=Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    """管理者向け：「修正サジェスト一覧」。未対応（status=pending）の👍👎評価を一覧表示する。"""
-    query = db.query(MessageFeedback).filter(MessageFeedback.status == "pending")
-    if character_id is not None:
-        query = query.filter(MessageFeedback.character_id == character_id)
-    if rating is not None:
-        if rating not in ("good", "bad"):
-            raise HTTPException(status_code=400, detail="ratingはgoodまたはbadで指定してください")
-        query = query.filter(MessageFeedback.rating == rating)
-    rows = query.order_by(MessageFeedback.created_at.desc()).all()
-    return [_serialize_feedback(f, db) for f in rows]
-
+# ===================== 修正サジェスト適用・無視 =====================
 
 class FeedbackApply(BaseModel):
     # rating=goodの場合のみ必須。reaction_examplesの追加先カテゴリ。
