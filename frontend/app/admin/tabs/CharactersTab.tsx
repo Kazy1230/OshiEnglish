@@ -7,6 +7,8 @@ import {
   buildLLMPrompt,
   buildImagePrompt,
   buildCharacterDesignPrompt,
+  buildCharacterGenerationPrompt,
+  parseCharacterGenerationOutput,
   IMAGE_SIZE_PX,
   parseExerciseJsonInput,
 } from "../lib/promptBuilders";
@@ -53,10 +55,10 @@ export function CharactersTab() {
   const [toneProfileError, setToneProfileError] = useState(false);
   const [colorSchemeError, setColorSchemeError] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
-  // 新規キャラクター設定のLLM自動生成用
+  // 新規キャラクター設定のLLM自動生成用（プロンプトをコピーして手動でLLMに貼り付ける方式）
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [genForm, setGenForm] = useState(emptyGenForm);
-  const [generatingBlock, setGeneratingBlock] = useState<string | null>(null); // "ALL" または個別ブロックキー
+  const [genPasteText, setGenPasteText] = useState("");
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
   const [promptCustomerIdByChar, setPromptCustomerIdByChar] = useState<Record<number, string>>({});
 
@@ -116,39 +118,45 @@ export function CharactersTab() {
     if (result.image_hint) setForm(f => ({ ...f, image_hint: result.image_hint }));
   }
 
-  /** blocksを省略すると6ブロック全てを生成する。指定するとそのブロックのみ再生成し、他の欄は保持される。 */
-  async function runGenerate(blocks?: string[]) {
-    setGeneratingBlock(blocks && blocks.length === 1 ? blocks[0] : "ALL");
-    try {
-      let existing: any = undefined;
-      if (blocks && blocks.length) {
-        existing = {};
-        if (!blocks.includes("DESCRIPTION") && form.description) existing.description = form.description;
-        if (!blocks.includes("GREETINGS") && form.greetings) existing.greetings = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
-        if (!blocks.includes("TONE_PROFILE") && form.tone_profile) {
-          try { existing.tone_profile = parseExerciseJsonInput(form.tone_profile); } catch { /* ignore */ }
-        }
-        if (!blocks.includes("COLOR_SCHEME") && form.color_scheme) {
-          try { existing.color_scheme = parseExerciseJsonInput(form.color_scheme); } catch { /* ignore */ }
-        }
-        if (!blocks.includes("FONT_STYLE") && form.font_style) existing.font_style = form.font_style;
-        if (!blocks.includes("IMAGE_HINT") && form.image_hint) existing.image_hint = form.image_hint;
+  /** blocksを省略すると6ブロック全てのプロンプトをコピーする。指定するとそのブロックのみ再生成するプロンプトになる（他の欄の内容は一貫性参考としてプロンプトに含める）。 */
+  function copyGenPrompt(blocks?: string[]) {
+    let existing: any = undefined;
+    if (blocks && blocks.length) {
+      existing = {};
+      if (!blocks.includes("DESCRIPTION") && form.description) existing.description = form.description;
+      if (!blocks.includes("GREETINGS") && form.greetings) existing.greetings = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
+      if (!blocks.includes("TONE_PROFILE") && form.tone_profile) {
+        try { existing.tone_profile = parseExerciseJsonInput(form.tone_profile); } catch { /* ignore */ }
       }
-      const result = await api.adminGenerateCharacterProfile({
-        character_name: genForm.character_name || form.name,
-        character_description: genForm.character_description || form.description,
-        user_requested_personality: genForm.user_requested_personality,
-        reference_character: genForm.reference_character,
-        blocks,
-        existing,
-      });
-      applyGeneratedResult(result);
-      toast(blocks ? `${blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・")}を再生成しました` : "キャラクター設定を生成しました（内容を確認・編集してから保存してください）", "success");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "生成に失敗しました", "error");
-    } finally {
-      setGeneratingBlock(null);
+      if (!blocks.includes("COLOR_SCHEME") && form.color_scheme) {
+        try { existing.color_scheme = parseExerciseJsonInput(form.color_scheme); } catch { /* ignore */ }
+      }
+      if (!blocks.includes("FONT_STYLE") && form.font_style) existing.font_style = form.font_style;
+      if (!blocks.includes("IMAGE_HINT") && form.image_hint) existing.image_hint = form.image_hint;
     }
+    const prompt = buildCharacterGenerationPrompt({
+      character_name: genForm.character_name || form.name,
+      character_description: genForm.character_description || form.description,
+      user_requested_personality: genForm.user_requested_personality,
+      reference_character: genForm.reference_character,
+      blocks,
+      existing,
+    });
+    navigator.clipboard.writeText(prompt);
+    toast(blocks ? `${blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・")}用のプロンプトをコピーしました。LLMに貼り付けて実行し、出力を下の欄に貼り付けて「反映」を押してください` : "キャラクター設定生成用のプロンプトをコピーしました。LLMに貼り付けて実行し、出力を下の欄に貼り付けて「反映」を押してください", "success");
+  }
+
+  /** 「反映」ボタン：貼り付けられたLLMの出力（6ブロック形式）をパースして各入力欄に反映する */
+  function applyGenPasteText() {
+    if (!genPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
+    const result = parseCharacterGenerationOutput(genPasteText);
+    if (Object.keys(result).length === 0) {
+      toast("出力を解析できませんでした。===DESCRIPTION===などの区切りを含む形式で貼り付けてください", "error");
+      return;
+    }
+    applyGeneratedResult(result);
+    setGenPasteText("");
+    toast("入力欄に反映しました（内容を確認・編集してから保存してください）", "success");
   }
 
   function handleToneProfileChange(val: string) {
@@ -274,16 +282,15 @@ export function CharactersTab() {
     }
   }
 
-  /** LLM生成結果を個別ブロックだけ再生成するための小さなボタン（生成パネルを開いている時のみ表示） */
+  /** 個別ブロックだけ再生成するプロンプトをコピーするための小さなボタン（生成パネルを開いている時のみ表示） */
   function RegenButton({ block, label }: { block: string; label: string }) {
     if (!showGenPanel) return null;
     return (
       <button type="button"
         className="text-xs px-1.5 py-0.5 rounded-lg border transition-all hover:shadow"
         style={{ borderColor: "var(--border)", color: "var(--accent)" }}
-        disabled={generatingBlock !== null}
-        onClick={() => runGenerate([block])}>
-        {generatingBlock === block ? "再生成中…" : `↻ ${label}をAIで再生成`}
+        onClick={() => copyGenPrompt([block])}>
+        {`↻ ${label}を再生成するプロンプトをコピー`}
       </button>
     );
   }
@@ -340,9 +347,11 @@ export function CharactersTab() {
             {showGenPanel && (
               <>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  申込フォーム等で受け取ったラフな構想を入力して「生成」を押すと、
+                  申込フォーム等で受け取ったラフな構想を入力して「プロンプトをコピー」を押すと、
                   説明文・本棚の一言（8個）・TONE_PROFILE・配色・フォント・画像ヒントを
-                  まとめてAIに作成してもらい、各入力欄に反映します（保存はされません。内容を確認・編集してから「保存」を押してください）。
+                  まとめて生成するためのプロンプトがクリップボードにコピーされます。
+                  これをLLM（claude-sonnet-4-6）に貼り付けて実行し、その出力を下の欄に貼り付けて
+                  「反映」を押すと各入力欄に反映されます（保存はされません。内容を確認・編集してから「保存」を押してください）。
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -374,14 +383,26 @@ export function CharactersTab() {
                 <button type="button"
                   className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
                   style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
-                  disabled={generatingBlock !== null}
-                  onClick={() => runGenerate()}>
-                  {generatingBlock === "ALL" ? "生成中…" : "✨ 生成する（6項目すべて）"}
+                  onClick={() => copyGenPrompt()}>
+                  📋 プロンプトをコピーする（6項目すべて）
                 </button>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  生成後、各入力欄の下にある「↻ 再生成」ボタンで個別の項目だけを再生成できます
-                  （他の項目の内容は保持されます）。
+                  各入力欄の下にある「↻ 再生成するプロンプトをコピー」ボタンで、
+                  個別の項目だけを再生成するプロンプトをコピーできます（他の項目の内容は保持されます）。
                 </p>
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                    LLMの出力をここに貼り付け
+                  </label>
+                  <textarea rows={6} value={genPasteText} onChange={e => setGenPasteText(e.target.value)}
+                    placeholder="===DESCRIPTION=== から始まるLLMの出力をそのまま貼り付けてください" />
+                </div>
+                <button type="button"
+                  className="text-xs font-bold py-2 px-3 rounded-xl transition-all hover:opacity-80 self-start"
+                  style={{ background: "var(--accent)", color: "white" }}
+                  onClick={applyGenPasteText}>
+                  ⬇️ 反映する
+                </button>
               </>
             )}
           </div>

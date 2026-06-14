@@ -1632,3 +1632,203 @@ export function buildCharacterDesignPrompt(name: string, description: string): s
 3. ===TONE_PROFILE=== と ===COLOR_SCHEME=== はJSON構文として正しい形で出力する
 4. 6つの区切りブロックを過不足なく出力し、前置き・後書きは付けない`.trim();
 }
+
+// ブロック名 → applyGeneratedResult が読み取る結果オブジェクトのキー名。
+// backend/app/core/character_generation.py の BLOCK_KEYS と同じ対応。
+const CHARACTER_GENERATION_BLOCK_KEYS: Record<string, string> = {
+  DESCRIPTION: "description",
+  GREETINGS: "greetings",
+  TONE_PROFILE: "tone_profile",
+  COLOR_SCHEME: "color_scheme",
+  FONT_STYLE: "font_style",
+  IMAGE_HINT: "image_hint",
+};
+export const CHARACTER_GENERATION_ALL_BLOCKS = Object.keys(CHARACTER_GENERATION_BLOCK_KEYS);
+
+/**
+ * 新規キャラクター作成時に使う「LLMで設定を生成」用プロンプト。
+ * backend/app/core/character_generation.py の CHARACTER_GENERATION_PROMPT_TEMPLATE と
+ * 同じ出力フォーマット（===DESCRIPTION===など6ブロック）・同じ著作権配慮の指示を採用しているが、
+ * こちらはクリップボードへのコピー用（APIは呼ばない・手動でLLMに貼り付けて使う）。
+ *
+ * blocksを指定すると、その一部のブロックのみ再生成するよう末尾に追加指示を付与する。
+ * existingには再生成しない他ブロックの現在値を渡すことで、再生成結果との一貫性を保つ。
+ */
+export function buildCharacterGenerationPrompt(opts: {
+  character_name?: string;
+  character_description?: string;
+  user_requested_personality?: string;
+  reference_character?: string;
+  blocks?: string[];
+  existing?: any;
+}): string {
+  const {
+    character_name = "",
+    character_description = "",
+    user_requested_personality = "",
+    reference_character = "",
+    blocks,
+    existing,
+  } = opts;
+
+  const prompt = `あなたはキャラクター設計のアシスタントです。
+以下のラフな構想をもとに、英語学習サービス「Oshi English」の
+キャラクター設定一式を考えてください。
+出力はすべて、管理画面の入力欄にそのままコピペできる形式にしてください。
+
+==================================================
+【ラフな構想】
+==================================================
+■ 名前（仮）: ${character_name || "（未入力）"}
+■ イメージ・説明: ${character_description || "（未入力）"}
+■ 顧客が希望するキャラクター設定（最大限尊重して設計）:
+${user_requested_personality || "（特になし。お任せ）"}
+
+■ 参考キャラクター:
+${reference_character || "（指定なし）"}
+
+==================================================
+【参考キャラクターの活用方法】
+==================================================
+参考キャラクターとして指定された人物・キャラクターについて、
+実際に知られている名セリフ・口調の特徴を
+できる限り具体的に把握してください。
+分析の過程では実際のセリフを引用して構いません。
+
+その上で、最終的な出力（GREETINGS・TONE_PROFILE内のすべての項目）には
+固有名詞や直接の引用を一切含めず、
+「文の長さ」「断定的か曖昧か」「比喩の使い方」
+「感情表現の強さ」「語尾のパターン」などの
+"スタイルの特徴"だけを抽出してオリジナルの表現として再構築してください。
+
+例：
+参考キャラが断定的かつ短い文で淡々と話す傾向がある場合、
+最終出力のreaction_examplesも同様に
+「短く言い切る」「装飾語を使わない」スタイルで生成する。
+ただしセリフ自体は引用せず、オリジナルの言い回しにする。
+
+==================================================
+【★★★ 最終出力に関する絶対厳守事項 ★★★】
+==================================================
+最終出力（GREETINGS以降の全ブロック）には
+実在の人物・既存の作品・キャラクター名、および
+それらの直接の引用・セリフを一切含めないでください。
+スタイルの特徴のみを反映したオリジナルの表現にしてください。
+
+==================================================
+【出力フォーマット】
+==================================================
+
+===DESCRIPTION===
+（顧客のバナーに表示する紹介文。1文・30〜50字程度）
+
+===GREETINGS===
+（本棚画面に表示する「キャラクターからの一言」を8個。1行1パターン。
+  語尾・言い回し・記号表現にバリエーションを持たせ、
+  全て異なる印象になるようにする。50字以内）
+
+===TONE_PROFILE===
+{
+  "keywords": ["", "", "", "", ""],
+  "personality": "",
+  "speech_style": "",
+  "ng_expressions": ["", "", ""],
+  "reaction_examples": {
+    "mistake": ["", "", "", ""],
+    "question": ["", "", "", ""],
+    "correct_answer": ["", "", "", ""],
+    "encouragement": ["", "", "", ""]
+  },
+  "conversation_rules": ["", "", "", "", "", "", "", ""],
+  "intimacy_variations": {
+    "low": "",
+    "high": ""
+  },
+  "article_style": ""
+}
+
+===COLOR_SCHEME===
+{"primary":"#______","accent":"#______","bg":"#______","text":"#______","card":"#ffffff","border":"#______","example_bg":"#______","tips_bg":"#______"}
+
+===FONT_STYLE===
+（default / rounded / serif / handwriting / monospace から1つ）
+
+===IMAGE_HINT===
+（プロフィール画像の見た目特徴。固有名詞なし。1〜2文）
+
+==================================================
+【厳守事項まとめ】
+==================================================
+1. 最終出力に固有名詞・直接引用を一切含めない
+2. ===GREETINGS=== は必ず8行・全て異なる語尾/言い回し/記号にする
+3. ===TONE_PROFILE=== はJSON構文として正しい形で出力する
+4. reaction_examplesの各カテゴリは4パターンずつ出力する
+5. conversation_rulesは8個出力する
+6. intimacy_variationsのlow/highで口調の違いを明確にする
+7. article_styleは雑談を減らし説明に集中するトーンを記述する
+8. 6つの区切りブロックを過不足なく出力し、前置き・後書きは付けない`;
+
+  const targetBlocks = blocks && blocks.length ? blocks : CHARACTER_GENERATION_ALL_BLOCKS;
+  if (targetBlocks.length === CHARACTER_GENERATION_ALL_BLOCKS.length) {
+    return prompt;
+  }
+
+  const targetLabel = targetBlocks.map(b => `===${b}===`).join("、");
+  const lines = [
+    prompt,
+    "",
+    "==================================================",
+    "【★今回の出力対象についての追加指示（最優先で従うこと）】",
+    "==================================================",
+    `今回は、上記6ブロックのうち ${targetLabel} のみを再生成してください。`,
+    "他のブロックは出力しないでください。区切り線・前置き・後書きも不要です。",
+  ];
+  if (existing && Object.keys(existing).length) {
+    lines.push(
+      "",
+      "以下は既に確定している他ブロックの内容です。キャラクター像・口調の一貫性を保つため、",
+      "この内容と矛盾しない範囲で再生成してください（これらのブロック自体は出力しないこと）。",
+      "",
+      JSON.stringify(existing, null, 2),
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * buildCharacterGenerationPrompt() の出力に対するLLMの回答（6ブロック形式のテキスト）を、
+ * 管理画面の各入力欄に反映できる形にパースする。
+ * backend/app/core/character_generation.py の parse_character_generation_output と同じロジック。
+ *
+ * 返り値のキー: description(string) / greetings(string[]) / tone_profile(object) /
+ * color_scheme(object) / font_style(string) / image_hint(string)
+ * 該当ブロックが見つからない場合はキー自体を含めない。
+ */
+export function parseCharacterGenerationOutput(text: string): any {
+  let body = text.trim();
+  const fenced = body.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/i);
+  if (fenced) body = fenced[1].trim();
+
+  const blockNames = Object.keys(CHARACTER_GENERATION_BLOCK_KEYS).join("|");
+  const pattern = new RegExp(`===\\s*(${blockNames})\\s*===`, "g");
+
+  const result: any = {};
+  const matches = [...body.matchAll(pattern)];
+  for (let i = 0; i < matches.length; i++) {
+    const blockName = matches[i][1];
+    const start = matches[i].index! + matches[i][0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : body.length;
+    const content = body.slice(start, end).trim();
+    const key = CHARACTER_GENERATION_BLOCK_KEYS[blockName];
+    if (!key || !content) continue;
+
+    if (key === "greetings") {
+      result[key] = content.split("\n").map(s => s.trim()).filter(Boolean);
+    } else if (key === "tone_profile" || key === "color_scheme") {
+      try { result[key] = parseExerciseJsonInput(content); } catch { /* このブロックはスキップ */ }
+    } else {
+      result[key] = content;
+    }
+  }
+  return result;
+}

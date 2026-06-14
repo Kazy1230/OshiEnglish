@@ -67,7 +67,7 @@ function CreditsPageInner() {
       <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/chat")} aria-label="戻る"
+            <button onClick={() => router.push("/shelf")} aria-label="戻る"
               className="text-white/70 hover:text-white text-sm">← 戻る</button>
             <h1 className="text-lg sm:text-xl font-black text-white">クレジット購入</h1>
           </div>

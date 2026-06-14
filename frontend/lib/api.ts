@@ -179,7 +179,6 @@ export const api = {
 
   // 管理者：キャラクター
   adminGetCharacters: () => apiFetch("/characters/"),
-  adminGenerateCharacterProfile: (data: object) => apiFetch("/characters/generate", { method: "POST", body: JSON.stringify(data) }),
   adminCreateCharacter: (data: object) => apiFetch("/characters/", { method: "POST", body: JSON.stringify(data) }),
   adminUpdateCharacter: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteCharacter: (id: number) => apiFetch(`/characters/${id}`, { method: "DELETE" }),

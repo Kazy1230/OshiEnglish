@@ -6,8 +6,6 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user
 from app.core.uploads import validate_image_content
-from app.core.llm import generate_text, LLMError
-from app.core.character_generation import build_character_generation_prompt, parse_character_generation_output
 from app.models.character import Character
 from app.models.customer import Customer
 from app.models.article import Article
@@ -65,40 +63,6 @@ def get_character_theme(
         "instagram_account": char.instagram_account,
         "is_preset": char.is_preset,
     }
-
-class CharacterGenerateRequest(BaseModel):
-    character_name: str = ""
-    character_description: str = ""
-    user_requested_personality: str = ""
-    reference_character: str = ""
-    blocks: Optional[list[str]] = None  # 指定時はこのブロックのみ再生成（例: ["GREETINGS"]）
-    existing: Optional[dict] = None     # 再生成しない他ブロックの現在値（一貫性確認用の参考情報）
-
-@router.post("/generate")
-def generate_character_profile(data: CharacterGenerateRequest, admin=Depends(get_current_admin)):
-    """LLM（claude-sonnet-4-6）でキャラクター設定一式（または指定ブロックのみ）を生成する。
-    DBへの保存は行わない。管理者が結果を確認・編集してから通常の保存操作で登録する。"""
-    prompt = build_character_generation_prompt(
-        character_name=data.character_name,
-        character_description=data.character_description,
-        user_requested_personality=data.user_requested_personality,
-        reference_character=data.reference_character,
-        blocks=data.blocks,
-        existing=data.existing,
-    )
-    try:
-        text = generate_text(
-            system_prompt="あなたはキャラクター設計のアシスタントです。指示された出力フォーマットを厳密に守ってください。",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-    except LLMError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-    result = parse_character_generation_output(text)
-    if not result:
-        raise HTTPException(status_code=502, detail="AIの出力を解析できませんでした。出力形式が想定と異なる可能性があります。")
-    return result
 
 @router.post("/", status_code=201)
 def create_character(data: CharacterCreate, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
