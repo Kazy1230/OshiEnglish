@@ -608,11 +608,24 @@ type InlineTheme = { primary: string; accent: string; bg: string };
  * tips・例文などの「短い1行テキスト」内の **太字** / `コード` / *斜体* をインライン装飾として描画する。
  * これらのフィールドはMarkdownパーサ（ReactMarkdown）を通していないため、
  * 記法がそのまま文字列として表示されてしまう問題を解消するための軽量レンダラ。
+ *
+ * また、`[[audio:URL]]` / `[[audio:URL|ラベル]]` という記法を、その場所に展開される
+ * 音声プレーヤーとして描画する。リスニング問題の instructions や questions[].prompt の
+ * 任意の位置に埋め込むことで、「記事内の指定した場所に音声を置く」ことができる。
  */
 function renderInlineMarkdown(text: string, t: InlineTheme): React.ReactNode[] {
-  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*|\[\[audio:[^\]]+\]\])/g;
   const parts = text.split(regex).filter(p => p !== "");
   return parts.map((part, i) => {
+    if (part.startsWith("[[audio:") && part.endsWith("]]")) {
+      const [url, label] = part.slice("[[audio:".length, -2).split("|");
+      return (
+        <span key={i} className="block my-2">
+          {label && <span className="text-xs font-bold block mb-1" style={{ color: t.accent }}>🎧 {label}</span>}
+          <audio controls src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost/api")}${url}`} className="w-full" />
+        </span>
+      );
+    }
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={i} className="font-bold" style={{ color: t.primary }}>{part.slice(2, -2)}</strong>;
     }
@@ -800,7 +813,7 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
                 {q.audio_url && (
                   <audio controls src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost/api")}${q.audio_url}`} className="w-full" />
                 )}
-                <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap" style={{ color: t.text }}>{q.prompt}</p>
+                <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap" style={{ color: t.text }}>{renderInlineMarkdown(String(q.prompt ?? ""), t)}</p>
                 <div className="flex flex-col gap-1.5">
                   {(q.choices ?? []).map((choice: string, ci: number) => {
                     const isChosen = answers[qi] === ci;
