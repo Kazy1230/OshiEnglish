@@ -66,10 +66,14 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
     }
   }
 
-  // 「対応が必要な受注」：未納品、またはキャラ作成・記事依頼・添削の対応待ちが残っている受注
+  // 「対応が必要な受注」：未納品、またはキャラ作成・報酬ループ・ウェルカムページ・挨拶DM・
+  // 記事依頼・添削の対応待ちが残っている受注
   function needsAttention(o: any): boolean {
     return o.status !== "delivered"
       || !!o.character_creation_pending
+      || !!o.reward_loop_pending
+      || !!o.welcome_page_pending
+      || !!o.greeting_dm_pending
       || (o.pending_article_requests?.length ?? 0) > 0
       || (o.pending_corrections?.length ?? 0) > 0;
   }
@@ -152,6 +156,9 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
     });
     if (o.status === "in_progress"
       && !o.character_creation_pending
+      && !o.reward_loop_pending
+      && !o.welcome_page_pending
+      && !o.greeting_dm_pending
       && (o.pending_article_requests?.length ?? 0) === 0
       && (o.pending_corrections?.length ?? 0) === 0) {
       tasks.push({ orderId: o.id, icon: "✅", label: `${o.customer_name}：対応完了・納品処理を行ってください`, color: "#1a6ea8", bg: "#e8f4fd" });
@@ -168,6 +175,18 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
       label: `${cu.username}：本日のDMを送信してください`,
       color: "#16a085", bg: "#e8fdf7",
       onClick: () => onNavigateToMessages?.(cu.id),
+    });
+  }
+
+  // 定期便プール不足リマインダー：自分専用キャラが割り当て済みの顧客で、
+  // 配布できる未配布の定期便プール記事が残っていない（次回配布時に不足する）顧客を一覧化する
+  for (const cu of customers) {
+    if (!cu.character_id) continue;
+    if ((cu.template_pool_remaining ?? 0) > 0) continue;
+    tasks.push({
+      icon: "📦",
+      label: `${cu.username}：定期便プールの記事が不足しています。記事管理タブで「定期便プール」記事を追加してください`,
+      color: "#8e44ad", bg: "#f5e8fb",
     });
   }
 

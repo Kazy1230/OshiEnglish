@@ -8,6 +8,7 @@ from typing import List, Optional
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user, hash_password
 from app.models.customer import Customer
+from app.models.character import Character
 from app.models.article import Article
 from app.models.message import Message
 from app.models.access_log import AccessLog
@@ -82,6 +83,20 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
         .all()
     )
 
+    # 定期便プールの残数（顧客ごとに「まだ配布されていないプール記事」が何本残っているか）
+    # 管理画面で「この顧客には定期便プールの記事が足りなくなりそう」を判断するための値
+    total_template_count = db.query(func.count(Article.id)).filter(
+        Article.article_type == "template",
+        Article.status == "published",
+        Article.customer_id.is_(None),
+    ).scalar() or 0
+    received_template_counts = dict(
+        db.query(Article.customer_id, func.count(Article.id))
+        .filter(Article.template_source_id.isnot(None))
+        .group_by(Article.customer_id)
+        .all()
+    )
+
     return [
         {
             "id": c.id,
@@ -101,6 +116,7 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
             "last_character_message_at": (
                 last_character_message_map[c.id].isoformat() if last_character_message_map.get(c.id) else None
             ),
+            "template_pool_remaining": max(0, total_template_count - received_template_counts.get(c.id, 0)),
         }
         for c in customers
     ]
@@ -163,8 +179,22 @@ def update_customer(customer_id: int, data: CustomerUpdate, admin=Depends(get_cu
     db.commit()
     db.refresh(customer)
 
-    # キャラクター完成案内メールは、受注管理画面で「納品完了」操作をした
-    # タイミングで送信する（routers/orders.py の update_order 参照）。
+    # オリジナルキャラ作成完了：キャラ未割り当て→割り当て済みになったタイミングで
+    # 完成案内メールを送信する（受注の「納品完了」操作とは独立して、割り当て時に1回だけ送る）
+    if old_character_id is None and customer.character_id is not None and customer.email:
+        character = db.query(Character).filter(Character.id == customer.character_id).first()
+        if character:
+            send_email(
+                to=customer.email,
+                subject="【推しEnglish】あなた専用キャラクターが完成しました",
+                html=(
+                    f"<p>{customer.username} 様</p>"
+                    f"<p>お待たせしました。あなた専用のキャラクター「{character.name}」が完成しました！</p>"
+                    "<p>さっそくアプリにログインして、アプリ内チャットでやり取りを始めましょう。</p>"
+                    f'<p><a href="{settings.FRONTEND_URL}/login">ログインはこちら</a></p>'
+                ),
+            )
+
     # 最新の intimacy も含めて返す（フロントエンドがそのまま使えるように）
     return {
         "id": customer.id,
