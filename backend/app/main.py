@@ -245,12 +245,14 @@ def _migrate_tone_profile_extensions():
             db.commit()
 
 
-_migrate_tone_profile_extensions()
-
 # 簡易マイグレーション㉙: characters.image_hint
 # - 新規キャラクター作成時のLLM設定生成（IMAGE_HINTブロック）の保存先。
 #   Stable Diffusion等でのキャラビジュアル生成時に参照するためのメモで、UI表示には使わない。
+# _migrate_tone_profile_extensions() がCharacterモデル経由でcharactersテーブルを
+# SELECT * するため、image_hint列は先に追加しておく必要がある。
 _ensure_column("characters", "image_hint", "TEXT NULL")
+
+_migrate_tone_profile_extensions()
 
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
