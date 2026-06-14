@@ -27,6 +27,9 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [pendingCorrection, setPendingCorrection] = useState<any>(null);
   const [pendingArticleRequest, setPendingArticleRequest] = useState<any>(null);
+  const [pendingRewardsCharacterId, setPendingRewardsCharacterId] = useState<number | null>(null);
+  const [pendingWelcomePage, setPendingWelcomePage] = useState<any>(null);
+  const [pendingMessagesCustomerId, setPendingMessagesCustomerId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [msgBadge, setMsgBadge] = useState(0);
   const [ordersBadge, setOrdersBadge] = useState(0);
@@ -182,14 +185,19 @@ export default function AdminPage() {
       {/* メインコンテンツ */}
       <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 min-w-0 md:h-screen">
         {tab === "dashboard" && <DashboardTab onNavigate={setTab} />}
-        {tab === "orders" && <OrdersTab onCreateArticleFromRequest={(order, request) => { setPendingArticleRequest({ order, request }); setTab("articles"); }} />}
-        {tab === "messages" && <MessagesTab />}
+        {tab === "orders" && <OrdersTab
+          onCreateArticleFromRequest={(order, request) => { setPendingArticleRequest({ order, request }); setTab("articles"); }}
+          onNavigateToRewards={(characterId) => { setPendingRewardsCharacterId(characterId); setTab("rewards"); }}
+          onNavigateToWelcomePage={(characterId) => { setPendingWelcomePage({ character_id: characterId }); setTab("articles"); }}
+          onNavigateToMessages={(customerId) => { setPendingMessagesCustomerId(customerId); setTab("messages"); }}
+        />}
+        {tab === "messages" && <MessagesTab initialCustomerId={pendingMessagesCustomerId} onConsumeInitialCustomerId={() => setPendingMessagesCustomerId(null)} />}
         {tab === "corrections" && <CorrectionsTab onCreateFeedbackArticle={(item) => { setPendingCorrection(item); setTab("articles"); }} />}
         {tab === "suggestions" && <SuggestionsTab />}
-        {tab === "articles" && <ArticlesTab pendingCorrection={pendingCorrection} onConsumePendingCorrection={() => setPendingCorrection(null)} pendingArticleRequest={pendingArticleRequest} onConsumePendingArticleRequest={() => setPendingArticleRequest(null)} />}
+        {tab === "articles" && <ArticlesTab pendingCorrection={pendingCorrection} onConsumePendingCorrection={() => setPendingCorrection(null)} pendingArticleRequest={pendingArticleRequest} onConsumePendingArticleRequest={() => setPendingArticleRequest(null)} pendingWelcomePage={pendingWelcomePage} onConsumePendingWelcomePage={() => setPendingWelcomePage(null)} />}
         {tab === "customers" && <CustomersTab />}
         {tab === "characters" && <CharactersTab />}
-        {tab === "rewards" && <RewardsTab />}
+        {tab === "rewards" && <RewardsTab initialCharacterId={pendingRewardsCharacterId} onConsumeInitialCharacterId={() => setPendingRewardsCharacterId(null)} />}
         {tab === "grammar" && <GrammarTab />}
         {tab === "menu" && <ServiceMenuTab />}
         {tab === "logs" && <LogsTab />}

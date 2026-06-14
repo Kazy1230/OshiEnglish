@@ -11,10 +11,33 @@ export function ServiceMenuTab() {
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [form, setForm] = useState<any>(emptyServiceItemForm);
 
+  const [creditSettings, setCreditSettings] = useState<any | null>(null);
+  const [templateUnlockCost, setTemplateUnlockCost] = useState("");
+  const [savingCreditSettings, setSavingCreditSettings] = useState(false);
+
   const reload = () => api.adminListAllServiceItems().then(setItems);
   useEffect(() => {
     reload().finally(() => setLoading(false));
+    api.adminGetCreditSettings().then(s => {
+      setCreditSettings(s);
+      setTemplateUnlockCost(String(s.template_unlock_cost));
+    });
   }, []);
+
+  async function saveCreditSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingCreditSettings(true);
+    try {
+      const updated = await api.adminUpdateCreditSettings({ template_unlock_cost: Number(templateUnlockCost) });
+      setCreditSettings(updated);
+      setTemplateUnlockCost(String(updated.template_unlock_cost));
+      toast("料金設定を保存しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    } finally {
+      setSavingCreditSettings(false);
+    }
+  }
 
   function startEdit(s: any) {
     setEditingItem(s);
@@ -126,6 +149,29 @@ export function ServiceMenuTab() {
         キャラクター（運営）がチャットの会話の流れの中で自然に商品・サービスへ誘導する「接客」スタイルを取るため、
         この一覧は運営側が金額・提供内容を把握し、チャットでの案内に役立てるための内部資料として使ってください。
       </p>
+
+      {/* クレジット関連の料金設定 */}
+      <div className="card mb-6">
+        <h3 className="font-bold mb-2" style={{ color: "var(--primary)" }}>🎁 定期便（特別記事）の開封コスト</h3>
+        <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+          定期便で本棚に届く特別記事を開封する際に消費するクレジット数です。記事ごとの個別設定はなく、ここで一括管理します。
+        </p>
+        {creditSettings === null ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>読み込み中…</p>
+        ) : (
+          <form onSubmit={saveCreditSettings} className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>開封コスト（クレジット）</label>
+              <input type="number" min="0" value={templateUnlockCost}
+                onChange={e => setTemplateUnlockCost(e.target.value)}
+                style={{ width: "8rem" }} required />
+            </div>
+            <button type="submit" className="btn-primary" disabled={savingCreditSettings}>
+              {savingCreditSettings ? "保存中…" : "保存する"}
+            </button>
+          </form>
+        )}
+      </div>
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card mb-6 flex flex-col gap-3">

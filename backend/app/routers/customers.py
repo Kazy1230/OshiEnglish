@@ -18,6 +18,7 @@ from app.models.credit_transaction import CreditTransaction
 from app.core.intimacy import intimacy_info
 from app.core.credentials import generate_temp_password
 from app.core.email import send_email
+from app.core.welcome_articles import swap_welcome_article_if_character_ready
 from app.core.config import settings
 from pydantic import BaseModel
 
@@ -73,6 +74,13 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
         .group_by(Article.customer_id)
         .all()
     )
+    # 各顧客への最終挨拶・DM送信日時（キャラからのメッセージの最新日時）
+    last_character_message_map = dict(
+        db.query(Message.customer_id, func.max(Message.created_at))
+        .filter(Message.sender == "character")
+        .group_by(Message.customer_id)
+        .all()
+    )
 
     return [
         {
@@ -90,6 +98,9 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
             "character_memory": c.character_memory,
             "intimacy": intimacy_info(c.intimacy_points),
             "credit_balance": c.credit_balance or 0,
+            "last_character_message_at": (
+                last_character_message_map[c.id].isoformat() if last_character_message_map.get(c.id) else None
+            ),
         }
         for c in customers
     ]
@@ -143,6 +154,11 @@ def update_customer(customer_id: int, data: CustomerUpdate, admin=Depends(get_cu
     # 本棚に「ようこそ」演出を一度表示するためのフラグを立てる
     if old_character_id is None and customer.character_id is not None:
         customer.character_ready_announced = False
+
+    # キャラ未割り当てだった顧客が割り当て済みになった場合、本棚の汎用ウェルカム記事を
+    # キャラクター専用版（既に登録済みなら）に差し替える
+    if old_character_id != customer.character_id:
+        swap_welcome_article_if_character_ready(db, customer)
 
     db.commit()
     db.refresh(customer)

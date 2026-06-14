@@ -19,7 +19,10 @@ const emptyForm = {
   official_only: false,
 };
 
-export function RewardsTab() {
+export function RewardsTab({ initialCharacterId, onConsumeInitialCharacterId }: {
+  initialCharacterId?: number | null;
+  onConsumeInitialCharacterId?: () => void;
+} = {}) {
   const [characters, setCharacters] = useState<any[]>([]);
   const [characterId, setCharacterId] = useState<number | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -43,6 +46,14 @@ export function RewardsTab() {
     }).finally(() => setLoading(false));
     api.adminGetIntimacySettings().then(setIntimacySettings).catch(() => {});
   }, []);
+
+  // 受注リストの「報酬・成長ループを設定」ボタンから遷移してきた場合、対象キャラクターを選択する
+  useEffect(() => {
+    if (initialCharacterId == null) return;
+    setCharacterId(initialCharacterId);
+    onConsumeInitialCharacterId?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCharacterId]);
 
   async function saveIntimacySettings() {
     if (!intimacySettings) return;

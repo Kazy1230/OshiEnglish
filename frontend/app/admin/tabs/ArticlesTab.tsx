@@ -32,11 +32,13 @@ const emptyArticleForm = {
   unlock_cost: "",
 };
 
-export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pendingArticleRequest, onConsumePendingArticleRequest }: {
+export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pendingArticleRequest, onConsumePendingArticleRequest, pendingWelcomePage, onConsumePendingWelcomePage }: {
   pendingCorrection?: any;
   onConsumePendingCorrection?: () => void;
   pendingArticleRequest?: any;
   onConsumePendingArticleRequest?: () => void;
+  pendingWelcomePage?: any;
+  onConsumePendingWelcomePage?: () => void;
 } = {}) {
   const [articles, setArticles] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -97,6 +99,19 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     window.scrollTo({ top: 0, behavior: "smooth" });
     onConsumePendingArticleRequest?.();
   }, [pendingArticleRequest]);
+
+  // OrdersTabから「ウェルカムページを作成」で遷移してきた場合、フォームに自動入力する
+  useEffect(() => {
+    if (!pendingWelcomePage) return;
+    setForm(f => ({
+      ...emptyArticleForm,
+      article_type: "welcome",
+      template_character_id: pendingWelcomePage.character_id ? String(pendingWelcomePage.character_id) : f.template_character_id,
+    }));
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    onConsumePendingWelcomePage?.();
+  }, [pendingWelcomePage]);
 
   // 依頼記事フォームで顧客が選択されたら、その顧客の対応中リクエスト一覧を取得する
   useEffect(() => {
@@ -606,6 +621,9 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 通常の依頼記事より軽い（日本語800〜1200文字程度・1ページ構成）記事を作成するためのプロンプトです。
                 LLMの出力を「本文」「例文」「Tips」欄に分割して貼り付けてください。
               </p>
+              <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                開封コストは「料金・メニュー」タブの料金設定で一括管理されます（この画面では設定しません）。
+              </p>
             </div>
           )}
 
@@ -766,14 +784,14 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 <option value="published">公開</option>
               </select>
             </div>
-            {(form.article_type === "request" || form.article_type === "exercise" || form.article_type === "template") && (
+            {(form.article_type === "request" || form.article_type === "exercise") && (
               <div>
                 <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
                   開封コスト（クレジット／任意）
                 </label>
                 <input type="number" min="0" value={form.unlock_cost}
                   onChange={e => setForm({ ...form, unlock_cost: e.target.value })}
-                  placeholder={form.article_type === "template" ? "未入力で50" : "未入力でリクエスト額から自動算出"} />
+                  placeholder="未入力でリクエスト額から自動算出" />
               </div>
             )}
           </div>

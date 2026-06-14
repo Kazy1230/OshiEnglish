@@ -11,6 +11,8 @@ from app.models.customer import Customer
 from app.models.character import Character
 from app.models.message import Message
 from app.models.correction_request import CorrectionRequest
+from app.models.article import Article
+from app.models.reward import RewardItem
 from app.core.email import send_email
 from app.core.config import settings
 from pydantic import BaseModel
@@ -27,6 +29,9 @@ def serialize_order(
     pending_article_requests: Optional[list] = None,
     character_creation_pending: bool = False,
     customer_character_id: Optional[int] = None,
+    reward_loop_pending: bool = False,
+    welcome_page_pending: bool = False,
+    greeting_dm_pending: bool = False,
 ) -> dict:
     return {
         "id": o.id,
@@ -35,6 +40,7 @@ def serialize_order(
         "character_name": o.character_name,
         "grammar_topic": o.grammar_topic,
         "status": o.status,
+        "order_type": o.order_type,
         "notes": o.notes,
         "customer_id": o.customer_id,                   # 紐づいた顧客アカウントID（null = 未紐づけ）
         "customer_username": customer_username,          # 紐づいた顧客のユーザー名（表示用）
@@ -46,6 +52,9 @@ def serialize_order(
         "pending_corrections": pending_corrections or [],          # 添削リクエスト（未完了）
         "pending_article_requests": pending_article_requests or [],  # 記事リクエスト（未完了）
         "character_creation_pending": character_creation_pending,    # キャラクター作成が未完了か
+        "reward_loop_pending": reward_loop_pending,        # そのキャラの報酬・成長ループが未設定か
+        "welcome_page_pending": welcome_page_pending,      # そのキャラ専用のウェルカムページが未作成か
+        "greeting_dm_pending": greeting_dm_pending,        # 顧客への挨拶DMが未送信か
     }
 
 class OrderUpdate(BaseModel):
@@ -111,17 +120,46 @@ def list_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db))
                 "request_status": m.request_status,
             })
 
-    return [
-        serialize_order(
+    # オリジナルキャラ申し込み時に同時起票する3つのタスク（報酬・成長ループ／ウェルカムページ／挨拶DM）の
+    # 完了判定に使う集合を一括取得する（N+1回避）
+    character_ids = {cid for cid in character_id_map.values() if cid}
+    reward_configured_char_ids: set = set()
+    welcome_configured_char_ids: set = set()
+    if character_ids:
+        reward_configured_char_ids = {
+            cid for (cid,) in db.query(RewardItem.character_id).filter(RewardItem.character_id.in_(character_ids)).distinct().all()
+        }
+        welcome_configured_char_ids = {
+            cid for (cid,) in db.query(Article.template_character_id).filter(
+                Article.is_welcome_template == True,  # noqa: E712
+                Article.template_character_id.in_(character_ids),
+            ).distinct().all()
+        }
+    greeted_customer_ids: set = set()
+    if customer_ids:
+        greeted_customer_ids = {
+            cid for (cid,) in db.query(Message.customer_id).filter(
+                Message.customer_id.in_(customer_ids),
+                Message.sender == "character",
+            ).distinct().all()
+        }
+
+    result = []
+    for o in orders:
+        character_id = character_id_map.get(o.customer_id)
+        is_character_order = o.order_type == "character_creation" and bool(o.customer_id)
+        result.append(serialize_order(
             o,
             username_map.get(o.customer_id),
             corrections_map.get(o.customer_id, []),
             requests_map.get(o.customer_id, []),
-            bool(o.customer_id) and character_id_map.get(o.customer_id) is None,
-            character_id_map.get(o.customer_id),
-        )
-        for o in orders
-    ]
+            bool(o.customer_id) and character_id is None,
+            character_id,
+            reward_loop_pending=is_character_order and (character_id is None or character_id not in reward_configured_char_ids),
+            welcome_page_pending=is_character_order and (character_id is None or character_id not in welcome_configured_char_ids),
+            greeting_dm_pending=is_character_order and o.customer_id not in greeted_customer_ids,
+        ))
+    return result
 
 @router.post("/", status_code=201)
 def create_order(data: OrderCreate, admin=Depends(get_current_admin), db: Session = Depends(get_db)):

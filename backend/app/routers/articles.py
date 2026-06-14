@@ -12,10 +12,10 @@ from app.models.customer import Customer
 from app.models.character import Character
 from app.core.intimacy import get_intimacy_settings
 from app.core.character_voice import customer_display_name
-from app.core.welcome_articles import claim_welcome_article_for_customer
+from app.core.welcome_articles import claim_welcome_article_for_customer, swap_welcome_article_if_character_ready
 from app.core.template_articles import distribute_template_article_if_due
 from app.core.rewards import check_and_unlock_rewards
-from app.core.credits import consume_credits, ARTICLE_REQUEST_FEE, TEMPLATE_UNLOCK_COST
+from app.core.credits import consume_credits, get_credit_settings, ARTICLE_REQUEST_FEE
 from pydantic import BaseModel, model_validator
 from typing import Optional
 
@@ -627,7 +627,7 @@ def admin_create_article(
         if req_msg and req_msg.credit_cost:
             article.unlock_cost = max(0, req_msg.credit_cost - ARTICLE_REQUEST_FEE)
     elif data.article_type == "template":
-        article.unlock_cost = TEMPLATE_UNLOCK_COST
+        article.unlock_cost = get_credit_settings(db).template_unlock_cost
 
     db.add(article)
     # 「依頼記事」の作成は記事依頼回数カウントの対象になるため、報酬解放チェックを行う
@@ -636,6 +636,18 @@ def admin_create_article(
         if customer:
             db.flush()
             check_and_unlock_rewards(db, customer)
+
+    # キャラクター専用のウェルカムテンプレートが新たに登録された場合、
+    # 既にキャラが割り当て済みで汎用ウェルカム記事を受け取っている顧客の本棚を専用版に差し替える
+    if article.article_type == "welcome" and article.is_welcome_template and article.template_character_id is not None:
+        db.flush()
+        customers = db.query(Customer).filter(
+            Customer.character_id == article.template_character_id,
+            Customer.free_content_claimed == True,  # noqa: E712
+        ).all()
+        for customer in customers:
+            swap_welcome_article_if_character_ready(db, customer)
+
     db.commit()
     db.refresh(article)
     return article
@@ -665,6 +677,16 @@ def admin_update_article(
         req_msg = db.query(Message).filter(Message.id == data.request_message_id).first()
         if req_msg and req_msg.credit_cost:
             article.unlock_cost = max(0, req_msg.credit_cost - ARTICLE_REQUEST_FEE)
+
+    # キャラクター専用のウェルカムテンプレートに更新された場合も、create時と同様に
+    # 既にキャラが割り当て済みで汎用ウェルカム記事を受け取っている顧客の本棚を専用版に差し替える
+    if article.article_type == "welcome" and article.is_welcome_template and article.template_character_id is not None:
+        customers = db.query(Customer).filter(
+            Customer.character_id == article.template_character_id,
+            Customer.free_content_claimed == True,  # noqa: E712
+        ).all()
+        for customer in customers:
+            swap_welcome_article_if_character_ready(db, customer)
 
     db.commit()
     db.refresh(article)

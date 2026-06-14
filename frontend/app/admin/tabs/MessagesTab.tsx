@@ -10,7 +10,10 @@ const ARTICLE_REQUEST_PROMPT_TEMPLATE =
   "そろそろ次の記事はどう？気になる文法や試験パート、添削してほしいものがあったら、" +
   "📋「記事をリクエスト」ボタンから教えてね！";
 
-export function MessagesTab() {
+export function MessagesTab({ initialCustomerId, onConsumeInitialCustomerId }: {
+  initialCustomerId?: number | null;
+  onConsumeInitialCustomerId?: () => void;
+} = {}) {
   const [threads, setThreads] = useState<any[]>([]);
   const [operators, setOperators] = useState<{ id: number; username: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +42,14 @@ export function MessagesTab() {
   }, []);
 
   useEffect(() => { loadThreads(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [assigneeFilter, sortBy]);
+
+  // 受注リストの「挨拶DMを送る」「本日のDMを送信」ボタンから遷移してきた場合、対象顧客のスレッドを選択する
+  useEffect(() => {
+    if (initialCustomerId == null) return;
+    setSelected(initialCustomerId);
+    onConsumeInitialCustomerId?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCustomerId]);
 
   return (
     <div>

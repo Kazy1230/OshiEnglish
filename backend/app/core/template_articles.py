@@ -3,7 +3,25 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from app.models.article import Article
 from app.models.customer import Customer
-from app.core.credits import TEMPLATE_UNLOCK_COST, TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS
+from app.models.order import Order
+from app.core.credits import get_credit_settings, TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS
+
+
+def _ensure_template_stock_order(db: Session) -> None:
+    """配布できる定期便プール記事が無い場合、受注リストに対応タスクを起票する
+    （既に未対応のタスクがあれば重複登録しない）。"""
+    existing = db.query(Order).filter(
+        Order.order_type == "template_stock",
+        Order.status != "delivered",
+    ).first()
+    if existing:
+        return
+    db.add(Order(
+        customer_name="🗂 定期便プールの記事が不足しています",
+        order_type="template_stock",
+        status="new",
+        notes="配布できる定期便プール記事がありません。記事管理タブで「定期便プール」記事を追加してください。",
+    ))
 
 
 def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
@@ -43,7 +61,10 @@ def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
     template = query.order_by(Article.id).first()
 
     if not template:
-        return  # 配布できる定期便記事が無ければスキップ（last_template_article_atは更新しない）
+        # 配布できる定期便記事が無ければスキップ（last_template_article_atは更新しない）。
+        # 運営側が気づけるよう、受注リストに対応タスクを起票する。
+        _ensure_template_stock_order(db)
+        return
 
     db.add(Article(
         customer_id=customer.id,
@@ -54,7 +75,7 @@ def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
         tips=template.tips,
         example_sentences=template.example_sentences,
         status="published",
-        unlock_cost=template.unlock_cost or TEMPLATE_UNLOCK_COST,
+        unlock_cost=template.unlock_cost or get_credit_settings(db).template_unlock_cost,
         template_source_id=template.id,
     ))
     customer.last_template_article_at = now

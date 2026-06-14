@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, payments, rewards, corrections
+from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections
 
 # テーブル自動作成（開発用。本番はAlembicマイグレーションを使用）
 Base.metadata.create_all(bind=engine)
@@ -563,6 +563,7 @@ app.include_router(grammar_masters.router)
 app.include_router(messages.router)
 app.include_router(service_items.router)
 app.include_router(intimacy_settings.router)
+app.include_router(credit_settings.router)
 app.include_router(payments.router)
 app.include_router(rewards.router)
 app.include_router(corrections.router)

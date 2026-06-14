@@ -347,11 +347,11 @@ export function CharactersTab() {
             {showGenPanel && (
               <>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  申込フォーム等で受け取ったラフな構想を入力して「プロンプトをコピー」を押すと、
                   説明文・本棚の一言（8個）・TONE_PROFILE・配色・フォント・画像ヒントを
-                  まとめて生成するためのプロンプトがクリップボードにコピーされます。
-                  これをLLM（claude-sonnet-4-6）に貼り付けて実行し、その出力を下の欄に貼り付けて
+                  まとめて生成するためのプロンプトは、受注リストの「🤖 キャラ設計プロンプト生成」ボタンから
+                  コピーできます。これをLLM（claude-sonnet-4-6）に貼り付けて実行し、その出力を下の欄に貼り付けて
                   「反映」を押すと各入力欄に反映されます（保存はされません。内容を確認・編集してから「保存」を押してください）。
+                  個別の項目だけ再生成したい場合は、各入力欄の下にある「↻ 再生成するプロンプトをコピー」ボタンを使ってください。
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -380,12 +380,6 @@ export function CharactersTab() {
                   <input value={genForm.reference_character} onChange={e => setGenForm({ ...genForm, reference_character: e.target.value })}
                     placeholder="例：〇〇のような口調・雰囲気" />
                 </div>
-                <button type="button"
-                  className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
-                  style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
-                  onClick={() => copyGenPrompt()}>
-                  📋 プロンプトをコピーする（6項目すべて）
-                </button>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
                   各入力欄の下にある「↻ 再生成するプロンプトをコピー」ボタンで、
                   個別の項目だけを再生成するプロンプトをコピーできます（他の項目の内容は保持されます）。

@@ -265,6 +265,10 @@ export const api = {
   adminGetIntimacySettings: () => apiFetch("/intimacy-settings/admin/"),
   adminUpdateIntimacySettings: (data: object) => apiFetch("/intimacy-settings/admin/", { method: "PATCH", body: JSON.stringify(data) }),
 
+  // 管理者：クレジット関連の料金設定（定期便の開封コストなど）
+  adminGetCreditSettings: () => apiFetch("/credit-settings/admin/"),
+  adminUpdateCreditSettings: (data: object) => apiFetch("/credit-settings/admin/", { method: "PATCH", body: JSON.stringify(data) }),
+
   // 公開：決済（Stripe）
   createCheckoutSession: (orderId: number) =>
     apiFetch("/payments/create-checkout-session", { method: "POST", body: JSON.stringify({ order_id: orderId }) }),

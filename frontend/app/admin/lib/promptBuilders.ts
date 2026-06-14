@@ -155,10 +155,10 @@ export function parseOrderCharSpec(order: any): {
 }
 
 /**
- * 受注データから「キャラクター設計支援プロンプト」を生成する。
- * buildCharacterDesignPrompt() と同じ6ブロック出力形式を使う。
+ * 受注データから「キャラクター設定一式生成プロンプト」を生成する。
+ * buildCharacterGenerationPrompt() と同じ6ブロック出力形式を使う。
  */
-export function buildCharacterPromptFromOrder(order: any): string {
+export function buildCharacterGenerationPromptFromOrder(order: any): string {
   const spec = parseOrderCharSpec(order);
   const cname = order.customer_name || "顧客";
 
@@ -176,11 +176,11 @@ export function buildCharacterPromptFromOrder(order: any): string {
   };
 
   if (spec.type === "leave_it") {
-    return buildCharacterDesignPrompt(
-      "",
-      `英語学習サービス「推しEnglish」で「${cname}」さんと1対1で学習する先生キャラクター。\n` +
-      `キャラクターの性別・性格・関係性は運営者に一任。顧客の英語学習を楽しくサポートする。`,
-    );
+    return buildCharacterGenerationPrompt({
+      character_description:
+        `英語学習サービス「推しEnglish」で「${cname}」さんと1対1で学習する先生キャラクター。\n` +
+        `キャラクターの性別・性格・関係性は運営者に一任。顧客の英語学習を楽しくサポートする。`,
+    });
   }
 
   if (spec.type === "builder") {
@@ -211,24 +211,23 @@ export function buildCharacterPromptFromOrder(order: any): string {
       `口調・呼び方・一言バリエーション・配色はすべて上記設定を強く反映させること。` +
       voiceBlock;
 
-    return buildCharacterDesignPrompt("", description);
+    return buildCharacterGenerationPrompt({ character_description: description });
   }
 
   if (spec.type === "custom" || spec.type === "unknown") {
     const { customDesc = "", refChar } = spec;
-    let description =
+    const description =
       `英語学習サービス「推しEnglish」で「${cname}」さんと1対1で学習する先生キャラクター。\n\n` +
       `【顧客が希望するキャラクター設定（この記述を最大限尊重して設計すること）】\n` +
       (customDesc || "（説明なし）");
 
-    if (refChar) {
-      description +=
-        `\n\n【参考キャラクター（固有名詞は使わず特徴だけを一般名詞で言い換えること）】\n${refChar}`;
-    }
-    return buildCharacterDesignPrompt("", description);
+    return buildCharacterGenerationPrompt({
+      character_description: description,
+      reference_character: refChar,
+    });
   }
 
-  return buildCharacterDesignPrompt("", `英語学習サービスの先生キャラクター（顧客: ${cname}）`);
+  return buildCharacterGenerationPrompt({ character_description: `英語学習サービスの先生キャラクター（顧客: ${cname}）` });
 }
 
 export function parseExerciseJsonInput(raw: string): any {
