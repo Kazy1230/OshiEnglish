@@ -56,6 +56,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   const [blogPromptCustomerId, setBlogPromptCustomerId] = useState("");
   // 外部LLMの下書きをもとに作成したかどうか（コピー用プロンプト → 外部LLM → 貼り戻しのフローを使った場合にチェック）
   const [isLlmDrafted, setIsLlmDrafted] = useState(false);
+  // リスニング演習問題：音声ファイルアップロード中フラグ
+  const [audioUploading, setAudioUploading] = useState(false);
   // 依頼記事：選択中の顧客の対応中リクエスト一覧（紐付け選択用）
   const [openRequests, setOpenRequests] = useState<any[]>([]);
   // 添削記事作成：CorrectionsTabから引き渡された添削提出内容（LLMプロンプトに直接反映する）
@@ -456,6 +458,35 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     ? "（先にキャラクターを選択）"
                     : (() => { const cu = customers.find(cs => String(cs.id) === String(form.customer_id)); return cu?.intimacy ? ` — 💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : ""; })()}
                 </button>
+                {form.exercise_format === "multiple_choice" && (
+                  <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+                    <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
+                      🎧 リスニング音声（リスニング問題の場合のみ）
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--muted)" }}>
+                      音声ファイル（mp3/wav/m4a/webm/ogg）をアップロードするとURLが発行されます。
+                      設問全体で共通の音声なら下のJSONの <code>audio_url</code> に、設問ごとに別音声がある場合は
+                      各 <code>questions[].audio_url</code> に貼り付けてください（URLは自動でコピーされます）。
+                    </p>
+                    <input type="file" accept="audio/*" disabled={audioUploading}
+                      onChange={async e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setAudioUploading(true);
+                        try {
+                          const res = await api.adminUploadExerciseAudio(file);
+                          await navigator.clipboard.writeText(res.audio_url).catch(() => {});
+                          toast(`音声をアップロードしました（URLをコピーしました）：${res.audio_url}`, "success");
+                        } catch (err: unknown) {
+                          toast(err instanceof Error ? err.message : "音声のアップロードに失敗しました", "error");
+                        } finally {
+                          setAudioUploading(false);
+                          e.target.value = "";
+                        }
+                      }} />
+                    {audioUploading && <p className="text-xs" style={{ color: "var(--muted)" }}>アップロード中…</p>}
+                  </div>
+                )}
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
                     演習問題データ（LLMが出力したJSONをそのまま貼り付けてください。コードブロック付きでもOK）
@@ -463,7 +494,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   <textarea rows={10} value={form.exercise_data_text}
                     onChange={e => setForm({ ...form, exercise_data_text: e.target.value })}
                     placeholder={form.exercise_format === "multiple_choice"
-                      ? '{\n  "instructions": "...",\n  "questions": [\n    { "prompt": "...", "choices": ["A","B","C","D"], "correct_index": 0,\n      "explanation_correct": "（正解した生徒向けの解説）...",\n      "explanation_incorrect": "（不正解だった生徒向けの解説）..." }\n  ],\n  "score_comments": {\n    "perfect": "（満点だった生徒へのひとこと）...",\n    "good": "（半分以上正解の生徒へのひとこと）...",\n    "encourage": "（半分未満の生徒へのひとこと）..."\n  }\n}'
+                      ? '{\n  "instructions": "...",\n  "audio_url": "/static/exercise_audio/xxxxx.mp3",\n  "listening_script": "（リスニング問題の場合：音声のスクリプト。解答後に確認用として表示）",\n  "questions": [\n    { "prompt": "...", "choices": ["A","B","C","D"], "correct_index": 0,\n      "explanation_correct": "（正解した生徒向けの解説）...",\n      "explanation_incorrect": "（不正解だった生徒向けの解説）..." }\n  ],\n  "score_comments": {\n    "perfect": "（満点だった生徒へのひとこと）...",\n    "good": "（半分以上正解の生徒へのひとこと）...",\n    "encourage": "（半分未満の生徒へのひとこと）..."\n  }\n}'
                       : '{\n  "instructions": "...",\n  "prompt": "...",\n  "evaluation_notes": "..."\n}'}
                     style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
                   <div className="flex items-center gap-3 mt-1.5">
@@ -485,6 +516,9 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                       ※選択式は questions（質問・選択肢・正解、および正解時用 explanation_correct／不正解時用 explanation_incorrect の解説）、
                       記述式は prompt（お題）と evaluation_notes（評価観点メモ）を含むJSONが必要です。
                       解説を正解・不正解で出し分けることで、採点結果に応じてキャラクターの反応が変わり、世界観を保てます。
+                      リスニング問題の場合は、上でアップロードした音声のURLを <code>audio_url</code>（設問ごとに音声が異なる場合は各
+                      <code>questions[].audio_url</code>）に設定し、音声のスクリプトを <code>listening_script</code> に入れると、
+                      生徒は音声を聞いて解答し、採点後にスクリプトで確認できます。
                     </p>
                   </div>
                 </div>

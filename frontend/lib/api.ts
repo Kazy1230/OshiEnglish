@@ -128,6 +128,11 @@ export const api = {
   adminCreateArticle: (data: object) => apiFetch("/articles/admin/", { method: "POST", body: JSON.stringify(data) }),
   adminUpdateArticle: (id: number, data: object) => apiFetch(`/articles/admin/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteArticle: (id: number) => apiFetch(`/articles/admin/${id}`, { method: "DELETE" }),
+  adminUploadExerciseAudio: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    return apiUpload("/articles/admin/exercise-audio", fd);
+  },
 
   // 管理者：顧客
   adminGetCustomers: () => apiFetch("/customers/"),

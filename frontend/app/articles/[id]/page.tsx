@@ -726,6 +726,14 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
         </div>
       )}
 
+      {/* リスニング音声（設問共通。存在する場合のみ表示） */}
+      {data.audio_url && (
+        <div className="rounded-xl px-4 py-3" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
+          <p className="text-xs font-bold mb-2" style={{ color: t.accent }}>🎧 音声を聞いて、設問に答えてください</p>
+          <audio controls src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost/api")}${data.audio_url}`} className="w-full" />
+        </div>
+      )}
+
       {/* リスニングスクリプト（存在する場合のみ／ネタバレにならないよう折りたたみ表示） */}
       {data.listening_script && (
         <details className="rounded-xl overflow-hidden" style={{ border: `1px solid ${t.border}` }}>
@@ -789,6 +797,9 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
                 )}
               </div>
               <div className="px-4 py-3 flex flex-col gap-2.5" style={{ background: t.card }}>
+                {q.audio_url && (
+                  <audio controls src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost/api")}${q.audio_url}`} className="w-full" />
+                )}
                 <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap" style={{ color: t.text }}>{q.prompt}</p>
                 <div className="flex flex-col gap-1.5">
                   {(q.choices ?? []).map((choice: string, ci: number) => {

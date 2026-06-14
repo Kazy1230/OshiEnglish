@@ -1,9 +1,12 @@
+import os
+import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_admin
+from app.core.uploads import validate_media_ext, MAX_MEDIA_SIZE
 from app.models.article import Article
 from app.models.message import Message
 from app.models.correction_request import CorrectionRequest
@@ -20,6 +23,10 @@ from pydantic import BaseModel, model_validator
 from typing import Optional
 
 router = APIRouter(prefix="/articles", tags=["記事"])
+
+# リスニング演習問題用の音声ファイル保存先（main.py で /static にマウントされているディレクトリ配下）
+_EXERCISE_AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "exercise_audio")
+os.makedirs(_EXERCISE_AUDIO_DIR, exist_ok=True)
 
 class ArticleOut(BaseModel):
     id: int
@@ -606,6 +613,33 @@ def claim_welcome_article(
     db.refresh(article)
 
     return {"id": article.id, "title": article.title, "article_type": article.article_type}
+
+
+@router.post("/admin/exercise-audio", tags=["管理者"])
+async def admin_upload_exercise_audio(
+    file: UploadFile = File(...),
+    admin=Depends(get_current_admin),
+):
+    """リスニング演習問題用の音声ファイルをアップロードする。
+
+    返ってきた audio_url を exercise_data の audio_url（設問共通の音声）や
+    questions[].audio_url（設問ごとの音声）に貼り付けて使う。
+    """
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    media_type = validate_media_ext(ext, "audio")
+    if media_type != "audio":
+        raise HTTPException(status_code=400, detail="音声ファイル（mp3/wav/m4a/webm/ogg）をアップロードしてください")
+
+    raw = await file.read()
+    if len(raw) > MAX_MEDIA_SIZE:
+        raise HTTPException(status_code=400, detail="ファイルサイズが大きすぎます（50MBまで）")
+
+    filename = f"{uuid.uuid4().hex}{ext}"
+    path = os.path.join(_EXERCISE_AUDIO_DIR, filename)
+    with open(path, "wb") as f:
+        f.write(raw)
+
+    return {"audio_url": f"/static/exercise_audio/{filename}"}
 
 
 @router.post("/admin/", tags=["管理者"], status_code=status.HTTP_201_CREATED)

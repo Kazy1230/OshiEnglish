@@ -541,6 +541,7 @@ _static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_static_dir, "character_images"), exist_ok=True)
 os.makedirs(os.path.join(_static_dir, "reward_images"), exist_ok=True)
 os.makedirs(os.path.join(_static_dir, "correction_media"), exist_ok=True)
+os.makedirs(os.path.join(_static_dir, "exercise_audio"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 app.include_router(auth.router)
