@@ -18,7 +18,6 @@ export type CharacterTheme = {
   font_style?: string; // rounded / serif / handwriting / monospace
   reward_progress_template?: string; // チャット画面のご褒美進捗メッセージ（{character}/{published}/{remaining}/{target} を置換）
   chat_footer_note?: string; // チャット画面の入力欄下の注意書き
-  chat_error_message?: string; // チャット送信失敗時にキャラの口調で表示するエラー文言
   instagram_account?: string; // 公式Instagramアカウント名（@なし）
   is_preset?: boolean; // 公式キャラクターかどうか
 };
@@ -30,10 +29,6 @@ export const DEFAULT_REWARD_PROGRESS_TEMPLATE =
 /** チャット画面footerの注意書きデフォルト */
 export const DEFAULT_CHAT_FOOTER_NOTE =
   "※ お返事には少々お時間がかかることがあります。気長に待っていてね。";
-
-/** チャット送信失敗時のエラー文言デフォルト（キャラ未設定時のフォールバック） */
-export const DEFAULT_CHAT_ERROR_MESSAGE =
-  "送信に失敗しました。もう一度お試しください。";
 
 /** 親密度バーの説明文（ツールチップ表示用） */
 export const INTIMACY_INFO_TEXT =

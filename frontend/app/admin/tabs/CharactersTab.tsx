@@ -2,14 +2,11 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE, DEFAULT_CHAT_ERROR_MESSAGE } from "@/lib/theme";
+import { DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE } from "@/lib/theme";
 import {
   buildLLMPrompt,
-  buildImagePrompt,
-  buildCharacterDesignPrompt,
   buildCharacterGenerationPrompt,
   parseCharacterGenerationOutput,
-  IMAGE_SIZE_PX,
   parseExerciseJsonInput,
 } from "../lib/promptBuilders";
 
@@ -21,15 +18,7 @@ const FONT_STYLE_OPTIONS = [
   { value: "monospace",   label: "monospace　— クール・ロボット" },
 ];
 
-const COLOR_PRESETS = [
-  { label: "クール赤黒（サディスト系）",   value: '{"primary":"#4a0e0e","accent":"#c0392b","bg":"#fdf6f6","text":"#2c1a1a","card":"#ffffff","border":"#f0d0d0","example_bg":"#fff0f0","tips_bg":"#fce8e8"}' },
-  { label: "スカイブルー（やさしい系）",   value: '{"primary":"#0369a1","accent":"#f59e0b","bg":"#f0f9ff","text":"#0c1a2e","card":"#ffffff","border":"#bae6fd","example_bg":"#fef9c3","tips_bg":"#ecfdf5"}' },
-  { label: "ダークパープル（クール系）",   value: '{"primary":"#2e1065","accent":"#7c3aed","bg":"#faf5ff","text":"#1e1b4b","card":"#ffffff","border":"#ddd6fe","example_bg":"#ede9fe","tips_bg":"#f5f3ff"}' },
-  { label: "フォレストグリーン（知的系）", value: '{"primary":"#14532d","accent":"#16a34a","bg":"#f0fdf4","text":"#1a2e1a","card":"#ffffff","border":"#bbf7d0","example_bg":"#dcfce7","tips_bg":"#f0fdf4"}' },
-  { label: "ウォームオレンジ（元気系）",   value: '{"primary":"#7c2d12","accent":"#ea580c","bg":"#fff7ed","text":"#2c1a0e","card":"#ffffff","border":"#fed7aa","example_bg":"#ffedd5","tips_bg":"#fef3c7"}' },
-];
-
-const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", chat_error_message: "", instagram_account: "", image_hint: "", is_preset: false, linked_customer_id: "" };
+const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", instagram_account: "", is_preset: false, linked_customer_id: "" };
 
 const GENERATION_BLOCKS: { key: string; label: string }[] = [
   { key: "DESCRIPTION", label: "説明文" },
@@ -37,11 +26,10 @@ const GENERATION_BLOCKS: { key: string; label: string }[] = [
   { key: "TONE_PROFILE", label: "TONE_PROFILE" },
   { key: "COLOR_SCHEME", label: "配色" },
   { key: "FONT_STYLE", label: "フォント" },
-  { key: "IMAGE_HINT", label: "画像ヒント" },
+  { key: "REWARD_PROGRESS_TEMPLATE", label: "ご褒美の進捗メッセージ" },
+  { key: "CHAT_FOOTER_NOTE", label: "入力欄下の注意書き" },
 ];
 const FONT_STYLE_VALUES = new Set(["default", "rounded", "serif", "handwriting", "monospace"]);
-
-const emptyGenForm = { character_name: "", character_description: "", user_requested_personality: "", reference_character: "" };
 
 export function CharactersTab() {
   const [characters, setCharacters] = useState<any[]>([]);
@@ -55,9 +43,8 @@ export function CharactersTab() {
   const [toneProfileError, setToneProfileError] = useState(false);
   const [colorSchemeError, setColorSchemeError] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
-  // 新規キャラクター設定のLLM自動生成用（プロンプトをコピーして手動でLLMに貼り付ける方式）
+  // 新規キャラクター設定のLLM自動生成用（受注リストでコピーしたプロンプトをLLMに貼り付け、出力をここに貼り付ける方式）
   const [showGenPanel, setShowGenPanel] = useState(false);
-  const [genForm, setGenForm] = useState(emptyGenForm);
   const [genPasteText, setGenPasteText] = useState("");
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
   const [promptCustomerIdByChar, setPromptCustomerIdByChar] = useState<Record<number, string>>({});
@@ -115,38 +102,40 @@ export function CharactersTab() {
     if (result.font_style && FONT_STYLE_VALUES.has(result.font_style)) {
       setForm(f => ({ ...f, font_style: result.font_style }));
     }
-    if (result.image_hint) setForm(f => ({ ...f, image_hint: result.image_hint }));
+    if (result.reward_progress_template) {
+      setForm(f => ({ ...f, reward_progress_template: result.reward_progress_template }));
+    }
+    if (result.chat_footer_note) {
+      setForm(f => ({ ...f, chat_footer_note: result.chat_footer_note }));
+    }
   }
 
-  /** blocksを省略すると6ブロック全てのプロンプトをコピーする。指定するとそのブロックのみ再生成するプロンプトになる（他の欄の内容は一貫性参考としてプロンプトに含める）。 */
-  function copyGenPrompt(blocks?: string[]) {
-    let existing: any = undefined;
-    if (blocks && blocks.length) {
-      existing = {};
-      if (!blocks.includes("DESCRIPTION") && form.description) existing.description = form.description;
-      if (!blocks.includes("GREETINGS") && form.greetings) existing.greetings = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
-      if (!blocks.includes("TONE_PROFILE") && form.tone_profile) {
-        try { existing.tone_profile = parseExerciseJsonInput(form.tone_profile); } catch { /* ignore */ }
-      }
-      if (!blocks.includes("COLOR_SCHEME") && form.color_scheme) {
-        try { existing.color_scheme = parseExerciseJsonInput(form.color_scheme); } catch { /* ignore */ }
-      }
-      if (!blocks.includes("FONT_STYLE") && form.font_style) existing.font_style = form.font_style;
-      if (!blocks.includes("IMAGE_HINT") && form.image_hint) existing.image_hint = form.image_hint;
+  /** 指定したブロックのみ再生成するプロンプトをコピーする（他の欄の内容は一貫性参考としてプロンプトに含める）。 */
+  function copyGenPrompt(blocks: string[]) {
+    const existing: any = {};
+    if (!blocks.includes("DESCRIPTION") && form.description) existing.description = form.description;
+    if (!blocks.includes("GREETINGS") && form.greetings) existing.greetings = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
+    if (!blocks.includes("TONE_PROFILE") && form.tone_profile) {
+      try { existing.tone_profile = parseExerciseJsonInput(form.tone_profile); } catch { /* ignore */ }
     }
+    if (!blocks.includes("COLOR_SCHEME") && form.color_scheme) {
+      try { existing.color_scheme = parseExerciseJsonInput(form.color_scheme); } catch { /* ignore */ }
+    }
+    if (!blocks.includes("FONT_STYLE") && form.font_style) existing.font_style = form.font_style;
+    if (!blocks.includes("REWARD_PROGRESS_TEMPLATE") && form.reward_progress_template) existing.reward_progress_template = form.reward_progress_template;
+    if (!blocks.includes("CHAT_FOOTER_NOTE") && form.chat_footer_note) existing.chat_footer_note = form.chat_footer_note;
+
     const prompt = buildCharacterGenerationPrompt({
-      character_name: genForm.character_name || form.name,
-      character_description: genForm.character_description || form.description,
-      user_requested_personality: genForm.user_requested_personality,
-      reference_character: genForm.reference_character,
+      character_name: form.name,
+      character_description: form.description,
       blocks,
       existing,
     });
     navigator.clipboard.writeText(prompt);
-    toast(blocks ? `${blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・")}用のプロンプトをコピーしました。LLMに貼り付けて実行し、出力を下の欄に貼り付けて「反映」を押してください` : "キャラクター設定生成用のプロンプトをコピーしました。LLMに貼り付けて実行し、出力を下の欄に貼り付けて「反映」を押してください", "success");
+    toast(`${blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・")}用のプロンプトをコピーしました。LLMに貼り付けて実行し、出力を下の欄に貼り付けて「反映」を押してください`, "success");
   }
 
-  /** 「反映」ボタン：貼り付けられたLLMの出力（6ブロック形式）をパースして各入力欄に反映する */
+  /** 「反映」ボタン：貼り付けられたLLMの出力（7ブロック形式）をパースして各入力欄に反映する */
   function applyGenPasteText() {
     if (!genPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
     const result = parseCharacterGenerationOutput(genPasteText);
@@ -177,9 +166,7 @@ export function CharactersTab() {
       font_style: c.font_style ?? "default",
       reward_progress_template: c.reward_progress_template ?? "",
       chat_footer_note: c.chat_footer_note ?? "",
-      chat_error_message: c.chat_error_message ?? "",
       instagram_account: c.instagram_account ?? "",
-      image_hint: c.image_hint ?? "",
       is_preset: !!c.is_preset,
       linked_customer_id: "",
     });
@@ -187,7 +174,6 @@ export function CharactersTab() {
     setToneProfileError(false);
     setColorSchemeError(false);
     setShowGenPanel(false);
-    setGenForm(emptyGenForm);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -200,7 +186,6 @@ export function CharactersTab() {
     setToneProfileError(false);
     setColorSchemeError(false);
     setShowGenPanel(false);
-    setGenForm(emptyGenForm);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -220,9 +205,7 @@ export function CharactersTab() {
       tone_profile, color_scheme, font_style: form.font_style,
       reward_progress_template: form.reward_progress_template.trim() || null,
       chat_footer_note: form.chat_footer_note.trim() || null,
-      chat_error_message: form.chat_error_message.trim() || null,
       instagram_account: form.instagram_account.trim() || null,
-      image_hint: form.image_hint.trim() || null,
       is_preset: form.is_preset,
     };
     try {
@@ -249,34 +232,6 @@ export function CharactersTab() {
       await api.adminDeleteCharacter(id);
       await reload();
       toast(`「${name}」を削除しました`, "info");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
-    }
-  }
-
-  const [uploadingId, setUploadingId] = useState<number | null>(null);
-
-  async function handleImageUpload(charId: number, file: File | null) {
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast("画像サイズは5MB以下にしてください", "error"); return; }
-    setUploadingId(charId);
-    try {
-      await api.adminUploadCharacterImage(charId, file);
-      await reload();
-      toast("画像をアップロードしました", "success");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "アップロードに失敗しました", "error");
-    } finally {
-      setUploadingId(null);
-    }
-  }
-
-  async function handleImageDelete(charId: number, name: string) {
-    if (!confirm(`「${name}」の画像を削除しますか？`)) return;
-    try {
-      await api.adminDeleteCharacterImage(charId);
-      await reload();
-      toast("画像を削除しました", "info");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
     }
@@ -312,30 +267,12 @@ export function CharactersTab() {
             <h3 className="font-bold" style={{ color: "var(--primary)" }}>
               {editingChar ? `✏️ 編集：${editingChar.name}` : "新規キャラクター追加"}
             </h3>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 rounded-lg border transition-all hover:shadow"
-              style={{ borderColor: "var(--border)", color: "var(--accent)" }}
-              onClick={() => {
-                if (!form.name && !form.description) {
-                  toast("先に「キャラクター名」か「説明」をざっくりでいいので入力すると、より具体的な提案プロンプトになります", "info");
-                }
-                navigator.clipboard.writeText(buildCharacterDesignPrompt(form.name, form.description));
-                toast("キャラクター設計支援プロンプトをコピーしました（tone_profile・一言バリエーション・配色まで一括提案）", "success");
-              }}>
-              🧩 設計支援プロンプトをコピー
-            </button>
           </div>
-          <p className="text-xs -mt-2" style={{ color: "var(--muted)" }}>
-            「キャラクター名」と「説明」をざっくり入力した状態でこのボタンを押すと、
-            tone_profile・本棚の一言（8パターン）・配色・フォント・画像のヒントまで
-            LLMにまとめて提案してもらえるプロンプトをコピーできます。著作権配慮の指示も含まれています。
-          </p>
 
           <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
-                🤖 LLMで設定を生成（claude-sonnet-4-6・自動保存はされません）
+                🤖 LLMの出力を反映
               </p>
               <button type="button"
                 className="text-xs px-2 py-1 rounded-lg border transition-all hover:shadow"
@@ -347,42 +284,10 @@ export function CharactersTab() {
             {showGenPanel && (
               <>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  説明文・本棚の一言（8個）・TONE_PROFILE・配色・フォント・画像ヒントを
-                  まとめて生成するためのプロンプトは、受注リストの「🤖 キャラ設計プロンプト生成」ボタンから
-                  コピーできます。これをLLM（claude-sonnet-4-6）に貼り付けて実行し、その出力を下の欄に貼り付けて
-                  「反映」を押すと各入力欄に反映されます（保存はされません。内容を確認・編集してから「保存」を押してください）。
+                  受注リストの「🤖 キャラ設計プロンプト生成」ボタンでコピーしたプロンプトをLLM（claude-sonnet-4-6）に
+                  貼り付けて実行し、その出力を下の欄に貼り付けて「反映」を押すと各入力欄に反映されます
+                  （保存はされません。内容を確認・編集してから「保存」を押してください）。
                   個別の項目だけ再生成したい場合は、各入力欄の下にある「↻ 再生成するプロンプトをコピー」ボタンを使ってください。
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>名前（仮）</label>
-                    <input value={genForm.character_name} onChange={e => setGenForm({ ...genForm, character_name: e.target.value })}
-                      placeholder={form.name || "例：鬼島先輩"} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>イメージ・説明</label>
-                    <input value={genForm.character_description} onChange={e => setGenForm({ ...genForm, character_description: e.target.value })}
-                      placeholder={form.description || "例：ため息をつきながら教えてくれる、少しサディスティックなお姉さん先輩。"} />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-                    顧客が希望するキャラクター設定（自由記述）
-                  </label>
-                  <textarea rows={3} value={genForm.user_requested_personality}
-                    onChange={e => setGenForm({ ...genForm, user_requested_personality: e.target.value })}
-                    placeholder="例：性別は女性、関係性は先輩、性格は厳しいけど面倒見がいい" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-                    参考キャラクター（任意・固有名詞は最終出力からは除去されます）
-                  </label>
-                  <input value={genForm.reference_character} onChange={e => setGenForm({ ...genForm, reference_character: e.target.value })}
-                    placeholder="例：〇〇のような口調・雰囲気" />
-                </div>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  各入力欄の下にある「↻ 再生成するプロンプトをコピー」ボタンで、
-                  個別の項目だけを再生成するプロンプトをコピーできます（他の項目の内容は保持されます）。
                 </p>
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
@@ -450,9 +355,9 @@ export function CharactersTab() {
           )}
           {!form.is_preset && !editingChar && (
             <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>紐づけアカウント（オリジナルキャラを依頼した顧客）</label>
-              <select value={form.linked_customer_id} onChange={e => setForm({ ...form, linked_customer_id: e.target.value })}>
-                <option value="">指定なし（後で紐づける）</option>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>紐づけアカウント（オリジナルキャラを依頼した顧客） *</label>
+              <select value={form.linked_customer_id} onChange={e => setForm({ ...form, linked_customer_id: e.target.value })} required>
+                <option value="">選択してください</option>
                 {customers.map(cu => (
                   <option key={cu.id} value={cu.id}>
                     {cu.username}{cu.character_id ? "（既にキャラ割当済み）" : ""}
@@ -460,7 +365,7 @@ export function CharactersTab() {
                 ))}
               </select>
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-                選択すると、作成したキャラクターをこの顧客に割り当て、完成案内メールを送信します。
+                作成したキャラクターをこの顧客に割り当て、完成案内メールを送信します。
               </p>
             </div>
           )}
@@ -483,9 +388,12 @@ export function CharactersTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-              チャット画面：ご褒美の進捗メッセージ（キャラごとに変更可・空欄なら共通デフォルト）
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                チャット画面：ご褒美の進捗メッセージ（キャラごとに変更可・空欄なら共通デフォルト）
+              </label>
+              <RegenButton block="REWARD_PROGRESS_TEMPLATE" label="ご褒美の進捗メッセージ" />
+            </div>
             <input value={form.reward_progress_template}
               onChange={e => setForm({ ...form, reward_progress_template: e.target.value })}
               placeholder={DEFAULT_REWARD_PROGRESS_TEMPLATE} />
@@ -497,9 +405,12 @@ export function CharactersTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-              チャット画面：入力欄の下に表示する注意書き（キャラごとに変更可・空欄なら共通デフォルト）
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                チャット画面：入力欄の下に表示する注意書き（キャラごとに変更可・空欄なら共通デフォルト）
+              </label>
+              <RegenButton block="CHAT_FOOTER_NOTE" label="入力欄下の注意書き" />
+            </div>
             <input value={form.chat_footer_note}
               onChange={e => setForm({ ...form, chat_footer_note: e.target.value })}
               placeholder={DEFAULT_CHAT_FOOTER_NOTE} />
@@ -510,53 +421,10 @@ export function CharactersTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-              チャット画面：メッセージ送信に失敗した時に表示するエラー文言（キャラごとに変更可・空欄なら共通デフォルト）
-            </label>
-            <input value={form.chat_error_message}
-              onChange={e => setForm({ ...form, chat_error_message: e.target.value })}
-              placeholder={DEFAULT_CHAT_ERROR_MESSAGE} />
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              キャラの口調に合わせると世界観が崩れません。
-              例：「…送信に失敗しました。もう一度試してください」
-            </p>
-          </div>
-
-          <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
                 tone_profile（JSON）— LLMに渡すプロンプトの核心
               </label>
-              <button type="button"
-                className="text-xs px-2 py-0.5 rounded-lg border transition-all hover:shadow flex-shrink-0"
-                style={{ borderColor: "var(--border)", color: "var(--accent)" }}
-                onClick={() => {
-                  let current: any = {};
-                  try { current = form.tone_profile ? parseExerciseJsonInput(form.tone_profile) : {}; }
-                  catch { current = {}; }
-                  const merged = {
-                    keywords: current.keywords ?? [],
-                    personality: current.personality ?? "",
-                    speech_style: current.speech_style ?? "",
-                    ng_expressions: current.ng_expressions ?? [],
-                    reaction_examples: {
-                      mistake: current.reaction_examples?.mistake ?? [],
-                      question: current.reaction_examples?.question ?? [],
-                      correct_answer: current.reaction_examples?.correct_answer ?? [],
-                      encouragement: current.reaction_examples?.encouragement ?? [],
-                    },
-                    conversation_rules: current.conversation_rules ?? [],
-                    intimacy_variations: {
-                      low: current.intimacy_variations?.low ?? "",
-                      high: current.intimacy_variations?.high ?? "",
-                    },
-                    article_style: current.article_style ?? "",
-                    ...current,
-                  };
-                  handleToneProfileChange(JSON.stringify(merged, null, 2));
-                }}>
-                📋 新形式のテンプレートを挿入（既存の値は保持）
-              </button>
               <RegenButton block="TONE_PROFILE" label="TONE_PROFILE" />
             </div>
             <textarea rows={16} value={form.tone_profile} onChange={e => handleToneProfileChange(e.target.value)}
@@ -566,10 +434,9 @@ export function CharactersTab() {
               <p className="text-xs mt-1" style={{ color: "#c0392b" }}>⚠️ JSON形式として読み取れません。カンマの付け忘れや引用符の閉じ忘れがないか確認してください</p>
             )}
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              「新形式のテンプレートを挿入」を押すと、既存の値を保持したまま
               ng_expressions（NG表現）・reaction_examples（状況別の返答例）・conversation_rules（会話の基本ルール）・
-              intimacy_variations（親密度low/highでの口調変化）・article_style（記事執筆時のトーン指示）を
-              JSON構造として追加できます。生成AIに作ってもらったJSONをそのまま貼り付けることもできます。
+              intimacy_variations（親密度low/highでの口調変化）・article_style（記事執筆時のトーン指示）などを
+              JSON構造で記述します。生成AIに作ってもらったJSONをそのまま貼り付けることもできます。
             </p>
           </div>
 
@@ -587,16 +454,6 @@ export function CharactersTab() {
               )}
               <RegenButton block="COLOR_SCHEME" label="配色" />
             </div>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {COLOR_PRESETS.map(p => (
-                <button key={p.label} type="button"
-                  className="text-xs px-2 py-1 rounded-full border transition-all hover:shadow"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                  onClick={() => handleColorSchemeChange(p.value)}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
             <textarea rows={3} value={form.color_scheme} onChange={e => handleColorSchemeChange(e.target.value)}
               placeholder={'{"primary":"#4a0e0e","accent":"#c0392b","bg":"#fdf6f6",...}'} style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
             {colorSchemeError && (
@@ -605,17 +462,6 @@ export function CharactersTab() {
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
               キー: primary / accent / bg / text / card / border / example_bg / tips_bg
             </p>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-                画像生成ヒント（Stable Diffusion等でのキャラビジュアル生成時の参考メモ・UIには表示されません）
-              </label>
-              <RegenButton block="IMAGE_HINT" label="画像ヒント" />
-            </div>
-            <textarea rows={2} value={form.image_hint} onChange={e => setForm({ ...form, image_hint: e.target.value })}
-              placeholder="例：明るい水色の髪を肩までのばした、丸眼鏡をかけた知的な印象の女性。白衣を羽織っている。" />
           </div>
 
           <div className="flex gap-3">
@@ -748,53 +594,6 @@ export function CharactersTab() {
                       </p>
                     </div>
                   )}
-
-                  {/* 画像管理 */}
-                  <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-medium" style={{ color: "var(--accent)" }}>プロフィール画像（記事ページに表示）</p>
-                      <button
-                        type="button"
-                        className="text-xs px-2 py-0.5 rounded-lg border transition-all hover:shadow"
-                        style={{ borderColor: "var(--border)", color: "var(--accent)" }}
-                        onClick={() => {
-                          navigator.clipboard.writeText(buildImagePrompt(c));
-                          toast("画像生成プロンプトをコピーしました（著作権配慮・サイズ指定込み）", "success");
-                        }}>
-                        🎨 画像生成プロンプトをコピー
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {c.image_url ? (
-                        <img src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost/api")}${c.image_url}`}
-                          alt={`${c.name}のプロフィール画像`}
-                          className="w-16 h-16 rounded-xl object-cover shadow-sm flex-shrink-0"
-                          style={{ border: "1px solid var(--border)" }} />
-                      ) : (
-                        <div className="w-16 h-16 rounded-xl flex items-center justify-center text-xs flex-shrink-0"
-                          style={{ background: "var(--bg)", color: "var(--muted)", border: "1px dashed var(--border)" }}>
-                          未設定
-                        </div>
-                      )}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs px-3 py-1.5 rounded-lg border cursor-pointer text-center transition-all hover:shadow"
-                          style={{ borderColor: "var(--border)", color: "var(--text)" }}>
-                          {uploadingId === c.id ? "アップロード中…" : "📤 画像をアップロード"}
-                          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-                            disabled={uploadingId === c.id}
-                            onChange={e => { handleImageUpload(c.id, e.target.files?.[0] ?? null); e.target.value = ""; }} />
-                        </label>
-                        {c.image_url && (
-                          <button type="button" className="text-xs px-3 py-1 rounded-lg" style={{ color: "#c0392b" }}
-                            onClick={() => handleImageDelete(c.id, c.name)}>画像を削除</button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
-                      PNG/JPG/WEBP・5MBまで。「🎨 画像生成プロンプトをコピー」で著作権に配慮した画像生成用プロンプト
-                      （{IMAGE_SIZE_PX}x{IMAGE_SIZE_PX}px指定）を取得し、AI画像生成ツールで作成した画像をアップロードしてください。
-                    </p>
-                  </div>
                 </div>
               )}
             </div>

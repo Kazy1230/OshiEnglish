@@ -29,9 +29,7 @@ class CharacterCreate(BaseModel):
     font_style: Optional[str] = None
     reward_progress_template: Optional[str] = None
     chat_footer_note: Optional[str] = None
-    chat_error_message: Optional[str] = None
     instagram_account: Optional[str] = None
-    image_hint: Optional[str] = None
     is_preset: bool = False
 
 @router.get("/")
@@ -59,7 +57,6 @@ def get_character_theme(
         "font_style": char.font_style,
         "reward_progress_template": char.reward_progress_template,
         "chat_footer_note": char.chat_footer_note,
-        "chat_error_message": char.chat_error_message,
         "instagram_account": char.instagram_account,
         "is_preset": char.is_preset,
     }
@@ -83,9 +80,7 @@ class CharacterUpdate(BaseModel):
     font_style: Optional[str] = None
     reward_progress_template: Optional[str] = None
     chat_footer_note: Optional[str] = None
-    chat_error_message: Optional[str] = None
     instagram_account: Optional[str] = None
-    image_hint: Optional[str] = None
     is_preset: Optional[bool] = None
 
 @router.patch("/{character_id}")

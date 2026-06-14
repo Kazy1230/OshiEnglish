@@ -6,6 +6,7 @@ import { ArticlePreviewModal } from "@/components/ArticlePreviewModal";
 import {
   parseExerciseJsonInput,
   summarizeExerciseData,
+  parseArticleGenerationOutput,
   buildBlogLLMPrompt,
   buildExercisePrompt,
   buildWritingFeedbackPrompt,
@@ -13,8 +14,6 @@ import {
   buildPersonalizedLLMPrompt,
   buildWelcomePagePrompt,
   buildTemplateArticlePrompt,
-  buildArticleContentPrompt,
-  buildArticleTonePrompt,
   getCustomerDisplayName,
 } from "../lib/promptBuilders";
 
@@ -61,8 +60,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   const [openRequests, setOpenRequests] = useState<any[]>([]);
   // 添削記事作成：CorrectionsTabから引き渡された添削提出内容（LLMプロンプトに直接反映する）
   const [correctionSubmission, setCorrectionSubmission] = useState<any | null>(null);
-  // 依頼記事：2段階生成（段階1=内容、段階2=口調変換）用に、段階1の出力を貼り戻す欄
-  const [stage1Content, setStage1Content] = useState("");
+  // LLMの出力を貼り付けて「本文／例文／Tips」欄に反映するための一時テキスト
+  const [genPasteText, setGenPasteText] = useState("");
 
   const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters()])
     .then(([a, c, ch, g]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); });
@@ -153,6 +152,30 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     setForm(emptyArticleForm);
     setIsLlmDrafted(false);
     setCorrectionSubmission(null);
+    setGenPasteText("");
+  }
+
+  // 上のプロンプトコピー → 外部LLM → 貼り戻しのフローで得たLLMの出力を、
+  // 「本文」「例文」「Tips」欄に反映する
+  function applyGenPasteText() {
+    if (!genPasteText.trim()) {
+      toast("LLMの出力を貼り付けてください", "error");
+      return;
+    }
+    const result = parseArticleGenerationOutput(genPasteText);
+    if (!result.content && !result.example_sentences && !result.tips) {
+      toast("LLMの出力を解析できませんでした。出力全体をそのまま貼り付けてください", "error");
+      return;
+    }
+    setForm(f => ({
+      ...f,
+      content: result.content ?? f.content,
+      example_sentences: result.example_sentences ?? f.example_sentences,
+      tips: result.tips ?? f.tips,
+    }));
+    setIsLlmDrafted(true);
+    setGenPasteText("");
+    toast("LLMの出力を反映しました", "success");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -715,58 +738,6 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 </p>
               </div>
             )}
-            {form.article_type === "request" && (
-              <div className="sm:col-span-2 rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
-                <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
-                  🧩 2段階生成（内容と口調を分けて作成・口調だけ再生成も可能）
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button"
-                    className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80"
-                    style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
-                    onClick={() => {
-                      const topic = window.prompt("今回依頼された文法トピックを入力してください（空欄でもOK）", "") || undefined;
-                      navigator.clipboard.writeText(buildArticleContentPrompt(topic));
-                      toast("段階1（内容生成・キャラ抜き）用プロンプトをコピーしました", "success");
-                    }}>
-                    📋 段階1：内容生成プロンプトをコピー
-                  </button>
-                  <span className="text-xs" style={{ color: "var(--muted)" }}>
-                    → LLMの出力を下の欄に貼り付けてください
-                  </span>
-                </div>
-                <textarea
-                  value={stage1Content}
-                  onChange={e => setStage1Content(e.target.value)}
-                  rows={4}
-                  placeholder="段階1のLLM出力（===CONTENT===/===EXAMPLES===/===TIPS===）をここに貼り付け"
-                  className="text-xs font-mono"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button"
-                    className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80"
-                    style={{ borderColor: "#8e44ad", color: "#8e44ad", background: "var(--card-bg, #fff)" }}
-                    disabled={!form.character_id || !stage1Content.trim()}
-                    onClick={() => {
-                      const c = characters.find(ch => String(ch.id) === String(form.character_id));
-                      const cu = form.customer_id ? customers.find(cs => String(cs.id) === String(form.customer_id)) : undefined;
-                      if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
-                      navigator.clipboard.writeText(buildArticleTonePrompt(stage1Content, c, cu));
-                      const lvLabel = cu?.intimacy ? `Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : "";
-                      toast(`段階2（口調変換）用プロンプトをコピーしました${lvLabel ? `（${lvLabel}を反映）` : ""}`, "success");
-                    }}>
-                    📋 段階2：口調変換プロンプトをコピー
-                    {(!form.character_id || !stage1Content.trim()) && "（先にキャラクターを選択・段階1の出力を貼り付け）"}
-                  </button>
-                </div>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  段階1で「キャラ抜き」の内容（解説・例文・Tips）を生成し、段階2でその内容を維持したまま
-                  キャラクターの口調・性格・NG表現・親密度に応じた語り口に変換します。
-                  口調だけ直したい場合は、段階1の出力欄の内容を変えずに段階2だけ再実行できます。
-                  最終的なLLMの出力を「本文」「例文」「Tips」欄に分割して貼り付けてください。
-                </p>
-              </div>
-            )}
             {form.article_type !== "welcome" && (
               <div>
                 <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター</label>
@@ -799,6 +770,31 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タイトル</label>
             <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required placeholder="例：関係代名詞の使い方（キャラ名）" />
           </div>
+          {form.article_type !== "exercise" && (
+            <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+              <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
+                📥 LLMの出力を貼り付けて反映
+              </p>
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                上のコピー用ボタンでプロンプトをコピー → 外部LLMに入力 → 得られた回答をそのまま（コードブロック付きでもOK）下の欄に貼り付けて
+                「反映する」を押すと、本文・例文・Tips欄に自動で振り分けられます。
+              </p>
+              <textarea
+                value={genPasteText}
+                onChange={e => setGenPasteText(e.target.value)}
+                rows={4}
+                placeholder="LLMの回答をここにそのまま貼り付け"
+                className="text-xs font-mono"
+              />
+              <button type="button"
+                className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+                style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
+                disabled={!genPasteText.trim()}
+                onClick={applyGenPasteText}>
+                ✅ 反映する
+              </button>
+            </div>
+          )}
           {form.article_type !== "exercise" && (
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>本文（Markdown可）</label>

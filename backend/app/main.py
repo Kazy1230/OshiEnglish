@@ -155,9 +155,6 @@ _ensure_column("orders", "currency", "VARCHAR(10) NULL")
 _ensure_column("orders", "stripe_invoice_id", "VARCHAR(255) NULL")
 _ensure_column("orders", "stripe_receipt_url", "VARCHAR(500) NULL")
 
-# 簡易マイグレーション⑱: チャット送信失敗時のキャラ口調エラー文言
-_ensure_column("characters", "chat_error_message", "VARCHAR(300) NULL")
-
 # 簡易マイグレーション⑲: 依頼記事と元のリクエストメッセージの紐付け
 # - 記事を「公開」にした際、対応するリクエスト（messages.request_status）を
 #   自動で completed に更新できるようにする（手動更新漏れの防止）
@@ -244,13 +241,6 @@ def _migrate_tone_profile_extensions():
         if changed:
             db.commit()
 
-
-# 簡易マイグレーション㉙: characters.image_hint
-# - 新規キャラクター作成時のLLM設定生成（IMAGE_HINTブロック）の保存先。
-#   Stable Diffusion等でのキャラビジュアル生成時に参照するためのメモで、UI表示には使わない。
-# _migrate_tone_profile_extensions() がCharacterモデル経由でcharactersテーブルを
-# SELECT * するため、image_hint列は先に追加しておく必要がある。
-_ensure_column("characters", "image_hint", "TEXT NULL")
 
 _migrate_tone_profile_extensions()
 

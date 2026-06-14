@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -26,9 +26,7 @@ class Character(Base):
     font_style = Column(String(100), nullable=True)
     reward_progress_template = Column(String(300), nullable=True)  # DM画面のご褒美進捗メッセージ（{character}/{published}/{remaining}/{target} を置換）
     chat_footer_note = Column(String(300), nullable=True)  # DM画面の入力欄下の注意書き（世界観に合わせてキャラごとに変更可能）
-    chat_error_message = Column(String(300), nullable=True)  # DM送信失敗時にキャラの口調で表示するエラー文言
     instagram_account = Column(String(100), nullable=True)  # 公式Instagramアカウント名（@なし、例: shirakawa_yukina._.a）
-    image_hint = Column(Text, nullable=True)  # プロフィール画像生成（Stable Diffusion等）用の見た目特徴メモ
     is_preset = Column(Boolean, default=False, nullable=False)  # 公式キャラクターかどうか
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

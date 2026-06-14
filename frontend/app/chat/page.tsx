@@ -5,10 +5,13 @@ import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
 import {
   resolveTheme, fillTemplate,
-  DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE, DEFAULT_CHAT_ERROR_MESSAGE,
+  DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE,
   INTIMACY_INFO_TEXT, REWARD_INFO_TEXT,
   type CharacterTheme,
 } from "@/lib/theme";
+
+// チャット送信失敗時のエラー文言（キャラごとの口調差は出さず、常に中立な文言にする）
+const CHAT_ERROR_MESSAGE = "送信に失敗しました。もう一度お試しください。";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { toast } from "@/components/Toast";
@@ -167,7 +170,7 @@ function ChatPageInner() {
       setMessages(prev => [...thread.messages, ...prev]);
       setHasMore(!!thread.has_more);
     } catch {
-      toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+      toast(CHAT_ERROR_MESSAGE, "error");
     } finally { setLoadingMore(false); }
   }
 
@@ -224,7 +227,7 @@ function ChatPageInner() {
       if (err instanceof Error && err.message.includes("クレジットが不足")) {
         toast("クレジットが不足しています。クレジットを購入してください", "error");
       } else {
-        toast(theme?.chat_error_message || DEFAULT_CHAT_ERROR_MESSAGE, "error");
+        toast(CHAT_ERROR_MESSAGE, "error");
       }
     } finally { setSending(false); }
   }

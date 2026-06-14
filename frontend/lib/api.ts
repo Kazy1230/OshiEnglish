@@ -182,12 +182,6 @@ export const api = {
   adminCreateCharacter: (data: object) => apiFetch("/characters/", { method: "POST", body: JSON.stringify(data) }),
   adminUpdateCharacter: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteCharacter: (id: number) => apiFetch(`/characters/${id}`, { method: "DELETE" }),
-  adminUploadCharacterImage: (id: number, file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    return apiUpload(`/characters/${id}/image`, fd);
-  },
-  adminDeleteCharacterImage: (id: number) => apiFetch(`/characters/${id}/image`, { method: "DELETE" }),
 
   // 管理者：チャット（メッセージ）
   adminListThreads: (params?: { assignedAdminId?: number | null; unassigned?: boolean; sort?: string }) => {
