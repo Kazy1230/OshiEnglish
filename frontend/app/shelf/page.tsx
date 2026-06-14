@@ -11,12 +11,14 @@ import { reportError } from "@/lib/reportError";
 import { toast } from "@/components/Toast";
 import { RequestArticleModal } from "@/components/RequestArticleModal";
 import { CorrectionSubmissionModal } from "@/components/CorrectionSubmissionModal";
+import { hasListeningAudio } from "@/lib/exercise";
 
 type Article = {
   id: number; title: string; character_id: number;
   article_type?: string;
   exercise_format?: "multiple_choice" | "written_response" | null;
   exercise_category?: string | null;
+  exercise_data?: any;
   unlock_cost?: number;
   opened_at?: string | null;
   locked?: boolean;
@@ -368,11 +370,12 @@ function BookCard({ article, index, theme: t, onClick }: {
   const isTemplate = article.article_type === "template";
   const isLocked = !!article.locked;
   const hue = isLocked ? 0 : isExercise ? 265 : isTemplate ? 140 : hues[index % hues.length];
+  const isListening = isExercise && hasListeningAudio(article.exercise_data);
   const actionLabel = isLocked
     ? `🔒 ${article.unlock_cost}クレジットで読む`
     : isExercise ? "解く →" : isBlog ? "読む →" : "読む →";
-  const badgeIcon = isTemplate ? "🎁" : isExercise ? "🧩" : isBlog ? "📰" : null;
-  const badgeText = isTemplate ? "特別記事" : isExercise ? (article.exercise_category || "演習問題") : isBlog ? "ブログ" : null;
+  const badgeIcon = isTemplate ? "🎁" : isExercise ? (isListening ? "🎧" : "🧩") : isBlog ? "📰" : null;
+  const badgeText = isTemplate ? "特別記事" : isExercise ? (article.exercise_category || (isListening ? "リスニング" : "演習問題")) : isBlog ? "ブログ" : null;
 
   return (
     <button onClick={onClick}

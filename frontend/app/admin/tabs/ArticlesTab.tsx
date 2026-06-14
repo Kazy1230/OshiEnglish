@@ -16,6 +16,7 @@ import {
   buildTemplateArticlePrompt,
   getCustomerDisplayName,
 } from "../lib/promptBuilders";
+import { hasListeningAudio } from "@/lib/exercise";
 
 const emptyArticleForm = {
   article_type: "request", customer_id: "", character_id: "", grammar_master_id: "", title: "", content: "", tips: "", example_sentences: "", status: "draft",
@@ -912,7 +913,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   {a.article_type === "blog" ? (
                     <>📰 ブログ記事　🎭 {a.character_name ?? "—"}</>
                   ) : a.article_type === "exercise" ? (
-                    <>🧩 {a.exercise_category ?? "演習問題"}（{a.exercise_format === "written_response" ? "記述式" : "選択式"}）　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}</>
+                    <>{a.exercise_format === "multiple_choice" && hasListeningAudio(a.exercise_data) ? "🎧" : "🧩"} {a.exercise_category ?? "演習問題"}（{a.exercise_format === "written_response" ? "記述式" : hasListeningAudio(a.exercise_data) ? "選択式・リスニング" : "選択式"}）　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}</>
                   ) : a.article_type === "writing_feedback" ? (
                     <>✍️ ライティングFB　👤 {a.customer_name ?? `顧客ID:${a.customer_id}`}　🎭 {a.character_name ?? "—"}</>
                   ) : a.article_type === "speaking_feedback" ? (
