@@ -110,9 +110,10 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
     setTimeout(() => cardRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   }
 
-  // 「やることリスト」：受注単位ではなく、対応が必要なタスク単位でフラットに一覧化する
+  // 「やることリスト」：対応が必要なタスクを顧客ごとにグループ化して一覧化する
   // orderId が無いタスク（顧客単位の日次DMリマインダーなど）は onClick を直接指定する
-  type TaskItem = { orderId?: number; icon: string; label: string; color: string; bg: string; onClick?: () => void };
+  // customerId が無いタスク（定期便プールの在庫不足など）は「その他」グループにまとめる
+  type TaskItem = { orderId?: number; customerId?: number | null; customerName?: string; icon: string; label: string; color: string; bg: string; onClick?: () => void };
   const tasks: TaskItem[] = [];
   for (const o of filtered) {
     if (o.order_type === "template_stock") {
@@ -126,31 +127,31 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
       continue;
     }
     if (o.status === "new") {
-      tasks.push({ orderId: o.id, icon: "🆕", label: `${o.customer_name}：新規受注の対応を開始`, color: "#b8860b", bg: "#fff8e1" });
+      tasks.push({ orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "🆕", label: "新規受注の対応を開始", color: "#b8860b", bg: "#fff8e1" });
     }
     if (o.character_creation_pending) {
-      tasks.push({ orderId: o.id, icon: "🎨", label: `${o.customer_name}：キャラクター作成が未対応`, color: "#c0392b", bg: "#fdebe8" });
+      tasks.push({ orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "🎨", label: "キャラクター作成が未対応", color: "#c0392b", bg: "#fdebe8" });
     }
     if (o.reward_loop_pending) {
-      tasks.push({ orderId: o.id, icon: "🎁", label: `${o.customer_name}：報酬・成長ループが未設定`, color: "#8e44ad", bg: "#f5e8fb" });
+      tasks.push({ orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "🎁", label: "報酬・成長ループが未設定", color: "#8e44ad", bg: "#f5e8fb" });
     }
     if (o.welcome_page_pending) {
-      tasks.push({ orderId: o.id, icon: "🏠", label: `${o.customer_name}：ウェルカムページが未作成`, color: "#2980b9", bg: "#e8f0fd" });
+      tasks.push({ orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "🏠", label: "ウェルカムページが未作成", color: "#2980b9", bg: "#e8f0fd" });
     }
     if (o.greeting_dm_pending) {
-      tasks.push({ orderId: o.id, icon: "👋", label: `${o.customer_name}：挨拶DMが未送信`, color: "#16a085", bg: "#e8fdf7" });
+      tasks.push({ orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "👋", label: "挨拶DMが未送信", color: "#16a085", bg: "#e8fdf7" });
     }
     (o.pending_article_requests ?? []).forEach((r: any) => {
       tasks.push({
-        orderId: o.id, icon: "📝",
-        label: `${o.customer_name}：記事依頼「${r.grammar_topic || "未指定"}」${r.request_status === "accepted" ? "（対応中・記事作成待ち）" : "（未対応）"}`,
+        orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "📝",
+        label: `記事依頼「${r.grammar_topic || "未指定"}」${r.request_status === "accepted" ? "（対応中・記事作成待ち）" : "（未対応）"}`,
         color: "#2471a3", bg: "#e8f4fd",
       });
     });
     (o.pending_corrections ?? []).forEach((c: any) => {
       tasks.push({
-        orderId: o.id, icon: "✏️",
-        label: `${o.customer_name}：添削（${c.correction_type === "writing" ? "ライティング" : "スピーキング"}）${c.status === "in_progress" ? "（対応中）" : "（未対応）"}`,
+        orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "✏️",
+        label: `添削（${c.correction_type === "writing" ? "ライティング" : "スピーキング"}）${c.status === "in_progress" ? "（対応中）" : "（未対応）"}`,
         color: "#a36a1f", bg: "#fdf3e8",
       });
     });
@@ -161,7 +162,7 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
       && !o.greeting_dm_pending
       && (o.pending_article_requests?.length ?? 0) === 0
       && (o.pending_corrections?.length ?? 0) === 0) {
-      tasks.push({ orderId: o.id, icon: "✅", label: `${o.customer_name}：対応完了・納品処理を行ってください`, color: "#1a6ea8", bg: "#e8f4fd" });
+      tasks.push({ orderId: o.id, customerId: o.customer_id, customerName: o.customer_name, icon: "✅", label: "対応完了・納品処理を行ってください", color: "#1a6ea8", bg: "#e8f4fd" });
     }
   }
 
@@ -171,8 +172,8 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
     const lastAt = cu.last_character_message_at ? new Date(cu.last_character_message_at) : null;
     if (lastAt && lastAt.toDateString() === todayStr) continue;
     tasks.push({
-      icon: "💬",
-      label: `${cu.username}：本日のDMを送信してください`,
+      customerId: cu.id, customerName: cu.username, icon: "💬",
+      label: "本日のDMを送信してください",
       color: "#16a085", bg: "#e8fdf7",
       onClick: () => onNavigateToMessages?.(cu.id),
     });
@@ -184,10 +185,25 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
     if (!cu.character_id) continue;
     if ((cu.template_pool_remaining ?? 0) > 0) continue;
     tasks.push({
-      icon: "📦",
-      label: `${cu.username}：定期便プールの記事が不足しています。記事管理タブで「定期便プール」記事を追加してください`,
+      customerId: cu.id, customerName: cu.username, icon: "📦",
+      label: "定期便プールの記事が不足しています。記事管理タブで「定期便プール」記事を追加してください",
       color: "#8e44ad", bg: "#f5e8fb",
     });
+  }
+
+  // 顧客ごとにタスクをグループ化する（customerId が無いものは「その他」にまとめる）
+  type TaskGroup = { key: string; name: string; tasks: TaskItem[] };
+  const taskGroups: TaskGroup[] = [];
+  const taskGroupMap = new Map<string, TaskGroup>();
+  for (const t of tasks) {
+    const key = t.customerId != null ? `c-${t.customerId}` : "other";
+    let g = taskGroupMap.get(key);
+    if (!g) {
+      g = { key, name: t.customerName ?? "その他", tasks: [] };
+      taskGroupMap.set(key, g);
+      taskGroups.push(g);
+    }
+    g.tasks.push(t);
   }
 
   if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
@@ -229,15 +245,25 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
           {tasks.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--muted)" }}>🎉 現在対応が必要なタスクはありません</p>
           ) : (
-            <div className="flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: "14rem" }}>
-              {tasks.map((t, i) => (
-                <button key={i} onClick={() => t.onClick ? t.onClick() : focusOrder(t.orderId!)}
-                  className="text-left text-xs px-3 py-2 rounded-lg flex items-center gap-2 transition-opacity hover:opacity-80"
-                  style={{ background: t.bg, color: t.color }}>
-                  <span>{t.icon}</span>
-                  <span className="flex-1 font-medium">{t.label}</span>
-                  <span className="flex-shrink-0" style={{ opacity: 0.7 }}>対応する ▸</span>
-                </button>
+            <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: "24rem" }}>
+              {taskGroups.map(g => (
+                <div key={g.key} className="rounded-lg p-2" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="font-bold text-sm" style={{ color: "var(--primary)" }}>{g.name === "その他" ? "📦 その他" : `👤 ${g.name}`}</span>
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>{g.tasks.length} 件</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {g.tasks.map((t, i) => (
+                      <button key={i} onClick={() => t.onClick ? t.onClick() : focusOrder(t.orderId!)}
+                        className="text-left text-xs px-3 py-2 rounded-lg flex items-center gap-2 transition-opacity hover:opacity-80"
+                        style={{ background: t.bg, color: t.color }}>
+                        <span>{t.icon}</span>
+                        <span className="flex-1 font-medium">{t.label}</span>
+                        <span className="flex-shrink-0" style={{ opacity: 0.7 }}>対応する ▸</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
