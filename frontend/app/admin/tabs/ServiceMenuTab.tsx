@@ -11,33 +11,10 @@ export function ServiceMenuTab() {
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [form, setForm] = useState<any>(emptyServiceItemForm);
 
-  const [intimacySettings, setIntimacySettings] = useState<any | null>(null);
-  const [intimacySaving, setIntimacySaving] = useState(false);
-
   const reload = () => api.adminListAllServiceItems().then(setItems);
   useEffect(() => {
     reload().finally(() => setLoading(false));
-    api.adminGetIntimacySettings().then(setIntimacySettings).catch(() => {});
   }, []);
-
-  async function saveIntimacySettings() {
-    if (!intimacySettings) return;
-    setIntimacySaving(true);
-    try {
-      const updated = await api.adminUpdateIntimacySettings({
-        points_per_message: Number(intimacySettings.points_per_message) || 0,
-        points_per_purchase: Number(intimacySettings.points_per_purchase) || 0,
-        points_per_login: Number(intimacySettings.points_per_login) || 0,
-        points_per_exercise_submit: Number(intimacySettings.points_per_exercise_submit) || 0,
-      });
-      setIntimacySettings(updated);
-      toast("親密度ポイントの設定を保存しました", "success");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
-    } finally {
-      setIntimacySaving(false);
-    }
-  }
 
   function startEdit(s: any) {
     setEditingItem(s);
@@ -149,47 +126,6 @@ export function ServiceMenuTab() {
         キャラクター（運営）がチャットの会話の流れの中で自然に商品・サービスへ誘導する「接客」スタイルを取るため、
         この一覧は運営側が金額・提供内容を把握し、チャットでの案内に役立てるための内部資料として使ってください。
       </p>
-
-      <div className="card mb-6">
-        <h3 className="font-bold mb-1" style={{ color: "var(--primary)" }}>💖 親密度ポイントの自動加算設定</h3>
-        <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
-          以下のイベントが発生したときに、自動で加算される親密度ポイント数を設定できます。
-          手動での増減は引き続きチャット画面の「親密度を調整」から行えます。
-        </p>
-        {!intimacySettings ? (
-          <p className="text-sm" style={{ color: "var(--muted)" }}>読み込み中…</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>メッセージ送信時</label>
-                <input type="number" min={0} value={intimacySettings.points_per_message}
-                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_message: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>コンテンツ購入時</label>
-                <input type="number" min={0} value={intimacySettings.points_per_purchase}
-                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_purchase: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>ログイン時（1日1回）</label>
-                <input type="number" min={0} value={intimacySettings.points_per_login}
-                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_login: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>演習問題提出時</label>
-                <input type="number" min={0} value={intimacySettings.points_per_exercise_submit}
-                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_exercise_submit: e.target.value })} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <button className="btn-primary" disabled={intimacySaving} onClick={saveIntimacySettings}>
-                {intimacySaving ? "保存中…" : "保存する"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card mb-6 flex flex-col gap-3">

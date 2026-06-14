@@ -33,12 +33,35 @@ export function RewardsTab() {
   const [ideaJsonText, setIdeaJsonText] = useState("");
   const [applyingIdeas, setApplyingIdeas] = useState(false);
 
+  const [intimacySettings, setIntimacySettings] = useState<any | null>(null);
+  const [intimacySaving, setIntimacySaving] = useState(false);
+
   useEffect(() => {
     api.adminGetCharacters().then((cs: any[]) => {
       setCharacters(cs);
       if (cs.length > 0) setCharacterId(cs[0].id);
     }).finally(() => setLoading(false));
+    api.adminGetIntimacySettings().then(setIntimacySettings).catch(() => {});
   }, []);
+
+  async function saveIntimacySettings() {
+    if (!intimacySettings) return;
+    setIntimacySaving(true);
+    try {
+      const updated = await api.adminUpdateIntimacySettings({
+        points_per_message: Number(intimacySettings.points_per_message) || 0,
+        points_per_purchase: Number(intimacySettings.points_per_purchase) || 0,
+        points_per_login: Number(intimacySettings.points_per_login) || 0,
+        points_per_exercise_submit: Number(intimacySettings.points_per_exercise_submit) || 0,
+      });
+      setIntimacySettings(updated);
+      toast("親密度ポイントの設定を保存しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    } finally {
+      setIntimacySaving(false);
+    }
+  }
 
   const reload = () => {
     if (characterId == null) return Promise.resolve();
@@ -373,8 +396,48 @@ export function RewardsTab() {
       <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
         親密度レベル到達（Lv1→2: 隠しセリフ／Lv2→3: 称号／Lv3→4: 壁紙／Lv4→5: ミックス）と、
         記事依頼回数到達の2系統で報酬を自動解放します。解放前は顧客にカテゴリ名のみ表示され、内容は伏せられます。
-        ポイント自動加算（メッセージ送信・ログイン・演習提出）の設定は「料金・メニュー」タブで行えます。
       </p>
+
+      <div className="card mb-6">
+        <h3 className="font-bold mb-1" style={{ color: "var(--primary)" }}>💖 親密度ポイントの自動加算設定</h3>
+        <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
+          以下のイベントが発生したときに、自動で加算される親密度ポイント数を設定できます。
+          手動での増減は引き続きチャット画面の「親密度を調整」から行えます。
+        </p>
+        {!intimacySettings ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>読み込み中…</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>メッセージ送信時</label>
+                <input type="number" min={0} value={intimacySettings.points_per_message}
+                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_message: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>コンテンツ購入時</label>
+                <input type="number" min={0} value={intimacySettings.points_per_purchase}
+                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_purchase: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>ログイン時（1日1回）</label>
+                <input type="number" min={0} value={intimacySettings.points_per_login}
+                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_login: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>演習問題提出時</label>
+                <input type="number" min={0} value={intimacySettings.points_per_exercise_submit}
+                  onChange={e => setIntimacySettings({ ...intimacySettings, points_per_exercise_submit: e.target.value })} />
+              </div>
+            </div>
+            <div className="mt-3">
+              <button className="btn-primary" disabled={intimacySaving} onClick={saveIntimacySettings}>
+                {intimacySaving ? "保存中…" : "保存する"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="mb-4">
         <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター</label>

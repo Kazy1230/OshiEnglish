@@ -289,6 +289,8 @@ def submit_public_form(data: PublicFormSubmit, request: Request, db: Session = D
 # ===== 顧客向け（購入履歴・領収書） =====
 
 def _order_description(order: Order) -> str:
+    if order.order_type == "credit_purchase":
+        return f"クレジット購入：{order.amount_total or 0}クレジット"
     if order.character_name:
         return f"スタータープラン（キャラクター作成＋記事1本）：{order.character_name}"
     return "スタータープラン（キャラクター作成＋記事1本）"

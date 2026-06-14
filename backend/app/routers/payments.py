@@ -295,6 +295,32 @@ def _handle_credit_purchase_completed(db: Session, session: dict):
         return
 
     grant_credits(db, customer, int(credits), reason="purchase", stripe_session_id=session_id)
+
+    # 購入履歴（/purchases）への表示・領収書発行のため、Orderレコードも作成する
+    order = Order(
+        customer_name=customer.username,
+        status="delivered",
+        order_type="credit_purchase",
+        customer_id=customer.id,
+        email=customer.email,
+        stripe_session_id=session_id,
+        stripe_payment_status="paid",
+        stripe_payment_intent_id=session.get("payment_intent"),
+        amount_total=session.get("amount_total"),
+        currency=session.get("currency"),
+        stripe_invoice_id=session.get("invoice"),
+    )
+    if order.stripe_payment_intent_id:
+        try:
+            stripe = _get_stripe()
+            pi = stripe.PaymentIntent.retrieve(order.stripe_payment_intent_id, expand=["latest_charge"])
+            charge = pi.get("latest_charge")
+            if charge:
+                order.stripe_receipt_url = charge.get("receipt_url")
+        except Exception:
+            logger.exception("[Stripe] 領収書URLの取得に失敗しました")
+    db.add(order)
+
     db.commit()
     logger.info(f"[Stripe] クレジットを付与しました: customer_id={customer_id}, credits={credits}")
 

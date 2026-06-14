@@ -20,6 +20,7 @@ import { GrammarTab } from "./tabs/GrammarTab";
 import { ServiceMenuTab } from "./tabs/ServiceMenuTab";
 import { LogsTab } from "./tabs/LogsTab";
 import { RewardsTab } from "./tabs/RewardsTab";
+import { SuggestionsTab } from "./tabs/SuggestionsTab";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -111,6 +112,7 @@ export default function AdminPage() {
     { key: "orders", label: "受注リスト", icon: "📋" },
     { key: "messages", label: "チャット", icon: "💬" },
     { key: "corrections", label: "添削", icon: "✏️" },
+    { key: "suggestions", label: "修正サジェスト", icon: "👍" },
     { key: "articles", label: "記事管理", icon: "📝" },
     { key: "customers", label: "顧客管理", icon: "👤" },
     { key: "characters", label: "キャラクター", icon: "🎭" },
@@ -183,6 +185,7 @@ export default function AdminPage() {
         {tab === "orders" && <OrdersTab onCreateArticleFromRequest={(order, request) => { setPendingArticleRequest({ order, request }); setTab("articles"); }} />}
         {tab === "messages" && <MessagesTab />}
         {tab === "corrections" && <CorrectionsTab onCreateFeedbackArticle={(item) => { setPendingCorrection(item); setTab("articles"); }} />}
+        {tab === "suggestions" && <SuggestionsTab />}
         {tab === "articles" && <ArticlesTab pendingCorrection={pendingCorrection} onConsumePendingCorrection={() => setPendingCorrection(null)} pendingArticleRequest={pendingArticleRequest} onConsumePendingArticleRequest={() => setPendingArticleRequest(null)} />}
         {tab === "customers" && <CustomersTab />}
         {tab === "characters" && <CharactersTab />}

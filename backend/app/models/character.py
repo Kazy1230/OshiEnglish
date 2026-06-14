@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -10,7 +10,7 @@ class Character(Base):
     検索・集計・一括更新の対象にはならない（プロンプト生成・UI表示への読み込み専用）ため
     JSON列のままで問題ない。
     一方、絞り込み・並び替え・集計クエリの対象になるフィールド（例: Customer.intimacy_points,
-    Customer.priority, Customer.assigned_admin_id）は、JSON内に置かず通常のカラムとして
+    Customer.assigned_admin_id）は、JSON内に置かず通常のカラムとして
     切り出すこと。新しいフィールドを追加する際もこの基準で判断する。
     """
     __tablename__ = "characters"
@@ -28,6 +28,7 @@ class Character(Base):
     chat_footer_note = Column(String(300), nullable=True)  # DM画面の入力欄下の注意書き（世界観に合わせてキャラごとに変更可能）
     chat_error_message = Column(String(300), nullable=True)  # DM送信失敗時にキャラの口調で表示するエラー文言
     instagram_account = Column(String(100), nullable=True)  # 公式Instagramアカウント名（@なし、例: shirakawa_yukina._.a）
+    image_hint = Column(Text, nullable=True)  # プロフィール画像生成（Stable Diffusion等）用の見た目特徴メモ
     is_preset = Column(Boolean, default=False, nullable=False)  # 公式キャラクターかどうか
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

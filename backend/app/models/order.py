@@ -11,6 +11,8 @@ class Order(Base):
     character_name = Column(String(200), nullable=True)
     grammar_topic = Column(String(300), nullable=True)
     status = Column(String(20), default="new")         # new / in_progress / delivered
+    # 受注の種別。character_creation（キャラ作成申し込み） / credit_purchase（クレジット購入）
+    order_type = Column(String(30), default="character_creation", nullable=False)
     notes = Column(Text, nullable=True)                # 運営者メモ
     # 受注からアカウント作成後、対応する顧客IDを紐づけることで
     # 「この受注からどの顧客が生まれたか」「対応完了しているか」を追跡できる

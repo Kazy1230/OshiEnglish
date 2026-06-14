@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
-import { resolveTheme } from "@/lib/theme";
+import { resolveTheme, type CharacterTheme } from "@/lib/theme";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { toast } from "@/components/Toast";
@@ -17,14 +17,17 @@ function CreditsPageInner() {
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<number | null>(null);
-  const t = resolveTheme(null, mode);
+  const [theme, setTheme] = useState<CharacterTheme | null>(null);
+  const t = resolveTheme(theme, mode);
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
     (async () => {
       try {
-        const thread = await api.getMyThread();
+        const [thread, user] = await Promise.all([api.getMyThread(), api.me()]);
         setCreditBalance(thread.credit_balance ?? 0);
+        const charTheme = user.character_id ? await api.getCharacterTheme(user.character_id) : null;
+        setTheme(charTheme);
       } catch {
         clearToken();
         router.replace("/login");

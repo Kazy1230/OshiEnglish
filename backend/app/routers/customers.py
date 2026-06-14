@@ -14,6 +14,7 @@ from app.models.access_log import AccessLog
 from app.models.correction_request import CorrectionRequest
 from app.models.reward import CustomerReward
 from app.models.order import Order
+from app.models.credit_transaction import CreditTransaction
 from app.core.intimacy import intimacy_info
 from app.core.credentials import generate_temp_password
 from app.core.email import send_email
@@ -246,19 +247,17 @@ def reissue_password(customer_id: int, admin=Depends(get_current_admin), db: Ses
     }
 
 
-@router.delete("/{customer_id}")
-def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
-    """顧客を削除する。
+def _delete_customer_and_related_data(db: Session, customer: Customer) -> None:
+    """顧客本体および関連レコードをまとめて削除する（DBから完全に削除）。
 
-    退会処理などで顧客を削除する際、DM(messages)・記事(articles)・アクセスログ(access_logs)が
-    残っていると外部キー制約により削除に失敗していた問題を解消するため、
-    関連レコードを先にまとめて削除してから顧客本体を削除する。
-    （シミュレーションでデモ顧客を削除しようとした際に実際に発生した不具合の修正）
+    管理者による削除・顧客自身の退会のいずれでも、DM(messages)・記事(articles)・
+    アクセスログ(access_logs)・クレジット履歴(credit_transactions)等が残っていると
+    外部キー制約により削除に失敗するため、関連レコードを先にまとめて削除してから
+    顧客本体を削除する。呼び出し元でdb.commit()すること。
     """
-    customer = db.query(Customer).filter(Customer.id == customer_id).first()
-    if not customer:
-        raise HTTPException(status_code=404, detail="顧客が見つかりません")
+    customer_id = customer.id
 
+    db.query(CreditTransaction).filter(CreditTransaction.customer_id == customer_id).delete(synchronize_session=False)
     db.query(Message).filter(Message.customer_id == customer_id).delete(synchronize_session=False)
     db.query(AccessLog).filter(AccessLog.customer_id == customer_id).delete(synchronize_session=False)
     db.query(CustomerReward).filter(CustomerReward.customer_id == customer_id).delete(synchronize_session=False)
@@ -277,8 +276,19 @@ def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Sess
     )
 
     db.delete(customer)
+
+
+@router.delete("/{customer_id}")
+def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """顧客を削除する（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美・
+    クレジット履歴も合わせてDBから完全に削除される）。"""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="顧客が見つかりません")
+
+    _delete_customer_and_related_data(db, customer)
     db.commit()
-    return {"message": "削除しました（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美も合わせて削除されました）"}
+    return {"message": "削除しました（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美・クレジット履歴も合わせて削除されました）"}
 
 
 @router.post("/me/ack-character-ready")
@@ -293,14 +303,12 @@ def ack_character_ready(current_user: Customer = Depends(get_current_user), db: 
 def withdraw(current_user: Customer = Depends(get_current_user), db: Session = Depends(get_db)):
     """顧客自身による退会処理。
 
-    返金・解約ポリシー: 退会後はキャラとのチャット履歴を削除し、未使用のコンテンツに
-    アクセスできなくなる（アカウントを無効化する）。Stripeのサブスクリプションが
-    存在する場合は解約し、退会完了メールを送信する。
+    返金・解約ポリシー: Stripeのサブスクリプションが存在する場合は解約し、
+    アカウント・キャラとのチャット履歴・記事・クレジット履歴等をDBから完全に削除した上で
+    退会完了メールを送信する（管理者による削除と同じ完全削除処理）。
     """
     if current_user.is_admin:
         raise HTTPException(status_code=403, detail="管理者アカウントは退会できません")
-
-    db.query(Message).filter(Message.customer_id == current_user.id).delete(synchronize_session=False)
 
     if current_user.stripe_subscription_id and settings.STRIPE_SECRET_KEY:
         try:
@@ -310,18 +318,21 @@ def withdraw(current_user: Customer = Depends(get_current_user), db: Session = D
         except Exception:
             logger.exception("[Stripe] サブスクリプションの解約に失敗しました")
 
-    current_user.is_active = False
-    current_user.withdrawn_at = datetime.utcnow()
+    # メール送信用に削除前の情報を保持しておく
+    email = current_user.email
+    username = current_user.username
+
+    _delete_customer_and_related_data(db, current_user)
     db.commit()
 
-    if current_user.email:
+    if email:
         send_email(
-            to=current_user.email,
+            to=email,
             subject="【推しEnglish】退会手続き完了のお知らせ",
             html=(
-                f"<p>{current_user.username} 様</p>"
+                f"<p>{username} 様</p>"
                 "<p>退会手続きが完了しました。これまでご利用いただきありがとうございました。</p>"
-                "<p>キャラクターとのチャット履歴は削除され、未使用のコンテンツへはアクセスできなくなります。</p>"
+                "<p>アカウント情報・キャラクターとのチャット履歴・記事等はすべて削除されました。</p>"
             ),
         )
 

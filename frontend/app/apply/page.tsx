@@ -136,7 +136,7 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
     gender: "male", relationship: "kohai", personality: "cool",
     hobby: "読書・天文",
     quote: "「……先輩のことは、まあ、認めてますよ」",
-    instagram: "https://www.instagram.com/aoi_rei_aoi",
+    instagram: "https://www.instagram.com/aoi_rei_rei_aoi",
     // 青・黒・グレー系
     themeOverride: {
       bg: "#10141c", card: "#1a1f2b", primary: "#9db8e0", accent: "#5b8ad1",

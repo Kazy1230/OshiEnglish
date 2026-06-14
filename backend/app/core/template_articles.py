@@ -18,7 +18,11 @@ def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
         last = customer.last_template_article_at
         if last.tzinfo is None:
             last = last.replace(tzinfo=timezone.utc)
-        interval_days = random.randint(TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS)
+        # 配布間隔（3〜5日）は前回配布時刻から決定的に算出する。
+        # 呼び出しごとに random.randint() し直すと、判定のたびに間隔が変わってしまい、
+        # 「届くはずの日に再ロールで間隔が伸びて届かない」ことが起こり得るため。
+        rng = random.Random(f"{customer.id}:{last.isoformat()}")
+        interval_days = rng.randint(TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS)
         if (now - last) < timedelta(days=interval_days):
             return
 

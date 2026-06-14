@@ -49,8 +49,6 @@ class Customer(Base):
     # サポート担当の割り当て（管理者・オペレーター複数人での分担運用のため）。
     # is_admin=True の customers.id を指す。未割り当ての場合は NULL。
     assigned_admin_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
-    # 対応優先度（SLA管理用）。normal / high の2段階。
-    priority = Column(String(20), default="normal", nullable=False)
     # 管理者がDM対応の中で「重要だと感じたこと」（誕生日・苦手分野への不安など）を記録するメモ。
     # DM返信下書き生成プロンプトに織り込むことで、担当者が増えても細かい情報を踏まえた返信ができるようにする。
     admin_memo = Column(Text, nullable=True)

@@ -1,13 +1,11 @@
-import os
-import uuid
 import logging
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_admin
-from app.core.uploads import validate_image_content
 from app.models.message import Message
+from app.models.message_feedback import MessageFeedback
 from app.models.customer import Customer
 from app.models.character import Character
 from app.models.article import Article
@@ -15,7 +13,7 @@ from app.models.credit_transaction import CreditTransaction
 from app.models.order import Order
 from app.core.intimacy import intimacy_info, POINTS_PER_CHARACTER_REPLY, get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
-from app.core.credits import grant_credits, consume_credits, ARTICLE_REQUEST_FEE
+from app.core.credits import grant_credits, consume_credits, ARTICLE_REQUEST_FEE, ALLOWED_ARTICLE_REQUEST_CREDIT_COSTS, DM_SEND_COST
 from app.core.llm import generate_text, LLMError
 from app.core.character_voice import (
     build_dm_reply_system_prompt,
@@ -27,17 +25,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/messages", tags=["メッセージ（DM）"])
 
-# ご褒美写真などの保存先（main.py で /static にマウントされているディレクトリ配下）
-_REWARD_IMAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "reward_images")
-os.makedirs(_REWARD_IMAGE_DIR, exist_ok=True)
-_ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp"}
-_MAX_IMAGE_SIZE = 8 * 1024 * 1024  # 8MB
-
 # 何記事おきにご褒美が発生するか
 REWARD_INTERVAL = 5
 
 
-def serialize_message(m: Message) -> dict:
+def serialize_message(m: Message, my_feedback: Optional[str] = None) -> dict:
     return {
         "id": m.id,
         "customer_id": m.customer_id,
@@ -54,6 +46,7 @@ def serialize_message(m: Message) -> dict:
         "article_id": m.article_id,
         "suggested_action": m.suggested_action,
         "created_at": m.created_at.isoformat() if m.created_at else None,
+        "my_feedback": my_feedback,
     }
 
 
@@ -141,13 +134,19 @@ def get_my_thread(
     if current_user.character_id:
         character = db.query(Character).filter(Character.id == current_user.character_id).first()
 
+    feedback_rows = db.query(MessageFeedback).filter(
+        MessageFeedback.customer_id == current_user.id,
+        MessageFeedback.message_id.in_([m.id for m in messages]),
+    ).all()
+    feedback_map = {f.message_id: f.rating for f in feedback_rows}
+
     return {
         "character": {
             "id": character.id,
             "name": character.name,
             "image_url": character.image_url,
         } if character else None,
-        "messages": [serialize_message(m) for m in messages],
+        "messages": [serialize_message(m, feedback_map.get(m.id)) for m in messages],
         "has_more": has_more,
         "reward_status": _reward_status(db, current_user.id),
         "intimacy": intimacy_info(current_user.intimacy_points),
@@ -174,7 +173,9 @@ def send_my_message(
         raise HTTPException(status_code=400, detail="メッセージ内容を入力してください")
 
     is_request = bool(data.grammar_topic)
-    cost = ARTICLE_REQUEST_FEE if is_request else 1
+    if is_request and data.credit_cost not in ALLOWED_ARTICLE_REQUEST_CREDIT_COSTS:
+        raise HTTPException(status_code=400, detail="credit_costの値が不正です")
+    cost = ARTICLE_REQUEST_FEE if is_request else DM_SEND_COST
     consume_credits(
         db, current_user, cost,
         reason="article_request" if is_request else "dm_send",
@@ -241,6 +242,68 @@ def get_my_reward_status(current_user: Customer = Depends(get_current_user), db:
     return _reward_status(db, current_user.id)
 
 
+class MessageFeedbackCreate(BaseModel):
+    rating: str  # good / bad
+
+
+@router.post("/{message_id}/feedback")
+def rate_message(
+    message_id: int,
+    data: MessageFeedbackCreate,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """顧客向け：キャラからの返信メッセージに👍👎評価を付ける（押し直しで変更可）"""
+    if data.rating not in ("good", "bad"):
+        raise HTTPException(status_code=400, detail="ratingはgoodまたはbadで指定してください")
+
+    msg = db.query(Message).filter(
+        Message.id == message_id,
+        Message.customer_id == current_user.id,
+        Message.sender == "character",
+    ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="メッセージが見つかりません")
+
+    feedback = db.query(MessageFeedback).filter(
+        MessageFeedback.message_id == message_id,
+        MessageFeedback.customer_id == current_user.id,
+    ).first()
+    if feedback:
+        feedback.rating = data.rating
+        feedback.status = "pending"
+        feedback.message_content = msg.content
+    else:
+        feedback = MessageFeedback(
+            message_id=msg.id,
+            character_id=msg.character_id,
+            customer_id=current_user.id,
+            rating=data.rating,
+            message_content=msg.content,
+            status="pending",
+        )
+        db.add(feedback)
+    db.commit()
+    return {"message_id": msg.id, "rating": data.rating}
+
+
+@router.delete("/{message_id}/feedback")
+def remove_message_rating(
+    message_id: int,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """顧客向け：付けた👍👎評価を取り消す"""
+    feedback = db.query(MessageFeedback).filter(
+        MessageFeedback.message_id == message_id,
+        MessageFeedback.customer_id == current_user.id,
+    ).first()
+    if feedback:
+        db.delete(feedback)
+        db.commit()
+    return {"message_id": message_id, "rating": None}
+
+
 # ===================== 管理者向け =====================
 
 @router.get("/admin/operators")
@@ -254,22 +317,19 @@ def list_operators(admin=Depends(get_current_admin), db: Session = Depends(get_d
 def list_threads(
     assigned_admin_id: Optional[int] = None,
     unassigned: bool = False,
-    priority: Optional[str] = None,
     sort: str = "urgency",
     admin=Depends(get_current_admin), db: Session = Depends(get_db),
 ):
     """管理者向け：DMスレッド一覧（顧客ごとに最新メッセージ・未対応リクエスト数などを表示）
 
-    複数オペレーターでの分担運用のため、担当者・優先度での絞り込みと、
-    並び順（未対応優先 / 優先度順 / 最終返信が古い順）を指定できる。
+    複数オペレーターでの分担運用のため、担当者での絞り込みと、
+    並び順（未対応優先 / 最終返信が古い順）を指定できる。
     """
     query = db.query(Customer).filter(Customer.is_admin == False)  # noqa: E712
     if unassigned:
         query = query.filter(Customer.assigned_admin_id.is_(None))
     elif assigned_admin_id is not None:
         query = query.filter(Customer.assigned_admin_id == assigned_admin_id)
-    if priority:
-        query = query.filter(Customer.priority == priority)
     customers = query.all()
 
     result = []
@@ -299,15 +359,9 @@ def list_threads(
             "intimacy": intimacy_info(c.intimacy_points),
             "assigned_admin_id": c.assigned_admin_id,
             "assigned_admin_name": c.assigned_admin.username if c.assigned_admin else None,
-            "priority": c.priority,
         })
 
-    if sort == "priority":
-        # 優先度（high優先）→ 未対応・未読数 の順
-        result.sort(key=lambda r: (0 if r["priority"] == "high" else 1,
-                                    -(r["pending_requests"] + r["unread_from_customer"] + r["reward_status"]["pending_rewards"]),
-                                    -(r["last_message"]["id"] if r["last_message"] else 0)))
-    elif sort == "oldest_reply":
+    if sort == "oldest_reply":
         # 最終メッセージが古い順（対応漏れの発見用）
         result.sort(key=lambda r: r["last_message"]["id"] if r["last_message"] else 0)
     else:
@@ -319,12 +373,11 @@ def list_threads(
 
 class AssignmentUpdate(BaseModel):
     assigned_admin_id: Optional[int] = None  # null を渡すと未割り当てに戻す
-    priority: Optional[str] = None           # "normal" | "high"
 
 
 @router.patch("/admin/{customer_id}/assignment")
 def update_assignment(customer_id: int, data: AssignmentUpdate, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
-    """管理者向け：DMスレッドの担当者・優先度を更新する（複数オペレーターでの分担運用のため）"""
+    """管理者向け：DMスレッドの担当者を更新する（複数オペレーターでの分担運用のため）"""
     customer = db.query(Customer).filter(Customer.id == customer_id, Customer.is_admin == False).first()  # noqa: E712
     if not customer:
         raise HTTPException(status_code=404, detail="顧客が見つかりません")
@@ -336,18 +389,12 @@ def update_assignment(customer_id: int, data: AssignmentUpdate, admin=Depends(ge
                 raise HTTPException(status_code=404, detail="担当者が見つかりません")
         customer.assigned_admin_id = data.assigned_admin_id
 
-    if data.priority is not None:
-        if data.priority not in ("normal", "high"):
-            raise HTTPException(status_code=400, detail="priorityはnormalまたはhighを指定してください")
-        customer.priority = data.priority
-
     db.commit()
     db.refresh(customer)
     return {
         "customer_id": customer.id,
         "assigned_admin_id": customer.assigned_admin_id,
         "assigned_admin_name": customer.assigned_admin.username if customer.assigned_admin else None,
-        "priority": customer.priority,
     }
 
 
@@ -437,8 +484,7 @@ def get_thread_admin(
                      "tone_profile": customer.character.tone_profile if customer.character else None,
                      "character_description": customer.character.description if customer.character else None,
                      "assigned_admin_id": customer.assigned_admin_id,
-                     "assigned_admin_name": customer.assigned_admin.username if customer.assigned_admin else None,
-                     "priority": customer.priority},
+                     "assigned_admin_name": customer.assigned_admin.username if customer.assigned_admin else None},
         "messages": [serialize_message(m) for m in messages],
         "has_more": has_more,
         "reward_status": _reward_status(db, customer_id),
@@ -651,43 +697,107 @@ def get_customer_open_requests(customer_id: int, admin=Depends(get_current_admin
     return [serialize_message(m) for m in msgs]
 
 
-@router.post("/admin/{customer_id}/reward")
-def send_reward(
-    customer_id: int,
-    file: UploadFile = File(...),
-    message: Optional[str] = Form(None),
+# ===================== 修正サジェスト一覧（メッセージ評価） =====================
+
+REACTION_EXAMPLE_CATEGORIES = ("mistake", "question", "correct_answer", "encouragement")
+
+
+def _serialize_feedback(f: MessageFeedback, db: Session) -> dict:
+    character = db.query(Character).filter(Character.id == f.character_id).first() if f.character_id else None
+    customer = db.query(Customer).filter(Customer.id == f.customer_id).first()
+    return {
+        "id": f.id,
+        "message_id": f.message_id,
+        "character_id": f.character_id,
+        "character_name": character.name if character else None,
+        "customer_id": f.customer_id,
+        "customer_name": customer.username if customer else None,
+        "rating": f.rating,
+        "message_content": f.message_content,
+        "status": f.status,
+        "created_at": f.created_at.isoformat() if f.created_at else None,
+    }
+
+
+@router.get("/admin/feedback")
+def list_message_feedback(
+    character_id: Optional[int] = None,
+    rating: Optional[str] = None,
     admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """達成記念のご褒美写真をキャラクターから送る（運営者が用意した画像をアップロード）"""
-    customer = db.query(Customer).filter(Customer.id == customer_id).first()
-    if not customer:
-        raise HTTPException(status_code=404, detail="顧客が見つかりません")
+    """管理者向け：「修正サジェスト一覧」。未対応（status=pending）の👍👎評価を一覧表示する。"""
+    query = db.query(MessageFeedback).filter(MessageFeedback.status == "pending")
+    if character_id is not None:
+        query = query.filter(MessageFeedback.character_id == character_id)
+    if rating is not None:
+        if rating not in ("good", "bad"):
+            raise HTTPException(status_code=400, detail="ratingはgoodまたはbadで指定してください")
+        query = query.filter(MessageFeedback.rating == rating)
+    rows = query.order_by(MessageFeedback.created_at.desc()).all()
+    return [_serialize_feedback(f, db) for f in rows]
 
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in _ALLOWED_EXT:
-        raise HTTPException(status_code=400, detail="対応していない画像形式です（png/jpg/jpeg/webp のみ）")
 
-    raw = file.file.read()
-    if len(raw) > _MAX_IMAGE_SIZE:
-        raise HTTPException(status_code=400, detail="画像サイズが大きすぎます（8MBまで）")
-    validate_image_content(raw, ext)
+class FeedbackApply(BaseModel):
+    # rating=goodの場合のみ必須。reaction_examplesの追加先カテゴリ。
+    category: Optional[str] = None
 
-    filename = f"{uuid.uuid4().hex}{ext}"
-    path = os.path.join(_REWARD_IMAGE_DIR, filename)
-    with open(path, "wb") as f:
-        f.write(raw)
 
-    image_url = f"/static/reward_images/{filename}"
-    msg = Message(
-        customer_id=customer_id,
-        character_id=customer.character_id,
-        sender="character",
-        content=message.strip() if message and message.strip() else None,
-        image_url=image_url,
-        is_reward=True,
-    )
-    db.add(msg)
+@router.post("/admin/feedback/{feedback_id}/apply")
+def apply_message_feedback(
+    feedback_id: int,
+    data: FeedbackApply,
+    admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """管理者向け：サジェストをキャラクターのTONE_PROFILEに反映する。
+    👍 → reaction_examples.<category> に追加、👎 → ng_expressions に追加。
+    """
+    feedback = db.query(MessageFeedback).filter(MessageFeedback.id == feedback_id).first()
+    if not feedback:
+        raise HTTPException(status_code=404, detail="サジェストが見つかりません")
+    if not feedback.message_content or not feedback.message_content.strip():
+        raise HTTPException(status_code=400, detail="メッセージ本文が空のため反映できません")
+    if not feedback.character_id:
+        raise HTTPException(status_code=400, detail="キャラクターが特定できないため反映できません")
+
+    character = db.query(Character).filter(Character.id == feedback.character_id).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="キャラクターが見つかりません")
+
+    tone_profile = dict(character.tone_profile or {})
+    content = feedback.message_content.strip()
+
+    if feedback.rating == "good":
+        if data.category not in REACTION_EXAMPLE_CATEGORIES:
+            raise HTTPException(status_code=400, detail="categoryはmistake/question/correct_answer/encouragementのいずれかで指定してください")
+        reaction_examples = dict(tone_profile.get("reaction_examples") or {})
+        examples = list(reaction_examples.get(data.category) or [])
+        if content not in examples:
+            examples.append(content)
+        reaction_examples[data.category] = examples
+        tone_profile["reaction_examples"] = reaction_examples
+    elif feedback.rating == "bad":
+        ng_expressions = list(tone_profile.get("ng_expressions") or [])
+        if content not in ng_expressions:
+            ng_expressions.append(content)
+        tone_profile["ng_expressions"] = ng_expressions
+    else:
+        raise HTTPException(status_code=400, detail="不正な評価データです")
+
+    character.tone_profile = tone_profile
+    feedback.status = "reviewed"
     db.commit()
-    db.refresh(msg)
-    return serialize_message(msg)
+    db.refresh(character)
+    return {"message": "反映しました", "tone_profile": character.tone_profile}
+
+
+@router.post("/admin/feedback/{feedback_id}/ignore")
+def ignore_message_feedback(feedback_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """管理者向け：サジェストを無視し、一覧から除外する"""
+    feedback = db.query(MessageFeedback).filter(MessageFeedback.id == feedback_id).first()
+    if not feedback:
+        raise HTTPException(status_code=404, detail="サジェストが見つかりません")
+    feedback.status = "reviewed"
+    db.commit()
+    return {"message": "無視しました"}

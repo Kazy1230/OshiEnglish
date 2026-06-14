@@ -658,6 +658,14 @@ def admin_update_article(
         setattr(article, key, val)
     if clear_template:
         article.template_character_id = None
+
+    # request_message_idが（このPATCHで）紐付けられ、unlock_costが明示指定されていない場合は、
+    # 作成時と同様に合意した総額（credit_cost）から依頼時の固定費を引いた残額を自動算出する。
+    if data.request_message_id is not None and data.unlock_cost is None:
+        req_msg = db.query(Message).filter(Message.id == data.request_message_id).first()
+        if req_msg and req_msg.credit_cost:
+            article.unlock_cost = max(0, req_msg.credit_cost - ARTICLE_REQUEST_FEE)
+
     db.commit()
     db.refresh(article)
 
@@ -719,7 +727,21 @@ def admin_update_article(
             cr.feedback_article_id = article.id
             correction_updated = True
 
-    if notification_sent or correction_updated or (
+    # 記事が「公開」に切り替わった瞬間、親密度レベル・記事依頼回数の達成状況をもとに
+    # 未解放の報酬を解放する（admin_create_article時のチェックだけでは、作成〜公開の
+    # 間に親密度ポイントが伸びていた場合の解放漏れが起こり得るため）。
+    rewards_unlocked = False
+    if (
+        data.status == "published"
+        and prev_status != "published"
+        and article.customer_id is not None
+    ):
+        customer = db.query(Customer).filter(Customer.id == article.customer_id).first()
+        if customer:
+            newly_unlocked = check_and_unlock_rewards(db, customer)
+            rewards_unlocked = bool(newly_unlocked)
+
+    if notification_sent or correction_updated or rewards_unlocked or (
         data.status == "published"
         and prev_status != "published"
         and article.request_message_id is not None

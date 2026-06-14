@@ -18,7 +18,7 @@ export function MessagesTab() {
 
   // 複数オペレーターでの分担運用のための絞り込み・並び替え
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "unassigned" | `${id}`
-  const [sortBy, setSortBy] = useState<string>("urgency"); // "urgency" | "priority" | "oldest_reply"
+  const [sortBy, setSortBy] = useState<string>("urgency"); // "urgency" | "oldest_reply"
 
   async function loadThreads() {
     setLoading(true);
@@ -85,7 +85,6 @@ export function MessagesTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="font-bold text-sm truncate" style={{ color: charColor || "var(--primary)" }}>{th.username}</p>
-                      {th.priority === "high" && <span className="text-[10px] flex-shrink-0">🔴</span>}
                       {badge > 0 && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black text-white flex-shrink-0" style={{ background: "var(--accent)" }}>
                           {badge}
@@ -261,7 +260,7 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
     } finally { setSavingMemo(false); }
   }
 
-  async function handleAssignmentChange(patch: { assigned_admin_id?: number | null; priority?: string }) {
+  async function handleAssignmentChange(patch: { assigned_admin_id?: number | null }) {
     setSavingAssignment(true);
     try {
       await api.adminUpdateAssignment(customerId, patch);

@@ -27,7 +27,19 @@ const COLOR_PRESETS = [
   { label: "ウォームオレンジ（元気系）",   value: '{"primary":"#7c2d12","accent":"#ea580c","bg":"#fff7ed","text":"#2c1a0e","card":"#ffffff","border":"#fed7aa","example_bg":"#ffedd5","tips_bg":"#fef3c7"}' },
 ];
 
-const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", chat_error_message: "", instagram_account: "", is_preset: false, linked_customer_id: "" };
+const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", chat_error_message: "", instagram_account: "", image_hint: "", is_preset: false, linked_customer_id: "" };
+
+const GENERATION_BLOCKS: { key: string; label: string }[] = [
+  { key: "DESCRIPTION", label: "説明文" },
+  { key: "GREETINGS", label: "一言（8個）" },
+  { key: "TONE_PROFILE", label: "TONE_PROFILE" },
+  { key: "COLOR_SCHEME", label: "配色" },
+  { key: "FONT_STYLE", label: "フォント" },
+  { key: "IMAGE_HINT", label: "画像ヒント" },
+];
+const FONT_STYLE_VALUES = new Set(["default", "rounded", "serif", "handwriting", "monospace"]);
+
+const emptyGenForm = { character_name: "", character_description: "", user_requested_personality: "", reference_character: "" };
 
 export function CharactersTab() {
   const [characters, setCharacters] = useState<any[]>([]);
@@ -41,6 +53,10 @@ export function CharactersTab() {
   const [toneProfileError, setToneProfileError] = useState(false);
   const [colorSchemeError, setColorSchemeError] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
+  // 新規キャラクター設定のLLM自動生成用
+  const [showGenPanel, setShowGenPanel] = useState(false);
+  const [genForm, setGenForm] = useState(emptyGenForm);
+  const [generatingBlock, setGeneratingBlock] = useState<string | null>(null); // "ALL" または個別ブロックキー
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
   const [promptCustomerIdByChar, setPromptCustomerIdByChar] = useState<Record<number, string>>({});
 
@@ -82,6 +98,59 @@ export function CharactersTab() {
     }
   }
 
+  /** LLM生成結果（パース済み）を各入力欄に反映する。自動保存はしない。 */
+  function applyGeneratedResult(result: any) {
+    if (result.description) setForm(f => ({ ...f, description: result.description }));
+    if (Array.isArray(result.greetings) && result.greetings.length) {
+      setForm(f => ({ ...f, greetings: result.greetings.join("\n") }));
+    }
+    if (result.tone_profile) {
+      handleToneProfileChange(JSON.stringify(result.tone_profile, null, 2));
+    }
+    if (result.color_scheme) {
+      handleColorSchemeChange(JSON.stringify(result.color_scheme));
+    }
+    if (result.font_style && FONT_STYLE_VALUES.has(result.font_style)) {
+      setForm(f => ({ ...f, font_style: result.font_style }));
+    }
+    if (result.image_hint) setForm(f => ({ ...f, image_hint: result.image_hint }));
+  }
+
+  /** blocksを省略すると6ブロック全てを生成する。指定するとそのブロックのみ再生成し、他の欄は保持される。 */
+  async function runGenerate(blocks?: string[]) {
+    setGeneratingBlock(blocks && blocks.length === 1 ? blocks[0] : "ALL");
+    try {
+      let existing: any = undefined;
+      if (blocks && blocks.length) {
+        existing = {};
+        if (!blocks.includes("DESCRIPTION") && form.description) existing.description = form.description;
+        if (!blocks.includes("GREETINGS") && form.greetings) existing.greetings = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
+        if (!blocks.includes("TONE_PROFILE") && form.tone_profile) {
+          try { existing.tone_profile = parseExerciseJsonInput(form.tone_profile); } catch { /* ignore */ }
+        }
+        if (!blocks.includes("COLOR_SCHEME") && form.color_scheme) {
+          try { existing.color_scheme = parseExerciseJsonInput(form.color_scheme); } catch { /* ignore */ }
+        }
+        if (!blocks.includes("FONT_STYLE") && form.font_style) existing.font_style = form.font_style;
+        if (!blocks.includes("IMAGE_HINT") && form.image_hint) existing.image_hint = form.image_hint;
+      }
+      const result = await api.adminGenerateCharacterProfile({
+        character_name: genForm.character_name || form.name,
+        character_description: genForm.character_description || form.description,
+        user_requested_personality: genForm.user_requested_personality,
+        reference_character: genForm.reference_character,
+        blocks,
+        existing,
+      });
+      applyGeneratedResult(result);
+      toast(blocks ? `${blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・")}を再生成しました` : "キャラクター設定を生成しました（内容を確認・編集してから保存してください）", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "生成に失敗しました", "error");
+    } finally {
+      setGeneratingBlock(null);
+    }
+  }
+
   function handleToneProfileChange(val: string) {
     setForm(f => ({ ...f, tone_profile: val }));
     if (!val.trim()) { setToneProfileError(false); return; }
@@ -102,12 +171,15 @@ export function CharactersTab() {
       chat_footer_note: c.chat_footer_note ?? "",
       chat_error_message: c.chat_error_message ?? "",
       instagram_account: c.instagram_account ?? "",
+      image_hint: c.image_hint ?? "",
       is_preset: !!c.is_preset,
       linked_customer_id: "",
     });
     try { setPreviewColors(c.color_scheme); } catch { setPreviewColors(null); }
     setToneProfileError(false);
     setColorSchemeError(false);
+    setShowGenPanel(false);
+    setGenForm(emptyGenForm);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -119,6 +191,8 @@ export function CharactersTab() {
     setPreviewColors(null);
     setToneProfileError(false);
     setColorSchemeError(false);
+    setShowGenPanel(false);
+    setGenForm(emptyGenForm);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -140,6 +214,7 @@ export function CharactersTab() {
       chat_footer_note: form.chat_footer_note.trim() || null,
       chat_error_message: form.chat_error_message.trim() || null,
       instagram_account: form.instagram_account.trim() || null,
+      image_hint: form.image_hint.trim() || null,
       is_preset: form.is_preset,
     };
     try {
@@ -199,6 +274,20 @@ export function CharactersTab() {
     }
   }
 
+  /** LLM生成結果を個別ブロックだけ再生成するための小さなボタン（生成パネルを開いている時のみ表示） */
+  function RegenButton({ block, label }: { block: string; label: string }) {
+    if (!showGenPanel) return null;
+    return (
+      <button type="button"
+        className="text-xs px-1.5 py-0.5 rounded-lg border transition-all hover:shadow"
+        style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+        disabled={generatingBlock !== null}
+        onClick={() => runGenerate([block])}>
+        {generatingBlock === block ? "再生成中…" : `↻ ${label}をAIで再生成`}
+      </button>
+    );
+  }
+
   if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
 
   return (
@@ -236,13 +325,77 @@ export function CharactersTab() {
             LLMにまとめて提案してもらえるプロンプトをコピーできます。著作権配慮の指示も含まれています。
           </p>
 
+          <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
+                🤖 LLMで設定を生成（claude-sonnet-4-6・自動保存はされません）
+              </p>
+              <button type="button"
+                className="text-xs px-2 py-1 rounded-lg border transition-all hover:shadow"
+                style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                onClick={() => setShowGenPanel(v => !v)}>
+                {showGenPanel ? "閉じる" : "開く"}
+              </button>
+            </div>
+            {showGenPanel && (
+              <>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>
+                  申込フォーム等で受け取ったラフな構想を入力して「生成」を押すと、
+                  説明文・本棚の一言（8個）・TONE_PROFILE・配色・フォント・画像ヒントを
+                  まとめてAIに作成してもらい、各入力欄に反映します（保存はされません。内容を確認・編集してから「保存」を押してください）。
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>名前（仮）</label>
+                    <input value={genForm.character_name} onChange={e => setGenForm({ ...genForm, character_name: e.target.value })}
+                      placeholder={form.name || "例：鬼島先輩"} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>イメージ・説明</label>
+                    <input value={genForm.character_description} onChange={e => setGenForm({ ...genForm, character_description: e.target.value })}
+                      placeholder={form.description || "例：ため息をつきながら教えてくれる、少しサディスティックなお姉さん先輩。"} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                    顧客が希望するキャラクター設定（自由記述）
+                  </label>
+                  <textarea rows={3} value={genForm.user_requested_personality}
+                    onChange={e => setGenForm({ ...genForm, user_requested_personality: e.target.value })}
+                    placeholder="例：性別は女性、関係性は先輩、性格は厳しいけど面倒見がいい" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                    参考キャラクター（任意・固有名詞は最終出力からは除去されます）
+                  </label>
+                  <input value={genForm.reference_character} onChange={e => setGenForm({ ...genForm, reference_character: e.target.value })}
+                    placeholder="例：〇〇のような口調・雰囲気" />
+                </div>
+                <button type="button"
+                  className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+                  style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
+                  disabled={generatingBlock !== null}
+                  onClick={() => runGenerate()}>
+                  {generatingBlock === "ALL" ? "生成中…" : "✨ 生成する（6項目すべて）"}
+                </button>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>
+                  生成後、各入力欄の下にある「↻ 再生成」ボタンで個別の項目だけを再生成できます
+                  （他の項目の内容は保持されます）。
+                </p>
+              </>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター名 *</label>
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required placeholder="例：鬼島先輩" />
             </div>
             <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>フォントスタイル</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>フォントスタイル</label>
+                <RegenButton block="FONT_STYLE" label="フォント" />
+              </div>
               <select value={form.font_style} onChange={e => setForm({ ...form, font_style: e.target.value })}>
                 {FONT_STYLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -250,7 +403,10 @@ export function CharactersTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>説明（顧客のバナーに表示）</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>説明（顧客のバナーに表示）</label>
+              <RegenButton block="DESCRIPTION" label="説明文" />
+            </div>
             <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="例：ため息をつきながら教えてくれる、少しサディスティックなお姉さん先輩。" />
           </div>
@@ -295,9 +451,12 @@ export function CharactersTab() {
           )}
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-              本棚に表示する「キャラクターからの一言」（1行に1パターン・複数登録推奨）
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                本棚に表示する「キャラクターからの一言」（1行に1パターン・複数登録推奨）
+              </label>
+              <RegenButton block="GREETINGS" label="一言" />
+            </div>
             <textarea rows={5} value={form.greetings} onChange={e => setForm({ ...form, greetings: e.target.value })}
               placeholder={"例（1行ずつ別パターンとして登録される）：\nしょうがないなあ。今日もぼくと一緒に頑張ろう！\nさあ、また勉強の時間だよ。一緒に頑張ろうね。\nのび太くんも、こうやって続けていれば必ず力がつくよ！\n大丈夫、わからないところは何度でも聞いていいんだからね。"} />
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
@@ -349,14 +508,54 @@ export function CharactersTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-              tone_profile（JSON）— LLMに渡すプロンプトの核心
-            </label>
-            <textarea rows={4} value={form.tone_profile} onChange={e => handleToneProfileChange(e.target.value)}
-              placeholder={'{"speech_style":"...", "keywords":["..."], "personality":"..."}'} style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                tone_profile（JSON）— LLMに渡すプロンプトの核心
+              </label>
+              <button type="button"
+                className="text-xs px-2 py-0.5 rounded-lg border transition-all hover:shadow flex-shrink-0"
+                style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                onClick={() => {
+                  let current: any = {};
+                  try { current = form.tone_profile ? parseExerciseJsonInput(form.tone_profile) : {}; }
+                  catch { current = {}; }
+                  const merged = {
+                    keywords: current.keywords ?? [],
+                    personality: current.personality ?? "",
+                    speech_style: current.speech_style ?? "",
+                    ng_expressions: current.ng_expressions ?? [],
+                    reaction_examples: {
+                      mistake: current.reaction_examples?.mistake ?? [],
+                      question: current.reaction_examples?.question ?? [],
+                      correct_answer: current.reaction_examples?.correct_answer ?? [],
+                      encouragement: current.reaction_examples?.encouragement ?? [],
+                    },
+                    conversation_rules: current.conversation_rules ?? [],
+                    intimacy_variations: {
+                      low: current.intimacy_variations?.low ?? "",
+                      high: current.intimacy_variations?.high ?? "",
+                    },
+                    article_style: current.article_style ?? "",
+                    ...current,
+                  };
+                  handleToneProfileChange(JSON.stringify(merged, null, 2));
+                }}>
+                📋 新形式のテンプレートを挿入（既存の値は保持）
+              </button>
+              <RegenButton block="TONE_PROFILE" label="TONE_PROFILE" />
+            </div>
+            <textarea rows={16} value={form.tone_profile} onChange={e => handleToneProfileChange(e.target.value)}
+              placeholder={'{\n  "keywords": ["", "", "", "", ""],\n  "personality": "",\n  "speech_style": "",\n  "ng_expressions": ["", "", ""],\n  "reaction_examples": {\n    "mistake": ["", "", "", ""],\n    "question": ["", "", "", ""],\n    "correct_answer": ["", "", "", ""],\n    "encouragement": ["", "", "", ""]\n  },\n  "conversation_rules": ["", "", "", "", "", "", "", ""],\n  "intimacy_variations": { "low": "", "high": "" },\n  "article_style": ""\n}'}
+              style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
             {toneProfileError && (
               <p className="text-xs mt-1" style={{ color: "#c0392b" }}>⚠️ JSON形式として読み取れません。カンマの付け忘れや引用符の閉じ忘れがないか確認してください</p>
             )}
+            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+              「新形式のテンプレートを挿入」を押すと、既存の値を保持したまま
+              ng_expressions（NG表現）・reaction_examples（状況別の返答例）・conversation_rules（会話の基本ルール）・
+              intimacy_variations（親密度low/highでの口調変化）・article_style（記事執筆時のトーン指示）を
+              JSON構造として追加できます。生成AIに作ってもらったJSONをそのまま貼り付けることもできます。
+            </p>
           </div>
 
           <div>
@@ -371,6 +570,7 @@ export function CharactersTab() {
                   <span className="text-xs ml-1" style={{ color: "var(--muted)" }}>プレビュー</span>
                 </div>
               )}
+              <RegenButton block="COLOR_SCHEME" label="配色" />
             </div>
             <div className="flex flex-wrap gap-2 mb-2">
               {COLOR_PRESETS.map(p => (
@@ -390,6 +590,17 @@ export function CharactersTab() {
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
               キー: primary / accent / bg / text / card / border / example_bg / tips_bg
             </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                画像生成ヒント（Stable Diffusion等でのキャラビジュアル生成時の参考メモ・UIには表示されません）
+              </label>
+              <RegenButton block="IMAGE_HINT" label="画像ヒント" />
+            </div>
+            <textarea rows={2} value={form.image_hint} onChange={e => setForm({ ...form, image_hint: e.target.value })}
+              placeholder="例：明るい水色の髪を肩までのばした、丸眼鏡をかけた知的な印象の女性。白衣を羽織っている。" />
           </div>
 
           <div className="flex gap-3">

@@ -102,6 +102,10 @@ export const api = {
     apiFetch("/messages/me", { method: "POST", body: JSON.stringify(data) }),
   getMyRewardStatus: () => apiFetch("/messages/me/reward-status"),
   getMyUnreadCount: () => apiFetch("/messages/me/unread-count"),
+  rateMessage: (messageId: number, rating: "good" | "bad") =>
+    apiFetch(`/messages/${messageId}/feedback`, { method: "POST", body: JSON.stringify({ rating }) }),
+  unrateMessage: (messageId: number) =>
+    apiFetch(`/messages/${messageId}/feedback`, { method: "DELETE" }),
 
   // 顧客：クレジット購入
   purchaseCredits: (credits: number) =>
@@ -175,6 +179,7 @@ export const api = {
 
   // 管理者：キャラクター
   adminGetCharacters: () => apiFetch("/characters/"),
+  adminGenerateCharacterProfile: (data: object) => apiFetch("/characters/generate", { method: "POST", body: JSON.stringify(data) }),
   adminCreateCharacter: (data: object) => apiFetch("/characters/", { method: "POST", body: JSON.stringify(data) }),
   adminUpdateCharacter: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteCharacter: (id: number) => apiFetch(`/characters/${id}`, { method: "DELETE" }),
@@ -186,17 +191,16 @@ export const api = {
   adminDeleteCharacterImage: (id: number) => apiFetch(`/characters/${id}/image`, { method: "DELETE" }),
 
   // 管理者：チャット（メッセージ）
-  adminListThreads: (params?: { assignedAdminId?: number | null; unassigned?: boolean; priority?: string; sort?: string }) => {
+  adminListThreads: (params?: { assignedAdminId?: number | null; unassigned?: boolean; sort?: string }) => {
     const qs = new URLSearchParams();
     if (params?.unassigned) qs.set("unassigned", "true");
     else if (params?.assignedAdminId != null) qs.set("assigned_admin_id", String(params.assignedAdminId));
-    if (params?.priority) qs.set("priority", params.priority);
     if (params?.sort) qs.set("sort", params.sort);
     const q = qs.toString();
     return apiFetch(`/messages/admin/threads${q ? `?${q}` : ""}`);
   },
   adminListOperators: () => apiFetch("/messages/admin/operators"),
-  adminUpdateAssignment: (customerId: number, data: { assigned_admin_id?: number | null; priority?: string }) =>
+  adminUpdateAssignment: (customerId: number, data: { assigned_admin_id?: number | null }) =>
     apiFetch(`/messages/admin/${customerId}/assignment`, { method: "PATCH", body: JSON.stringify(data) }),
   adminGetThread: (customerId: number, params?: { beforeId?: number; limit?: number }) => {
     const qs = new URLSearchParams();
@@ -231,6 +235,19 @@ export const api = {
     apiFetch(`/messages/admin/message/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
   adminDeleteMessage: (messageId: number) =>
     apiFetch(`/messages/admin/message/${messageId}`, { method: "DELETE" }),
+
+  // 管理者：修正サジェスト一覧（メッセージ評価）
+  adminListMessageFeedback: (params?: { characterId?: number; rating?: "good" | "bad" }) => {
+    const qs = new URLSearchParams();
+    if (params?.characterId != null) qs.set("character_id", String(params.characterId));
+    if (params?.rating) qs.set("rating", params.rating);
+    const q = qs.toString();
+    return apiFetch(`/messages/admin/feedback${q ? `?${q}` : ""}`);
+  },
+  adminApplyMessageFeedback: (feedbackId: number, category?: string) =>
+    apiFetch(`/messages/admin/feedback/${feedbackId}/apply`, { method: "POST", body: JSON.stringify({ category }) }),
+  adminIgnoreMessageFeedback: (feedbackId: number) =>
+    apiFetch(`/messages/admin/feedback/${feedbackId}/ignore`, { method: "POST" }),
 
   // 管理者：文法マスター
   adminGetGrammarMasters: () => apiFetch("/grammar-masters/"),

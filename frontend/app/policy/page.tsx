@@ -1,15 +1,34 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { resolveTheme } from "@/lib/theme";
+import { resolveTheme, type CharacterTheme } from "@/lib/theme";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 
 export default function PolicyPage() {
   const router = useRouter();
   const [mode, toggleMode] = useDarkMode();
-  const t = resolveTheme(null, mode);
+  const [theme, setTheme] = useState<CharacterTheme | null>(null);
+  const t = resolveTheme(theme, mode);
   const loggedIn = !!getToken();
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    (async () => {
+      try {
+        const user = await api.me();
+        if (user.character_id) {
+          const charTheme = await api.getCharacterTheme(user.character_id);
+          setTheme(charTheme);
+        }
+      } catch {
+        // テーマ取得に失敗してもデフォルトテーマで表示を継続する
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: t.bg, fontFamily: t.fontFamily }}>
@@ -37,8 +56,7 @@ export default function PolicyPage() {
           <h3 className="text-lg font-black mb-3" style={{ color: t.primary }}>🚪 解約について</h3>
           <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
             <li>ユーザーはいつでも退会することができます。</li>
-            <li>退会後は、未使用のコンテンツにアクセスできなくなります。</li>
-            <li>キャラクターとのチャット履歴は、退会後に削除されます。</li>
+            <li>退会すると、アカウント情報・キャラクターとのチャット履歴・記事などのデータはすべて削除され、復元できません。</li>
           </ul>
         </section>
 

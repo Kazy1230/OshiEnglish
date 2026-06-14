@@ -28,6 +28,7 @@ type Msg = {
   is_reward: boolean;
   suggested_action: string | null;
   created_at: string;
+  my_feedback?: "good" | "bad" | null;
 };
 
 type Intimacy = {
@@ -102,6 +103,22 @@ function ChatPageInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prependingRef = useRef(false);
   const prevLevelRef = useRef<number | null>(null);
+
+  async function handleRateMessage(messageId: number, rating: "good" | "bad") {
+    const current = messages.find(m => m.id === messageId);
+    const next = current?.my_feedback === rating ? null : rating;
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, my_feedback: next } : m));
+    try {
+      if (next) {
+        await api.rateMessage(messageId, next);
+      } else {
+        await api.unrateMessage(messageId);
+      }
+    } catch (err: any) {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, my_feedback: current?.my_feedback ?? null } : m));
+      toast(err.message || "評価の送信に失敗しました", "error");
+    }
+  }
 
   async function checkRewardUnlocks() {
     try {
@@ -411,7 +428,8 @@ function ChatPageInner() {
         <div className="flex flex-col gap-3">
           {messages.map((m) => (
             <MessageBubble key={m.id} m={m} theme={t} charName={charName} charImage={charImage}
-              onSuggestedAction={() => setCorrectionModalType("ask")} />
+              onSuggestedAction={() => setCorrectionModalType("ask")}
+              onRate={handleRateMessage} />
           ))}
         </div>
         <div ref={bottomRef} />
@@ -529,9 +547,10 @@ function ChatPageInner() {
   );
 }
 
-function MessageBubble({ m, theme: t, charName, charImage, onSuggestedAction }: {
+function MessageBubble({ m, theme: t, charName, charImage, onSuggestedAction, onRate }: {
   m: Msg; theme: ReturnType<typeof resolveTheme>; charName: string; charImage?: string;
   onSuggestedAction?: (action: string) => void;
+  onRate?: (messageId: number, rating: "good" | "bad") => void;
 }) {
   const isCustomer = m.sender === "customer";
 
@@ -588,7 +607,23 @@ function MessageBubble({ m, theme: t, charName, charImage, onSuggestedAction }: 
             )}
           </div>
         )}
-        <p className="text-[10px] mt-1 px-1" style={{ color: t.accent, opacity: 0.7 }}>{formatTime(m.created_at)}</p>
+        <div className="flex items-center gap-1.5 mt-1 px-1">
+          <p className="text-[10px]" style={{ color: t.accent, opacity: 0.7 }}>{formatTime(m.created_at)}</p>
+          {!isCustomer && (
+            <span className="flex items-center gap-0.5">
+              <button type="button" onClick={() => onRate?.(m.id, "good")} aria-label="良い返信"
+                className="text-[11px] leading-none px-0.5 transition-opacity hover:opacity-100"
+                style={{ opacity: m.my_feedback === "good" ? 1 : 0.35 }}>
+                👍
+              </button>
+              <button type="button" onClick={() => onRate?.(m.id, "bad")} aria-label="改善してほしい返信"
+                className="text-[11px] leading-none px-0.5 transition-opacity hover:opacity-100"
+                style={{ opacity: m.my_feedback === "bad" ? 1 : 0.35 }}>
+                👎
+              </button>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

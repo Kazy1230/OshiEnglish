@@ -7,7 +7,14 @@ _TONE_LABELS = {
     "keywords": "口癖・キーワード",
     "personality": "性格・特徴",
     "example_prefix": "例文の書き出しイメージ",
+    "ng_expressions": "避けるべき表現（NG表現）",
+    "conversation_rules": "会話の基本ルール（常に守ること）",
 }
+
+# render_tone_profileの「未知キーをそのまま出力」ループから除外するキー。
+# これらは個別のrender_*関数で専用の形式に整形して別ブロックとして渡すため、
+# ここで素朴にstr()してしまうと辞書がそのまま文字列化されて読みにくくなる。
+_STRUCTURED_KEYS = {"reaction_examples", "intimacy_variations", "level_tones", "article_style"}
 
 
 def render_tone_profile(tone_profile: dict | None) -> str:
@@ -22,12 +29,64 @@ def render_tone_profile(tone_profile: dict | None) -> str:
         if text.strip():
             lines.append(f"■ {label}: {text}")
     for key, val in tone_profile.items():
-        if key in _TONE_LABELS or val in (None, "", []):
+        if key in _TONE_LABELS or key in _STRUCTURED_KEYS or val in (None, "", []):
             continue
         text = "、".join(val) if isinstance(val, list) else str(val)
         if text.strip():
             lines.append(f"■ {key}: {text}")
     return "\n".join(lines)
+
+
+_REACTION_CATEGORY_LABELS = {
+    "mistake": "ユーザーが間違えた・うまくいかなかった時",
+    "question": "ユーザーが質問した時",
+    "correct_answer": "ユーザーが正解した・うまくできた時",
+    "encouragement": "励ましたい時",
+}
+
+
+def render_reaction_examples(tone_profile: dict | None, categories: list[str] | None = None) -> str:
+    """tone_profile.reaction_examples（状況別の返答例）を、参考例ブロックとして整形する。
+
+    categories省略時は全カテゴリ（mistake/question/correct_answer/encouragement）を出力する。
+    LLMはここに渡された例をそのまま使うのではなく、会話の流れに合った
+    カテゴリ・言い回しを参考にして自然な返答を考えるための材料として使う。
+    """
+    if not isinstance(tone_profile, dict):
+        return ""
+    examples = tone_profile.get("reaction_examples")
+    if not isinstance(examples, dict):
+        return ""
+    target_keys = categories or list(_REACTION_CATEGORY_LABELS.keys())
+    lines = []
+    for key in target_keys:
+        vals = examples.get(key)
+        if not isinstance(vals, list) or not vals:
+            continue
+        text = "／".join(str(v) for v in vals if str(v).strip())
+        if text:
+            label = _REACTION_CATEGORY_LABELS.get(key, key)
+            lines.append(f"■ {label}の参考例: {text}")
+    return "\n".join(lines)
+
+
+def render_intimacy_variation(tone_profile: dict | None, level: int) -> str:
+    """tone_profile.intimacy_variations（low/high）から、現在の親密度レベルに応じた
+    口調・態度の変化を取り出す。
+
+    tone_profile例: {"intimacy_variations": {"low": "...", "high": "..."}}
+    Lv0〜2はlow、Lv3〜5はhigh（app/core/intimacy.pyの段階区分に対応）を使う。
+    """
+    if not isinstance(tone_profile, dict) or not tone_profile:
+        return ""
+    variations = tone_profile.get("intimacy_variations")
+    if not isinstance(variations, dict):
+        return ""
+    key = "low" if level < 3 else "high"
+    text = variations.get(key)
+    if not text or not str(text).strip():
+        return ""
+    return str(text).strip()
 
 
 def render_level_tone(tone_profile: dict | None, level: int) -> str:
@@ -66,7 +125,8 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
     birthday = mem.get("birthday")
     admin_memo = (customer.admin_memo or "").strip()
 
-    tone_block = render_tone_profile(character.tone_profile if character else None)
+    tone_profile = character.tone_profile if character else None
+    tone_block = render_tone_profile(tone_profile)
 
     lines = [
         f"あなたは英語学習サービスのキャラクター「{character.name if character else 'キャラクター'}」になりきって、"
@@ -90,9 +150,12 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
         f"■ 名前: {customer_display_name(customer)}",
         f"■ 関係性の段階: Lv.{intimacy['level']}（{intimacy['stage_label']}） — {intimacy['stage_hint']}",
     ]
-    level_tone = render_level_tone(character.tone_profile if character else None, intimacy["level"])
+    level_tone = render_level_tone(tone_profile, intimacy["level"])
     if level_tone:
         lines.append(f"■ この親密度レベルでの口調・態度: {level_tone}")
+    intimacy_variation = render_intimacy_variation(tone_profile, intimacy["level"])
+    if intimacy_variation:
+        lines.append(f"■ 現在の親密度段階での口調の変化: {intimacy_variation}")
     if birthday:
         lines.append(f"■ 誕生日: {birthday}")
     if favorites:
@@ -101,6 +164,17 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
         lines.append(f"■ これまでのエピソード: {' / '.join(episodes)}")
     if admin_memo:
         lines.append(f"■ 運営からの引き継ぎメモ（重要・必ず踏まえること）: {admin_memo}")
+
+    reaction_block = render_reaction_examples(tone_profile)
+    if reaction_block:
+        lines += [
+            "",
+            "==================================================",
+            "【状況別の返答例（参考。直近の生徒のメッセージ内容に最も近いカテゴリの例を",
+            "参考にしつつ、会話の流れに合わせて自然な一言にすること。そのまま使う必要はない）】",
+            "==================================================",
+            reaction_block,
+        ]
 
     lines += [
         "",
@@ -111,6 +185,7 @@ def build_dm_reply_system_prompt(character, customer, intimacy: dict) -> str:
         "・前置き、説明、見出し、引用符（「」など）は不要です。",
         "・関係性の段階に合った呼び方・距離感の口調にしてください。",
         "・直近の会話の流れに自然につながる、1〜3文程度の短い返信にしてください。",
+        "・「会話の基本ルール」を常に守り、「避けるべき表現（NG表現）」は使わないでください。",
     ]
     return "\n".join(lines)
 

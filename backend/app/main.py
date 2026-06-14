@@ -22,6 +22,17 @@ def _ensure_column(table: str, column: str, ddl: str):
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
             conn.commit()
 
+# 使わなくなったカラムをDBからも削除するためのヘルパー
+def _drop_column(table: str, column: str):
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column"
+        ), {"table": table, "column": column})
+        if result.scalar() > 0:
+            conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+            conn.commit()
+
 _ensure_column("characters", "greeting", "VARCHAR(300) NULL")
 _ensure_column("characters", "image_url", "VARCHAR(500) NULL")
 _ensure_column("characters", "greetings", "JSON NULL")
@@ -73,9 +84,11 @@ _ensure_column("customers", "intimacy_points", "INT NOT NULL DEFAULT 0")
 # どの受注がどの顧客につながったかを追跡するための外部キー（アプリ側で整合性を管理）
 _ensure_column("orders", "customer_id", "INT NULL")
 
-# 簡易マイグレーション⑥: DMスレッドの担当割り当て・優先度（複数オペレーターでの分担運用のため）
+# 簡易マイグレーション⑥: DMスレッドの担当割り当て（複数オペレーターでの分担運用のため）
 _ensure_column("customers", "assigned_admin_id", "INT NULL")
-_ensure_column("customers", "priority", "VARCHAR(20) NOT NULL DEFAULT 'normal'")
+
+# 簡易マイグレーション⑥b: 対応優先度（priority）は運用上不要になったため削除
+_drop_column("customers", "priority")
 
 # 簡易マイグレーション⑦: アクセスログ・DMの肥大化対策
 # - access_logsは記事閲覧のたびに1行追加されるため、顧客×期間での絞り込みを高速化するインデックスを追加
@@ -193,6 +206,51 @@ _ensure_column("articles", "template_source_id", "INT NULL")
 _ensure_index("articles", "ix_articles_template_source_id", "(template_source_id)")
 _ensure_column("messages", "credit_cost", "INT NULL")
 _ensure_column("customers", "last_template_article_at", "DATETIME NULL")
+
+# 簡易マイグレーション㉗: クレジット購入の購入履歴・領収書対応
+# - orders.order_type: character_creation（キャラ作成申し込み）/ credit_purchase（クレジット購入）
+#   クレジット購入時もOrderレコードを作成し、購入履歴（/purchases）に表示・領収書発行できるようにする
+_ensure_column("orders", "order_type", "VARCHAR(30) NOT NULL DEFAULT 'character_creation'")
+
+# 簡易マイグレーション㉘: characters.tone_profile の構造拡張
+# - tone_profileはJSON列のため列追加は不要だが、既存キャラクターのtone_profileに
+#   新しいキー（ng_expressions / reaction_examples / conversation_rules /
+#   intimacy_variations / article_style）が無ければ空の初期値を追加し、
+#   既存のキー・値は一切変更しない（記事生成・チャット返信プロンプトがこれらのキーを参照するため）。
+_TONE_PROFILE_NEW_KEY_DEFAULTS = {
+    "ng_expressions": [],
+    "reaction_examples": {"mistake": [], "question": [], "correct_answer": [], "encouragement": []},
+    "conversation_rules": [],
+    "intimacy_variations": {"low": "", "high": ""},
+    "article_style": "",
+}
+
+
+def _migrate_tone_profile_extensions():
+    from app.models.character import Character
+    with SessionLocal() as db:
+        changed = False
+        for character in db.query(Character).all():
+            tp = character.tone_profile
+            if not isinstance(tp, dict):
+                continue
+            updated = dict(tp)
+            for key, default in _TONE_PROFILE_NEW_KEY_DEFAULTS.items():
+                if key not in updated:
+                    updated[key] = default
+            if updated != tp:
+                character.tone_profile = updated
+                changed = True
+        if changed:
+            db.commit()
+
+
+_migrate_tone_profile_extensions()
+
+# 簡易マイグレーション㉙: characters.image_hint
+# - 新規キャラクター作成時のLLM設定生成（IMAGE_HINTブロック）の保存先。
+#   Stable Diffusion等でのキャラビジュアル生成時に参照するためのメモで、UI表示には使わない。
+_ensure_column("characters", "image_hint", "TEXT NULL")
 
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ

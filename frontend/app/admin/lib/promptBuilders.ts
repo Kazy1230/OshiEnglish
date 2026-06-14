@@ -265,13 +265,21 @@ export function summarizeExerciseData(format: string, data: any): string {
   return "";
 }
 
+// renderToneProfileの「未知キーをそのまま出力」ループから除外するキー。
+// これらは個別のrender*関数で専用の形式に整形して別ブロックとして渡すため、
+// ここで素朴に文字列化してしまうと、オブジェクトがそのまま [object Object] のように
+// 表示されたり、記事生成プロンプトの趣旨に合わない形で混入してしまう。
+const TONE_PROFILE_STRUCTURED_KEYS = new Set(["reaction_examples", "intimacy_variations", "level_tones", "article_style"]);
+
 export function renderToneProfile(tp: any): string {
   if (!tp || typeof tp !== "object") return "";
   const KNOWN: Record<string, string> = {
-    speech_style:   "口調・話し方",
-    keywords:       "口癖・キーワード",
-    personality:    "性格・特徴",
-    example_prefix: "例文の書き出しイメージ",
+    speech_style:    "口調・話し方",
+    keywords:        "口癖・キーワード",
+    personality:     "性格・特徴",
+    example_prefix:  "例文の書き出しイメージ",
+    ng_expressions:  "避けるべき表現（NG表現）",
+    conversation_rules: "会話の基本ルール（常に守ること）",
   };
   const lines: string[] = [];
   // 既知フィールドを先に（日本語ラベル付き）
@@ -283,7 +291,7 @@ export function renderToneProfile(tp: any): string {
   }
   // 未知フィールドをその後（キー名をラベルとして使用）
   for (const [key, val] of Object.entries(tp)) {
-    if (key in KNOWN) continue;
+    if (key in KNOWN || TONE_PROFILE_STRUCTURED_KEYS.has(key)) continue;
     if (val === undefined || val === null || val === "") continue;
     const str = Array.isArray(val) ? (val as any[]).join("、") : String(val);
     if (str.trim()) lines.push(`■ ${key}: ${str}`);
@@ -291,10 +299,47 @@ export function renderToneProfile(tp: any): string {
   return lines.join("\n");
 }
 
+const REACTION_EXAMPLE_LABELS: Record<string, string> = {
+  mistake:        "ユーザーが間違えた・うまくいかなかった時",
+  question:       "ユーザーが質問した時",
+  correct_answer: "ユーザーが正解した・うまくできた時",
+  encouragement:  "励ましたい時",
+};
+
+/** tone_profile.reaction_examples（状況別の返答例）を参考例ブロックとして整形する */
+export function renderReactionExamples(tp: any, categories?: string[]): string {
+  const examples = tp?.reaction_examples;
+  if (!examples || typeof examples !== "object") return "";
+  const keys = categories ?? Object.keys(REACTION_EXAMPLE_LABELS);
+  const lines: string[] = [];
+  for (const key of keys) {
+    const vals = examples[key];
+    if (!Array.isArray(vals) || vals.length === 0) continue;
+    const text = vals.map((v: any) => String(v)).filter(s => s.trim()).join("／");
+    if (text) lines.push(`■ ${REACTION_EXAMPLE_LABELS[key] ?? key}の参考例: ${text}`);
+  }
+  return lines.join("\n");
+}
+
+/** tone_profile.intimacy_variations（low/high）から、現在の親密度レベルに応じた口調の変化を取り出す */
+export function renderIntimacyVariation(tp: any, level: number): string {
+  const variations = tp?.intimacy_variations;
+  if (!variations || typeof variations !== "object") return "";
+  const key = level < 3 ? "low" : "high";
+  const text = variations[key];
+  return text && String(text).trim() ? String(text).trim() : "";
+}
+
+/** tone_profile.article_style（記事執筆時のトーン指示）を取り出す */
+export function renderArticleStyle(tp: any): string {
+  const text = tp?.article_style;
+  return text && String(text).trim() ? String(text).trim() : "";
+}
+
 /** キャラクター情報からLLMに渡すプロンプト文字列を生成 */
 export function buildLLMPrompt(char: any, topic?: string, customer?: any): string {
   const tp = char.tone_profile ?? {};
-  const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
+  const intimacyBlock = customer ? buildIntimacyBlock(customer, tp) : "";
   return `あなたは英文法解説記事のライターです。以下のキャラクターになりきって、指定の出力フォーマットを"厳密に"守って記事を書いてください。
 フォーマットを厳守する理由は、後工程でこの出力をそのまま管理画面の入力欄（解説本文／例文／Tips）に分割してコピー＆ペーストするためです。体裁が変わると貼り付け作業がやり直しになるので、必ず同じ型で出力してください。
 
@@ -400,10 +445,183 @@ Someone **who** is singing so loudly must be practicing again. / こんなに大
    コードブロックで囲むことで、Markdown記法を含む「生のテキスト」のまま安全にコピー＆ペーストできるようになります。`.trim();
 }
 
+/**
+ * 【段階1】記事の「内容」をキャラクター抜きで生成するプロンプト。
+ * キャラクターの口調・性格には触れず、文法解説として正確・網羅的な内容を作る。
+ * ここで生成された ===CONTENT===/===EXAMPLES===/===TIPS=== の出力を、
+ * そのまま buildArticleTonePrompt() の stage1Content に渡すことで、
+ * 「内容はそのまま、口調だけ再生成する」段階2を独立して実行できる。
+ */
+export function buildArticleContentPrompt(topic?: string): string {
+  return `あなたは英文法解説記事のライターです。指定の出力フォーマットを"厳密に"守って記事を書いてください。
+この段階ではキャラクターの口調・性格づけは一切行わず、誰が読んでも分かりやすい標準的な解説文（です・ます調）で執筆してください。
+（口調・キャラクター性への変換は、この後の別の工程で行います。）
+
+フォーマットを厳守する理由は、後工程でこの出力をそのまま管理画面の入力欄（解説本文／例文／Tips）に分割してコピー＆ペーストするためです。体裁が変わると貼り付け作業がやり直しになるので、必ず同じ型で出力してください。
+
+==================================================
+【今回の文法トピック】
+==================================================
+${topic ?? "（ここに依頼された文法項目を記入）"}
+
+==================================================
+【★最重要：品質基準（これを満たさない記事は不合格です）】
+==================================================
+この記事は「隅々まで役立つ参考書の1ページ」を目指します。以下の3点を必ず満たしてください。
+
+1. ボリューム: 解説本文（===CONTENT===の中身）だけで日本語3000文字程度を確保する。
+   薄い説明を引き伸ばすのではなく、後述2の「網羅性」の要素を実際に書き込むことで自然にこの分量に到達させること。
+   見出し4〜6個・各セクション500〜700字程度を目安に、内容のある文章で構成する。
+
+   ▼ページ分割マーカーについて（★必須）
+   この記事は読者の画面では「1ページ1500文字程度」の複数ページに分けて表示される。
+   そのため、本文中のキリの良い区切り（見出しの直前など、文や段落の途中では絶対に入れない）に
+   目安として1500文字ごとに改行のみの行で \`<!--PAGE-->\` を1〜2箇所挿入し、
+   全体が概ね2〜3ページ（合計3000文字程度）になるように調整すること。
+   マーカーは「次の見出しが始まる直前」に置き、読者が読みやすい単位で章が割れるようにする。
+
+2. 網羅性: そのトピックを「これ1本読めば困らない」状態にする。最低限、以下の要素を本文に含める。
+   - 基本ルール・形の説明（いつ・どう使うか）
+   - 似ている表現／紛らわしい表現との違い（例: 比較対象になる文法項目、置き換え可能な表現とのニュアンス差）
+   - 関連して覚えておきたい英語表現・言い回し（コロケーションや定番フレーズなど、トピックの周辺知識）
+   - 学習者がよくやる誤用とその理由（表面的な「気をつけよう」で終わらせず、なぜ間違えるのか・どう直すかまで踏み込む）
+   - フォーマル/カジュアルや会話/ライティングなど、場面によるニュアンスの違い（該当する場合）
+
+3. 例文は文法的に正確で、トピックの文法ポイントを明確に含むこと。
+   この段階ではキャラクター性は不要なので、状況設定はシンプルで一般的な内容（日常会話・学校・仕事など）にしてください。
+   （キャラクターの世界観を活かした演出は、次の段階で別途付け加えます。）
+
+4. 一貫性: 解説本文・例文・Tipsのすべてで、丁寧で分かりやすい解説トーンを統一する。
+
+==================================================
+【出力フォーマット（このまま3ブロックで出力すること）】
+==================================================
+必ず下記の3つの見出し区切り（===CONTENT===など）をそのまま出力に含めてください。
+区切りの間に書く中身は、Markdown記法と装飾ルールに厳密に従ってください。
+
+===CONTENT===
+（ここに解説本文をMarkdownで。日本語3000文字程度。下記の装飾ルールと、上の「品質基準」1〜2を必ず満たすこと）
+
+装飾ルール（本文内で使用する記法。崩さず必ず使うこと）:
+- 見出しは「## 」で大項目、「### 」で小項目（"# "は使わない）。大項目を4〜6個用意し、網羅性の各要素を割り振る
+- 文法用語・重要語句は **太字** で強調する（例: **関係代名詞** ）
+- 英単語・英熟語のミニ引用は \`コード表記\` を使う（例: \`who\` と \`which\` の違い）
+- 「ここがポイント」となる例文・要約は引用ブロック「> 」で2〜3回入れる
+- 各セクション500〜700字程度の読み応えのある分量で、丁寧な解説トーン（です・ます調）で書く
+- 約1500文字ごとの「次の見出しの直前」に、独立した行として \`<!--PAGE-->\` を1〜2箇所挿入し、
+  読者の画面では複数ページに分かれて表示されるようにする（文・段落の途中には絶対に入れない）
+- 最後に1文、学習者を励ます一言を入れる
+
+===EXAMPLES===
+（例文を3〜4本、改行区切りで。各行は必ず下記の形式に統一すること。
+　英文は文法的に正確で、トピックの文法ポイントを明確に含むこと。状況設定はシンプルな日常・学校・仕事のシーンにする）
+**英文（太字部分に文法ポイントを含める）** / 日本語訳
+
+例（関係代名詞のトピックの場合）:
+The friend **who** always helps me with homework is Maria. / いつも宿題を手伝ってくれる友達はマリアです。
+Someone **who** is singing so loudly must be practicing for a concert. / こんなに大きな声で歌っている人は、きっとコンサートの練習をしているのでしょう。
+
+===TIPS===
+（よくある間違い・注意点・関連して覚えておきたい表現を3〜4個、改行区切りの箇条書きで。
+　各行は1〜2文・丁寧な解説トーンで、「なぜそうなるか」まで踏み込んで書く）
+
+==================================================
+【厳守事項まとめ】
+==================================================
+1. 必ず ===CONTENT=== / ===EXAMPLES=== / ===TIPS=== の3ブロックを過不足なく出力する
+2. 区切り線や前置き・後書きの説明文は一切付けない（本文のみを出力する）
+3. 装飾ルール（##見出し・**太字**・\`コード\`・> 引用）は必ず使用し、本文を無装飾の地の文だけにしない
+4. ===CONTENT=== は日本語3000文字程度を満たし、網羅性の各要素（基本ルール／紛らわしい表現との違い／関連表現／誤用の理由／場面によるニュアンス差）を実際に盛り込む
+5. ===CONTENT=== 内に、約1500文字ごとの見出し直前という「キリの良い位置」に \`<!--PAGE-->\` を1〜2箇所挿入し、2〜3ページ構成にする
+6. キャラクターの口調・性格づけは一切行わない（次の段階で別途変換するため）
+7. 【出力時の最終手順・必ず守ること】回答全体を、フェンス付きコードブロック（\`\`\`の3つで開始・終了）で囲んで出力してください。
+   理由：このままチャット画面に表示されると、##や**などのMarkdown記法が「見た目」としてレンダリングされてしまい、
+   コピーした際に記法が壊れたり消えたりして、管理画面に正しく貼り付けられなくなります。
+   コードブロックで囲むことで、Markdown記法を含む「生のテキスト」のまま安全にコピー＆ペーストできるようになります。`.trim();
+}
+
+/**
+ * 【段階2】段階1で生成済みの記事内容（stage1Content）を、キャラクターの
+ * TONE_PROFILE全体を使って「口調・キャラクター性」に変換するプロンプト。
+ * 内容（解説の論点・例文の文法ポイント・Tipsの指摘事項）は変えず、
+ * 文体・語りかけ方・例文の演出だけを変換すること、を強く指示する。
+ * このプロンプトはstage1Contentさえあれば独立して何度でも再生成できるため、
+ * 「内容はそのまま、口調だけ再生成する」という要件を満たす。
+ */
+export function buildArticleTonePrompt(stage1Content: string, char: any, customer?: any): string {
+  const tp = char?.tone_profile ?? {};
+  const intimacyBlock = customer ? buildIntimacyBlock(customer, tp) : "";
+  const reactionBlock = renderReactionExamples(tp);
+  const articleStyle = renderArticleStyle(tp);
+  const intimacyLevel = customer?.intimacy_level ?? customer?.intimacy?.level;
+  const intimacyVariation = typeof intimacyLevel === "number" ? renderIntimacyVariation(tp, intimacyLevel) : "";
+
+  return `あなたは英文法解説記事のリライターです。以下に与える「変換前の記事（内容確定済み）」を、
+指定のキャラクターの口調・性格になりきって書き直してください。
+
+==================================================
+【最重要：守るべきこと】
+==================================================
+・解説の論点、例文の文法ポイント、Tipsで指摘している内容など「内容そのもの」は変えないこと。
+・見出し構成、===CONTENT===/===EXAMPLES===/===TIPS=== の3ブロック構成、\`<!--PAGE-->\` の位置、
+　Markdown装飾（##見出し・**太字**・\`コード\`・> 引用）は維持すること。
+・変えるのは「文体・語りかけ方・例文に添える演出・言葉選び」だけです。
+
+==================================================
+【キャラクター設定】
+==================================================
+■ 名前: ${char?.name ?? ""}
+■ 説明: ${char?.description ?? ""}
+${renderToneProfile(tp)}
+■ このキャラクターの世界観（関係者・口グセ・定番シチュエーションなど、知っている人がニヤッとできる要素）も自分で補って活用してください。
+${articleStyle ? `\n■ 記事執筆時のトーン指示: ${articleStyle}\n  （雑談・余談は控え、解説そのものに集中したトーンで書き直してください）` : ""}
+${intimacyVariation ? `\n■ 現在の親密度段階での口調の変化: ${intimacyVariation}` : ""}
+${intimacyBlock ? `\n${intimacyBlock}` : ""}
+${reactionBlock ? `\n==================================================\n【状況別の返答例（参考。例文に添える演出やTipsの語りかけのトーンの参考にしてください。そのまま使う必要はありません）】\n==================================================\n${reactionBlock}` : ""}
+
+==================================================
+【変換時の指示】
+==================================================
+1. キャラクター性を例文に最大限活かす: これがこの記事の一番の付加価値です。
+   ただ文法的に正しいだけの無味乾燥な例文は禁止します。例文そのもの、または例文に添えるひとことに、
+   「このキャラクターを知っている人が思わずニヤッとする」ネタ（定番の決め台詞、関係キャラとのエピソード、
+   よくあるシチュエーションなど）を必ず練り込んでください。
+   ─ 悪い例（キャラ性ゼロ）: "Someone is singing so loudly." / 誰かがとても大きな声で歌っている。
+   ─ 良い例（ドラえもん風キャラの場合）: "Someone is singing so loudly." の例文に対して、
+     「ジャイアン、また空き地でリサイタルか…のび太くん、今日は遠回りして帰ろう」のように、
+     例文の状況をキャラクターの世界の出来事として"演出"し、読者がクスッと笑える一言を添える。
+   このレベル感を、今回のキャラクター「${char?.name ?? ""}」の世界観に置き換えて、全例文（最低3本）に施してください。
+   設定にないキャラクター名や固有名詞を断定的に作り出すのではなく、上記の「キャラクター設定」と
+   一般に知られているそのキャラクターの世界観をもとに、自然で違和感のない演出を考えること。
+   文法ポイント（太字部分）や日本語訳の意味は変えないこと。
+
+2. 解説本文・Tipsは、このキャラクターの口調・口癖・テンションで書き直す。
+   「会話の基本ルール」を常に守り、「避けるべき表現（NG表現）」は使わないこと。${customer ? `
+   この記事は「${getCustomerDisplayName(customer)}」さん向けに書かれます。上記の親密度ブロックに従い、書き方・語りかけ方・距離感を必ず合わせてください。` : ""}
+
+3. 一貫性: 解説本文・例文・Tipsのすべてで、このキャラクターの口調・口癖・テンションを統一する。
+   キャラクターが「先生」として語りかけている感覚を最後まで切らさないこと。
+
+==================================================
+【変換前の記事（内容確定済み・この内容を変えずに口調だけ変換すること）】
+==================================================
+${stage1Content}
+
+==================================================
+【出力フォーマット】
+==================================================
+変換後の記事を、===CONTENT===/===EXAMPLES===/===TIPS=== の3ブロック構成のまま出力してください。
+区切り線や前置き・後書きの説明文は一切付けないこと（本文のみを出力する）。
+【出力時の最終手順・必ず守ること】回答全体を、フェンス付きコードブロック（\`\`\`の3つで開始・終了）で囲んで出力してください。
+理由：このままチャット画面に表示されると、##や**などのMarkdown記法が「見た目」としてレンダリングされてしまい、
+コピーした際に記法が壊れたり消えたりして、管理画面に正しく貼り付けられなくなります。
+コードブロックで囲むことで、Markdown記法を含む「生のテキスト」のまま安全にコピー＆ペーストできるようになります。`.trim();
+}
+
 /** キャラクターのブログ記事用にLLMへ渡すプロンプト文字列を生成（テーマ・オプション顧客対応） */
 export function buildBlogLLMPrompt(char: any, theme?: string, customer?: any): string {
   const tp = char.tone_profile ?? {};
-  const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
+  const intimacyBlock = customer ? buildIntimacyBlock(customer, tp) : "";
   return `あなたは、キャラクター「${char.name}」になりきって個人ブログを書くライターです。
 これは英文法解説記事ではなく、「${char.name}」が趣味や日常のちょっとした出来事を綴っている、肩の力を抜いた読み物です。
 読者は「このキャラクターが普段どんなことを考えて過ごしているか」を覗き見る感覚で楽しみます。
@@ -625,12 +843,13 @@ Tips2
  *   Lv4（140〜219pt）: 親友期   - もはや親友、冗談・軽口も飛び交う関係
  *   Lv5（220pt〜）: 特別な存在期 - 誰よりも信頼し合う、かけがえのない相手
  */
-export function buildIntimacyBlock(customer: any): string {
+export function buildIntimacyBlock(customer: any, tp?: any): string {
   const intimacy = customer?.intimacy ?? {};
   const level: number = intimacy.level ?? 0;
   const stageLabel: string = intimacy.stage_label ?? "敬語期";
   const points: number = intimacy.points ?? 0;
   const username: string = getCustomerDisplayName(customer, "（生徒名）");
+  const intimacyVariation = renderIntimacyVariation(tp, level);
 
   // 呼び方ガイドライン（レベルごと）
   const nameGuides: Record<number, string> = {
@@ -688,6 +907,10 @@ export function buildIntimacyBlock(customer: any): string {
 
 ■ 文体・距離感の方針：
   ${toneGuides[level] ?? toneGuides[0]}
+${intimacyVariation ? `
+■ このキャラクター独自の、現在の親密度段階での口調の変化（intimacy_variations）：
+  ${intimacyVariation}
+` : ""}
 
 ■ 注意事項：
   - キャラクターの口調・世界観（上記【キャラクター設定】）はあくまで維持すること。
@@ -775,7 +998,7 @@ ${mem.tone_notes
 ■ これまでに届けた記事数: 依頼記事 ${progress?.total_published_articles ?? "（不明）"} 本${progress?.total_published_exercises ? `、演習問題 ${progress.total_published_exercises} 件` : ""}
    → 積み重ねに合った関係感（まだ始まったばかり／すでに仲が深まっている）を文章全体のトーンに自然に反映させてください。
 
-${buildIntimacyBlock(customer)}
+${buildIntimacyBlock(customer, tp)}
 
 ==================================================
 【★品質基準：この記事は「特別感のある手紙のような参考書ページ」を目指す】
@@ -860,7 +1083,7 @@ ${renderToneProfile(tp)}`;
    自動でフォームに反映できるようになります。
 3. JSONは有効な形式（ダブルクォート・カンマ・カッコの対応）に厳密に従ってください。`;
 
-  const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
+  const intimacyBlock = customer ? buildIntimacyBlock(customer, tp) : "";
 
   if (format === "multiple_choice") {
     return `あなたは英語学習教材の作問者です。以下の条件で「選択式の演習問題」を作成し、JSON形式で出力してください。
@@ -977,7 +1200,7 @@ ${codeBlockNote}`.trim();
 // ──────────────────────────────────────────────────────────────────────────────
 export function buildWritingFeedbackPrompt(char: any, customer?: any, originalPrompt?: string, submission?: string): string {
   const tp = char.tone_profile ?? {};
-  const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
+  const intimacyBlock = customer ? buildIntimacyBlock(customer, tp) : "";
   const username: string = getCustomerDisplayName(customer, "（生徒名）");
 
   return `あなたは英語ライティングのフィードバック記事を書くライターです。
@@ -1074,7 +1297,7 @@ ${submission ?? "（ここに生徒が提出したライティングの答案を
 // ──────────────────────────────────────────────────────────────────────────────
 export function buildSpeakingFeedbackPrompt(char: any, customer?: any, originalPrompt?: string, submission?: string): string {
   const tp = char.tone_profile ?? {};
-  const intimacyBlock = customer ? buildIntimacyBlock(customer) : "";
+  const intimacyBlock = customer ? buildIntimacyBlock(customer, tp) : "";
   const username: string = getCustomerDisplayName(customer, "（生徒名）");
 
   return `あなたは英語スピーキングのフィードバック記事を書くライターです。

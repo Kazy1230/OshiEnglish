@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { resolveTheme } from "@/lib/theme";
+import { resolveTheme, type CharacterTheme } from "@/lib/theme";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 
@@ -37,7 +38,7 @@ function eikenRows(grade: EikenGrade) {
 
 const IELTS_ROWS = [
   { part: "Reading Academic / General", price: "200クレジット" },
-  { part: "Listening Section 1〜4", price: "各200クレジット" },
+  { part: "Listening Section 1〜4（1セット）", price: "200クレジット" },
   { part: "Writing Task 1", price: "200クレジット" },
   { part: "Writing Task 2", price: "400クレジット" },
   { part: "Speaking Part 1〜3", price: "400クレジット" },
@@ -74,8 +75,25 @@ export default function PricingPage() {
   const [examTab, setExamTab] = useState<ExamTab>("TOEIC");
   const [eikenGrade, setEikenGrade] = useState<EikenGrade>("2級");
   const [toeflType, setToeflType] = useState<ToeflType>("iBT");
-  const t = resolveTheme(null, mode);
+  const [theme, setTheme] = useState<CharacterTheme | null>(null);
+  const t = resolveTheme(theme, mode);
   const loggedIn = !!getToken();
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    (async () => {
+      try {
+        const user = await api.me();
+        if (user.character_id) {
+          const charTheme = await api.getCharacterTheme(user.character_id);
+          setTheme(charTheme);
+        }
+      } catch {
+        // テーマ取得に失敗してもデフォルトテーマで表示を継続する
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: t.bg, fontFamily: t.fontFamily }}>
@@ -110,7 +128,7 @@ export default function PricingPage() {
             お申し込み時に「白河雪菜」または「蒼井零」を選択すると、以下の特典がすべて付いてきます。
           </p>
           <ul className="text-sm leading-relaxed list-disc pl-5" style={{ color: t.text }}>
-            <li><strong>キャラ作成費無料</strong>：オリジナルキャラ作成費（¥500）が0円になり、さらに20クレジットが付与されます（オリジナルキャラ作成の場合は500クレジット付与）</li>
+            <li><strong>キャラ作成費無料</strong>：オリジナルキャラ作成費（¥500）が0円になり、さらに20クレジットが付与されます</li>
             <li><strong>すぐにチャット開始</strong>：ログイン直後からすぐにチャットできます</li>
             <li><strong>限定称号・壁紙あり</strong>：公式キャラを選んだ方だけが解放できる称号・壁紙が用意されています</li>
             <li><strong>隠しセリフ多数</strong>：オリジナルキャラより多くの隠しセリフが用意されています</li>
