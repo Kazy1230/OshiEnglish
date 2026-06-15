@@ -14,6 +14,10 @@ import {
   buildPersonalizedLLMPrompt,
   buildWelcomePagePrompt,
   buildTemplateArticlePrompt,
+  buildEducationalArticlePrompt,
+  buildArticleAdaptationPrompt,
+  buildExerciseBodyPrompt,
+  buildExerciseAdaptationPrompt,
   getCustomerDisplayName,
 } from "../lib/promptBuilders";
 import { hasListeningAudio } from "@/lib/exercise";
@@ -22,6 +26,8 @@ const emptyArticleForm = {
   article_type: "request", customer_id: "", character_id: "", grammar_master_id: "", title: "", content: "", tips: "", example_sentences: "", status: "draft",
   // ----- 演習問題（exercise）専用 -----
   exercise_format: "multiple_choice", exercise_category: "", exercise_data_text: "",
+  // 記述式（written_response）専用：ライティング/スピーキングの区別（exercise_data.skillに格納）
+  exercise_skill: "writing",
   // 依頼記事：元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
   request_message_id: "",
   // フィードバック記事：元になった添削リクエスト（公開時にステータス自動更新に使う）
@@ -63,11 +69,115 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   const [openRequests, setOpenRequests] = useState<any[]>([]);
   // 添削記事作成：CorrectionsTabから引き渡された添削提出内容（LLMプロンプトに直接反映する）
   const [correctionSubmission, setCorrectionSubmission] = useState<any | null>(null);
+  // スピーキング添削：音声/動画を運営が手動で文字起こしした結果（FBプロンプトの提出内容に使う）
+  const [transcriptText, setTranscriptText] = useState("");
+  const [transcriptSaving, setTranscriptSaving] = useState(false);
   // LLMの出力を貼り付けて「本文／例文／Tips」欄に反映するための一時テキスト
   const [genPasteText, setGenPasteText] = useState("");
 
-  const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters()])
-    .then(([a, c, ch, g]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); });
+  // ①記事作成2段階化：教育記事ストック（キャラ非依存の素材記事）
+  const [articleTemplates, setArticleTemplates] = useState<any[]>([]);
+  const [stockTopic, setStockTopic] = useState("");
+  const [stockDifficulty, setStockDifficulty] = useState("medium");
+  const [stockPasteText, setStockPasteText] = useState("");
+  const [selectedArticleTemplateId, setSelectedArticleTemplateId] = useState("");
+
+  // ②演習問題2段階化：問題本体ストック（キャラ非依存の問題本体）
+  const [exerciseTemplates, setExerciseTemplates] = useState<any[]>([]);
+  const [exStockCategory, setExStockCategory] = useState("");
+  const [exStockDifficulty, setExStockDifficulty] = useState("medium");
+  const [exStockTopic, setExStockTopic] = useState("");
+  const [exStockPasteText, setExStockPasteText] = useState("");
+  const [selectedExerciseTemplateId, setSelectedExerciseTemplateId] = useState("");
+  const [exAdaptationPasteText, setExAdaptationPasteText] = useState("");
+  // 2段階生成ストック管理パネルの開閉
+  const [showStockPanel, setShowStockPanel] = useState(false);
+
+  const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters(), api.adminListArticleTemplates(), api.adminListExerciseTemplates()])
+    .then(([a, c, ch, g, at, et]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); setArticleTemplates(at); setExerciseTemplates(et); });
+
+  // ①素材記事ストックに保存（第1段階のLLM出力を貼り付けて登録）
+  async function saveArticleTemplate() {
+    if (!stockTopic.trim()) { toast("トピックを入力してください", "error"); return; }
+    if (!stockPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
+    try {
+      const created = await api.adminCreateArticleTemplate({ topic: stockTopic.trim(), difficulty: stockDifficulty, content: stockPasteText.trim() });
+      setArticleTemplates(prev => [created, ...prev]);
+      setStockPasteText("");
+      toast("教育記事ストックに保存しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    }
+  }
+
+  async function deleteArticleTemplate(id: number) {
+    if (!confirm("このストックを削除しますか？")) return;
+    try {
+      await api.adminDeleteArticleTemplate(id);
+      setArticleTemplates(prev => prev.filter(t => t.id !== id));
+      toast("削除しました", "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    }
+  }
+
+  // ②問題本体ストックに保存（第1段階のLLM出力＝JSONを貼り付けて登録）
+  async function saveExerciseTemplate() {
+    if (!exStockCategory.trim()) { toast("出題カテゴリを入力してください", "error"); return; }
+    if (!exStockPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
+    let parsed: any;
+    try {
+      parsed = parseExerciseJsonInput(exStockPasteText);
+    } catch {
+      toast("JSONの解析に失敗しました。出力全体をそのまま貼り付けてください", "error");
+      return;
+    }
+    try {
+      const created = await api.adminCreateExerciseTemplate({ exercise_category: exStockCategory.trim(), difficulty: exStockDifficulty, exercise_data: parsed });
+      setExerciseTemplates(prev => [created, ...prev]);
+      setExStockPasteText("");
+      toast("問題本体ストックに保存しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    }
+  }
+
+  async function deleteExerciseTemplate(id: number) {
+    if (!confirm("このストックを削除しますか？")) return;
+    try {
+      await api.adminDeleteExerciseTemplate(id);
+      setExerciseTemplates(prev => prev.filter(t => t.id !== id));
+      toast("削除しました", "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    }
+  }
+
+  // ②演習問題：選択中の問題本体ストック＋キャラ適応出力（解説・score_comments）をマージして
+  // exercise_data_textに反映する
+  function applyExerciseAdaptation() {
+    const template = exerciseTemplates.find(t => String(t.id) === selectedExerciseTemplateId);
+    if (!template) { toast("先に問題本体ストックを選択してください", "error"); return; }
+    if (!exAdaptationPasteText.trim()) { toast("キャラ適応LLMの出力を貼り付けてください", "error"); return; }
+    let adaptation: any;
+    try {
+      adaptation = parseExerciseJsonInput(exAdaptationPasteText);
+    } catch {
+      toast("JSONの解析に失敗しました。出力全体をそのまま貼り付けてください", "error");
+      return;
+    }
+    const baseData = template.exercise_data || {};
+    const baseQuestions = baseData.questions || [];
+    const adaptedQuestions = adaptation.questions || [];
+    const merged = {
+      ...baseData,
+      questions: baseQuestions.map((q: any, i: number) => ({ ...q, ...(adaptedQuestions[i] || {}) })),
+      score_comments: adaptation.score_comments ?? baseData.score_comments,
+    };
+    setForm(f => ({ ...f, exercise_data_text: JSON.stringify(merged, null, 2) }));
+    setExAdaptationPasteText("");
+    toast(`問題本体ストック「${template.exercise_category}」に解説・コメントを反映しました`, "success");
+  }
 
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
 
@@ -82,6 +192,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       correction_request_id: String(pendingCorrection.id),
     }));
     setCorrectionSubmission(pendingCorrection);
+    setTranscriptText(pendingCorrection.transcript || "");
     setShowForm(true);
     onConsumePendingCorrection?.();
   }, [pendingCorrection]);
@@ -139,12 +250,14 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       exercise_format: a.exercise_format ?? "multiple_choice",
       exercise_category: a.exercise_category ?? "",
       exercise_data_text: a.exercise_data ? JSON.stringify(a.exercise_data, null, 2) : "",
+      exercise_skill: a.exercise_data?.skill === "speaking" ? "speaking" : "writing",
       request_message_id: a.request_message_id ? String(a.request_message_id) : "",
       correction_request_id: a.correction_request_id ? String(a.correction_request_id) : "",
       template_character_id: a.template_character_id ? String(a.template_character_id) : "",
       unlock_cost: a.unlock_cost != null ? String(a.unlock_cost) : "",
     });
     setCorrectionSubmission(null);
+    setTranscriptText("");
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -155,6 +268,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     setForm(emptyArticleForm);
     setIsLlmDrafted(false);
     setCorrectionSubmission(null);
+    setTranscriptText("");
     setGenPasteText("");
   }
 
@@ -217,6 +331,9 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       } catch {
         toast("演習問題データのJSONを解析できませんでした。形式を確認してください", "error");
         return;
+      }
+      if (form.exercise_format === "written_response") {
+        payload.exercise_data = { ...payload.exercise_data, skill: form.exercise_skill };
       }
     } else if (isTemplate) {
       // 定期便プール：customer_id等はサーバー側で自動的にクリアされる
@@ -308,10 +425,102 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>📝 記事管理</h2>
-        <button className="btn-accent" onClick={() => showForm ? cancelForm() : setShowForm(true)}>
-          {showForm ? "キャンセル" : "+ 新規記事"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="btn-ghost" onClick={() => setShowStockPanel(s => !s)}>
+            {showStockPanel ? "🏭 ストック管理を閉じる" : "🏭 2段階生成ストック管理"}
+          </button>
+          <button className="btn-accent" onClick={() => showForm ? cancelForm() : setShowForm(true)}>
+            {showForm ? "キャンセル" : "+ 新規記事"}
+          </button>
+        </div>
       </div>
+
+      {showStockPanel && (
+        <div className="card mb-6 flex flex-col gap-4">
+          <h3 className="font-bold" style={{ color: "var(--primary)" }}>🏭 2段階生成ストック管理</h3>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            第1段階（キャラ非依存の素材）をまとめて作っておき、第2段階（キャラへの適応）で使い回すためのストックです。
+            ここで作成したストックは、下の記事作成フォームの「②キャラに適応プロンプトをコピー」で選択して利用します。
+          </p>
+
+          {/* 教育記事ストック（①記事作成） */}
+          <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+            <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>📄 教育記事ストック（①記事作成・第1段階）</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input value={stockTopic} onChange={e => setStockTopic(e.target.value)} placeholder="トピック（例：関係代名詞）" />
+              <select value={stockDifficulty} onChange={e => setStockDifficulty(e.target.value)}>
+                <option value="easy">easy（初級）</option>
+                <option value="medium">medium（中級）</option>
+                <option value="hard">hard（上級）</option>
+              </select>
+            </div>
+            <button type="button"
+              className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+              style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
+              onClick={() => {
+                navigator.clipboard.writeText(buildEducationalArticlePrompt(stockTopic.trim() || undefined, stockDifficulty));
+                toast("第1段階（素材記事生成）プロンプトをコピーしました", "success");
+              }}>
+              📋 第1段階プロンプトをコピー
+            </button>
+            <textarea rows={5} value={stockPasteText} onChange={e => setStockPasteText(e.target.value)}
+              placeholder="LLMの出力（CONTENT/EXAMPLES/TIPS）をここに貼り付け"
+              style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+            <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start" onClick={saveArticleTemplate}>
+              💾 ストックに保存
+            </button>
+            {articleTemplates.length > 0 && (
+              <div className="flex flex-col gap-1 mt-1">
+                {articleTemplates.map(t => (
+                  <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
+                    <span>📄 {t.topic}（{t.difficulty}）#{t.id}</span>
+                    <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteArticleTemplate(t.id)}>削除</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 問題本体ストック（②演習問題） */}
+          <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+            <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>🧩 問題本体ストック（②演習問題・第1段階）</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input value={exStockCategory} onChange={e => setExStockCategory(e.target.value)} placeholder="出題カテゴリ（例：TOEIC Part 5）" />
+              <select value={exStockDifficulty} onChange={e => setExStockDifficulty(e.target.value)}>
+                <option value="easy">easy（初級）</option>
+                <option value="medium">medium（中級）</option>
+                <option value="hard">hard（上級）</option>
+              </select>
+              <input value={exStockTopic} onChange={e => setExStockTopic(e.target.value)} placeholder="トピック（任意）" />
+            </div>
+            <button type="button"
+              className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+              style={{ borderColor: "#7b5cff", color: "#7b5cff", background: "var(--card-bg, #fff)" }}
+              onClick={() => {
+                navigator.clipboard.writeText(buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined));
+                toast("第1段階（問題本体生成）プロンプトをコピーしました", "success");
+              }}>
+              📋 第1段階プロンプトをコピー
+            </button>
+            <textarea rows={6} value={exStockPasteText} onChange={e => setExStockPasteText(e.target.value)}
+              placeholder="LLMの出力（JSON：instructions/questions等）をここに貼り付け"
+              style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+            <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start" onClick={saveExerciseTemplate}>
+              💾 ストックに保存
+            </button>
+            {exerciseTemplates.length > 0 && (
+              <div className="flex flex-col gap-1 mt-1">
+                {exerciseTemplates.map(t => (
+                  <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
+                    <span>🧩 {t.exercise_category}（{t.difficulty}・{(t.exercise_data?.questions ?? []).length}問）#{t.id}</span>
+                    <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteExerciseTemplate(t.id)}>削除</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card mb-6 flex flex-col gap-3">
@@ -434,6 +643,20 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     </select>
                   </div>
                 </div>
+                {form.exercise_format === "written_response" && (
+                  <div>
+                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                      スキル（解答提出後、どの添削フローに連携するか）
+                    </label>
+                    <select value={form.exercise_skill} onChange={e => setForm({ ...form, exercise_skill: e.target.value })}>
+                      <option value="writing">ライティング（テキスト解答 → ライティングFBへ）</option>
+                      <option value="speaking">スピーキング（音声/動画解答 → スピーキングFBへ）</option>
+                    </select>
+                    <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                      顧客が解答を提出すると、ここで選んだスキルの添削リクエストが自動作成され、添削タブ・このタブのFB作成画面に連携されます。
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
                     出題カテゴリ（料金・メニュー表に対応／例：「TOEIC Part 5」「英検2級 ライティング」「IELTS Reading Academic」）
@@ -459,6 +682,46 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     ? "（先にキャラクターを選択）"
                     : (() => { const cu = customers.find(cs => String(cs.id) === String(form.customer_id)); return cu?.intimacy ? ` — 💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : ""; })()}
                 </button>
+                {form.exercise_format === "multiple_choice" && (
+                  <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "#7b5cff" }}>
+                    <p className="text-xs font-bold" style={{ color: "#7b5cff" }}>
+                      🏭 2段階生成：問題本体ストックからキャラに適応
+                    </p>
+                    <select value={selectedExerciseTemplateId} onChange={e => setSelectedExerciseTemplateId(e.target.value)}>
+                      <option value="">問題本体ストックを選択…</option>
+                      {exerciseTemplates.map(t => (
+                        <option key={t.id} value={t.id}>
+                          🧩 {t.exercise_category}（{t.difficulty}・{(t.exercise_data?.questions ?? []).length}問）#{t.id}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button"
+                      className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+                      style={{ borderColor: "#7b5cff", color: "#7b5cff", background: "var(--card-bg, #fff)" }}
+                      disabled={!form.character_id || !selectedExerciseTemplateId}
+                      onClick={() => {
+                        const c = characters.find(ch => String(ch.id) === String(form.character_id));
+                        const cu = form.customer_id ? customers.find(cs => String(cs.id) === String(form.customer_id)) : undefined;
+                        const template = exerciseTemplates.find(t => String(t.id) === selectedExerciseTemplateId);
+                        if (!c || !template) { toast("キャラクターと問題本体ストックを選択してください", "error"); return; }
+                        navigator.clipboard.writeText(buildExerciseAdaptationPrompt(c, cu, template.exercise_data, template.exercise_category));
+                        toast("第2段階（キャラ適応）プロンプトをコピーしました", "success");
+                      }}>
+                      📋 第2段階プロンプトをコピー
+                      {(!form.character_id || !selectedExerciseTemplateId) && "（先にキャラクターとストックを選択）"}
+                    </button>
+                    <textarea rows={5} value={exAdaptationPasteText} onChange={e => setExAdaptationPasteText(e.target.value)}
+                      placeholder="キャラ適応LLMの出力（JSON：questions[].explanation_*, score_comments）をここに貼り付け"
+                      style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+                    <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start" onClick={applyExerciseAdaptation}>
+                      ✅ 問題本体に反映する
+                    </button>
+                    <p className="text-xs" style={{ color: "var(--muted)" }}>
+                      問題本体ストックの questions（prompt/choices/correct_index、音声情報含む）に、
+                      キャラ適応LLMが生成した解説・score_commentsをマージして「演習問題データ」欄に出力します。
+                    </p>
+                  </div>
+                )}
                 {form.exercise_format === "multiple_choice" && (
                   <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
                     <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
@@ -563,10 +826,20 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     let originalPrompt: string | undefined;
                     let submission: string | undefined;
                     if (correctionSubmission) {
-                      submission = correctionSubmission.text_content || undefined;
-                      if (correctionSubmission.media_url) {
-                        const mediaNote = `※音声/動画は管理画面で確認してください: ${correctionSubmission.media_url}`;
-                        submission = submission ? `${submission}\n\n${mediaNote}` : mediaNote;
+                      if (correctionSubmission.source_article_title || correctionSubmission.source_article_prompt) {
+                        originalPrompt = [correctionSubmission.source_article_title, correctionSubmission.source_article_prompt]
+                          .filter(Boolean).join("\n\n") || undefined;
+                      }
+                      if (form.article_type === "speaking_feedback") {
+                        // スピーキングは音声/動画そのものをLLMに渡せないため、運営が手動で文字起こしした内容を使う
+                        submission = transcriptText.trim() || undefined;
+                        if (!submission && correctionSubmission.note) submission = correctionSubmission.note;
+                        if (!submission) {
+                          toast("文字起こしを入力・保存してから実行してください", "error");
+                          return;
+                        }
+                      } else {
+                        submission = correctionSubmission.text_content || undefined;
                       }
                     } else {
                       originalPrompt = window.prompt("【任意】元の演習問題のお題・設問文を貼り付けてください（空欄でもOK）", "") || undefined;
@@ -591,20 +864,56 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     : (() => { const cu = customers.find(cs => String(cs.id) === String(form.customer_id)); return cu?.intimacy ? ` — 💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : ""; })()}
                 </button>
                 {correctionSubmission ? (
-                  <div className="text-xs p-2 rounded-lg" style={{ background: "var(--bg)", color: "var(--muted)" }}>
-                    <p className="font-bold mb-1" style={{ color: "var(--primary)" }}>添削提出内容を自動反映します</p>
-                    {correctionSubmission.text_content && (
-                      <p className="whitespace-pre-wrap">{correctionSubmission.text_content}</p>
-                    )}
-                    {correctionSubmission.media_url && (
-                      correctionSubmission.media_type === "video" ? (
-                        <video controls src={correctionSubmission.media_url} className="w-full rounded-lg max-h-48 mt-1" />
-                      ) : (
-                        <audio controls src={correctionSubmission.media_url} className="w-full mt-1" />
-                      )
-                    )}
-                    {correctionSubmission.note && (
-                      <p className="mt-1"><strong>メモ：</strong>{correctionSubmission.note}</p>
+                  <div className="text-xs p-2 rounded-lg flex flex-col gap-2" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+                    <div>
+                      <p className="font-bold mb-1" style={{ color: "var(--primary)" }}>添削提出内容を自動反映します</p>
+                      {(correctionSubmission.source_article_title || correctionSubmission.source_article_prompt) && (
+                        <div className="mb-1.5 p-1.5 rounded" style={{ background: "var(--card-bg, #fff)" }}>
+                          <p className="font-bold" style={{ color: "var(--accent, var(--primary))" }}>📝 元のお題（{correctionSubmission.source_article_title}）</p>
+                          {correctionSubmission.source_article_prompt && (
+                            <p className="whitespace-pre-wrap">{correctionSubmission.source_article_prompt}</p>
+                          )}
+                        </div>
+                      )}
+                      {correctionSubmission.text_content && (
+                        <p className="whitespace-pre-wrap">{correctionSubmission.text_content}</p>
+                      )}
+                      {correctionSubmission.media_url && (
+                        correctionSubmission.media_type === "video" ? (
+                          <video controls src={correctionSubmission.media_url} className="w-full rounded-lg max-h-48 mt-1" />
+                        ) : (
+                          <audio controls src={correctionSubmission.media_url} className="w-full mt-1" />
+                        )
+                      )}
+                      {correctionSubmission.note && (
+                        <p className="mt-1"><strong>メモ：</strong>{correctionSubmission.note}</p>
+                      )}
+                    </div>
+                    {form.article_type === "speaking_feedback" && (
+                      <div>
+                        <label className="text-xs font-bold block mb-1" style={{ color: "var(--primary)" }}>
+                          🎙️ 文字起こし（音声/動画を運営が手動で書き起こした内容を貼り付けてください）
+                        </label>
+                        <textarea rows={5} value={transcriptText} onChange={e => setTranscriptText(e.target.value)}
+                          placeholder="ここに音声/動画の文字起こしを貼り付けてください…"
+                          className="w-full text-xs rounded-lg px-2 py-1.5 outline-none"
+                          style={{ border: "1px solid var(--border)", background: "var(--card-bg, #fff)", color: "var(--text)" }} />
+                        <button type="button" className="btn-ghost text-xs py-1 px-2 mt-1" disabled={transcriptSaving}
+                          onClick={async () => {
+                            setTranscriptSaving(true);
+                            try {
+                              const updated = await api.adminUpdateCorrectionTranscript(correctionSubmission.id, transcriptText);
+                              setCorrectionSubmission(updated);
+                              toast("文字起こしを保存しました", "success");
+                            } catch (err: unknown) {
+                              toast(err instanceof Error ? err.message : "文字起こしの保存に失敗しました", "error");
+                            } finally {
+                              setTranscriptSaving(false);
+                            }
+                          }}>
+                          {transcriptSaving ? "保存中…" : "💾 文字起こしを保存"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -779,6 +1088,35 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   <strong>現在の親密度レベル</strong>に応じた呼び方・距離感の書き方指示が自動で織り込まれます。
                   親密度が上がるほど、キャラクターの語りかけ方が「敬語」→「タメ口」→「あだ名」と変化します。
                 </p>
+                <div className="rounded-xl border-2 p-3 flex flex-col gap-2 mt-2" style={{ borderColor: "var(--accent)" }}>
+                  <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                    🏭 2段階生成：教育記事ストックからキャラに適応
+                  </p>
+                  <select value={selectedArticleTemplateId} onChange={e => setSelectedArticleTemplateId(e.target.value)}>
+                    <option value="">教育記事ストックを選択…</option>
+                    {articleTemplates.map(t => (
+                      <option key={t.id} value={t.id}>📄 {t.topic}（{t.difficulty}）#{t.id}</option>
+                    ))}
+                  </select>
+                  <button type="button"
+                    className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+                    style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
+                    disabled={!form.character_id || !selectedArticleTemplateId}
+                    onClick={() => {
+                      const c = characters.find(ch => String(ch.id) === String(form.character_id));
+                      const cu = customers.find(cs => String(cs.id) === String(form.customer_id));
+                      const template = articleTemplates.find(t => String(t.id) === selectedArticleTemplateId);
+                      if (!c || !template) { toast("キャラクターと教育記事ストックを選択してください", "error"); return; }
+                      navigator.clipboard.writeText(buildArticleAdaptationPrompt(c, cu, template.content, template.topic));
+                      toast("第2段階（キャラ適応）プロンプトをコピーしました", "success");
+                    }}>
+                    📋 第2段階プロンプトをコピー
+                    {(!form.character_id || !selectedArticleTemplateId) && "（先にキャラクターとストックを選択）"}
+                  </button>
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    出力結果は下の「📥 LLMの出力を貼り付けて反映」欄に貼り付けてください（本文・例文・Tipsに自動で振り分けられます）。
+                  </p>
+                </div>
               </div>
             )}
             {form.article_type !== "welcome" && (

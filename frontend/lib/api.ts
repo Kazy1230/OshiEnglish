@@ -80,8 +80,19 @@ export const api = {
     apiFetch(`/articles/${id}/submit-mc`, { method: "POST", body: JSON.stringify({ answers }) }),
   checkExerciseAnswer: (id: number, questionIndex: number, chosenIndex: number | null) =>
     apiFetch(`/articles/${id}/check-answer`, { method: "POST", body: JSON.stringify({ question_index: questionIndex, chosen_index: chosenIndex }) }),
+  answerExerciseQuestion: (id: number, questionIndex: number, chosenIndex: number | null, timeTaken?: number, attemptNumber?: number) =>
+    apiFetch(`/articles/${id}/answer-question`, {
+      method: "POST",
+      body: JSON.stringify({ question_index: questionIndex, chosen_index: chosenIndex, time_taken: timeTaken, attempt_number: attemptNumber }),
+    }),
   submitWrittenExercise: (id: number, answer: string) =>
     apiFetch(`/articles/${id}/submit-written`, { method: "POST", body: JSON.stringify({ answer }) }),
+  submitSpeakingExercise: (id: number, file: File | Blob, note?: string) => {
+    const fd = new FormData();
+    fd.append("file", file, (file as File).name || "submission");
+    if (note) fd.append("note", note);
+    return apiUpload(`/articles/${id}/submit-written/media`, fd);
+  },
   unlockArticle: (id: number) => apiFetch(`/articles/${id}/unlock`, { method: "POST" }),
   getCharacterTheme: (id: number) => apiFetch(`/characters/theme/${id}`),
   claimWelcomeArticle: () =>
@@ -133,6 +144,22 @@ export const api = {
     fd.append("file", file, file.name);
     return apiUpload("/articles/admin/exercise-audio", fd);
   },
+
+  // 管理者：教育記事ストック（①記事作成の2段階生成）
+  adminListArticleTemplates: (topic?: string) =>
+    apiFetch(`/article-templates/admin/${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
+  adminCreateArticleTemplate: (data: { topic: string; difficulty: string; content: string }) =>
+    apiFetch("/article-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
+  adminDeleteArticleTemplate: (id: number) =>
+    apiFetch(`/article-templates/admin/${id}`, { method: "DELETE" }),
+
+  // 管理者：問題本体ストック（②選択式演習の2段階生成）
+  adminListExerciseTemplates: (exerciseCategory?: string) =>
+    apiFetch(`/exercise-templates/admin/${exerciseCategory ? `?exercise_category=${encodeURIComponent(exerciseCategory)}` : ""}`),
+  adminCreateExerciseTemplate: (data: { exercise_category: string; difficulty: string; exercise_data: object }) =>
+    apiFetch("/exercise-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
+  adminDeleteExerciseTemplate: (id: number) =>
+    apiFetch(`/exercise-templates/admin/${id}`, { method: "DELETE" }),
 
   // 管理者：顧客
   adminGetCustomers: () => apiFetch("/customers/"),
@@ -219,6 +246,8 @@ export const api = {
   adminGetCorrectionRequest: (id: number) => apiFetch(`/corrections/admin/${id}`),
   adminUpdateCorrectionStatus: (id: number, status: string) =>
     apiFetch(`/corrections/admin/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  adminUpdateCorrectionTranscript: (id: number, transcript: string) =>
+    apiFetch(`/corrections/admin/${id}/transcript`, { method: "PATCH", body: JSON.stringify({ transcript }) }),
   adminUpdateMemo: (customerId: number, adminMemo: string) =>
     apiFetch(`/messages/admin/${customerId}/memo`, { method: "PATCH", body: JSON.stringify({ admin_memo: adminMemo }) }),
   adminUpdateRequestStatus: (messageId: number, status: string) =>

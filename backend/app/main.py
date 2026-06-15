@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections, preview
+from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections, preview, article_templates, exercise_templates
 
 # テーブル自動作成（開発用。本番はAlembicマイグレーションを使用）
 Base.metadata.create_all(bind=engine)
@@ -250,6 +250,14 @@ def _migrate_tone_profile_extensions():
 
 
 _migrate_tone_profile_extensions()
+
+# 簡易マイグレーション㉚: 演習問題（written_response／ライティング・スピーキング）の解答提出を
+# ③④の添削（CorrectionRequest）フローに連携する
+# - correction_requests.source_article_id: 提出元の演習記事への参照（自由提出の場合はNULL）
+# - correction_requests.transcript: スピーキング提出の音声/動画を管理者が手動で文字起こしした結果
+_ensure_column("correction_requests", "source_article_id", "INT NULL")
+_ensure_index("correction_requests", "ix_correction_requests_source_article_id", "(source_article_id)")
+_ensure_column("correction_requests", "transcript", "TEXT NULL")
 
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
@@ -566,6 +574,8 @@ app.include_router(payments.router)
 app.include_router(rewards.router)
 app.include_router(corrections.router)
 app.include_router(preview.router)
+app.include_router(article_templates.router)
+app.include_router(exercise_templates.router)
 
 @app.get("/health")
 def health():

@@ -13,3 +13,6 @@ from app.models.correction_request import CorrectionRequest
 from app.models.reward import RewardItem, CustomerReward
 from app.models.credit_transaction import CreditTransaction
 from app.models.preview_example import PreviewExample
+from app.models.article_template import ArticleTemplate
+from app.models.exercise_template import ExerciseTemplate
+from app.models.exercise_submission import ExerciseSubmission

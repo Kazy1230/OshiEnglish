@@ -32,9 +32,17 @@ class CorrectionRequest(Base):
     # 添削記事として配信された場合の参照（公開時に設定）
     feedback_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True)
 
+    # 演習問題（written_response、お題付き）からの提出の場合、元になった記事への参照。
+    # 自由提出（お題なし）の場合はNULL。
+    source_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
+
+    # スピーキング: 管理者が音声/動画を手動で文字起こしした結果を貼り付けておく欄（FB生成プロンプトの提出内容に使う）
+    transcript = Column(Text, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     customer = relationship("Customer")
     character = relationship("Character")
     feedback_article = relationship("Article", foreign_keys=[feedback_article_id])
+    source_article = relationship("Article", foreign_keys=[source_article_id])

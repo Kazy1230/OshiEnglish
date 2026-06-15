@@ -22,6 +22,14 @@ type Article = {
   exercise_format?: "multiple_choice" | "written_response" | null;
   exercise_category?: string | null;
   exercise_data?: any;
+  exercise_progress?: {
+    attempt_number: number;
+    answers: Record<string, { chosen_index: number | null; is_correct: boolean; correct_index: number | null; explanation: string | null }>;
+    completed: boolean;
+    score?: number;
+    total?: number;
+    character_comment?: string | null;
+  } | null;
   unlock_cost?: number;
   opened_at?: string | null;
   locked?: boolean;
@@ -692,43 +700,58 @@ function ExerciseView({ article, theme: t, charTheme }: { article: Article; them
 function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Article; theme: ReturnType<typeof resolveTheme>; charTheme: CharacterTheme | null }) {
   const data = article.exercise_data ?? {};
   const questions: any[] = Array.isArray(data.questions) ? data.questions : [];
-  const [answers, setAnswers] = useState<(number | null)[]>(() => questions.map(() => null));
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ score: number; total: number; results: any[]; character_comment?: string | null } | null>(null);
+  const progress = article.exercise_progress;
+
+  // 設問は解答した瞬間にロックされ、その場で正誤・解説が表示される。
+  // 画面再読み込み後もロック状態を復元できるよう、article.exercise_progress（前回までの解答記録）から初期化する。
+  const [attemptNumber, setAttemptNumber] = useState<number>(progress?.attempt_number ?? 1);
+  const [answers, setAnswers] = useState<(number | null)[]>(() =>
+    questions.map((_, i) => progress?.answers?.[String(i)]?.chosen_index ?? null)
+  );
+  const [results, setResults] = useState<(any | null)[]>(() =>
+    questions.map((_, i) => progress?.answers?.[String(i)] ?? null)
+  );
+  const [completed, setCompleted] = useState<boolean>(!!progress?.completed);
+  const [scoreInfo, setScoreInfo] = useState<{ score: number; total: number; character_comment?: string | null } | null>(
+    progress?.completed ? { score: progress.score ?? 0, total: progress.total ?? questions.length, character_comment: progress.character_comment } : null
+  );
+  const [answeringIndex, setAnsweringIndex] = useState<number | null>(null);
   const [errMsg, setErrMsg] = useState("");
 
-  // 解答ごとの即時フィードバック（○/✕アイコンのみ）。解説・キャラコメントは「採点する」でまとめて表示。
-  const [checks, setChecks] = useState<(boolean | null)[]>(() => questions.map(() => null));
-
   async function choose(qIndex: number, choiceIndex: number) {
-    if (result) return; // 採点後は変更不可
-    setAnswers(prev => prev.map((a, i) => i === qIndex ? choiceIndex : a));
+    if (results[qIndex]) return; // 解答済みの設問はロックされ変更不可
+    if (answeringIndex !== null) return;
+    setErrMsg("");
+    setAnsweringIndex(qIndex);
     try {
-      const res = await api.checkExerciseAnswer(article.id, qIndex, choiceIndex);
-      setChecks(prev => prev.map((c, i) => i === qIndex ? !!res.is_correct : c));
-    } catch {
-      // 即時フィードバックの取得に失敗しても、まとめての採点は妨げない
-      setChecks(prev => prev.map((c, i) => i === qIndex ? null : c));
+      const res = await api.answerExerciseQuestion(article.id, qIndex, choiceIndex, undefined, attemptNumber);
+      setAnswers(prev => prev.map((a, i) => i === qIndex ? choiceIndex : a));
+      setResults(prev => prev.map((r, i) => i === qIndex ? {
+        chosen_index: choiceIndex, is_correct: res.is_correct, correct_index: res.correct_index, explanation: res.explanation,
+      } : r));
+      if (res.completed) {
+        setCompleted(true);
+        setScoreInfo({ score: res.score, total: res.total, character_comment: res.character_comment });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    } catch (err: unknown) {
+      setErrMsg(err instanceof Error ? err.message : "解答の送信に失敗しました。時間をおいて再度お試しください");
+    } finally {
+      setAnsweringIndex(null);
     }
   }
 
-  async function handleSubmit() {
-    if (answers.some(a => a === null)) {
-      setErrMsg("すべての設問に解答してから採点してください");
-      return;
-    }
+  function retry() {
+    setAttemptNumber(prev => prev + 1);
+    setAnswers(questions.map(() => null));
+    setResults(questions.map(() => null));
+    setCompleted(false);
+    setScoreInfo(null);
     setErrMsg("");
-    setSubmitting(true);
-    try {
-      const res = await api.submitMultipleChoiceExercise(article.id, answers);
-      setResult(res);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (err: unknown) {
-      setErrMsg(err instanceof Error ? err.message : "採点に失敗しました。時間をおいて再度お試しください");
-    } finally {
-      setSubmitting(false);
-    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  const answeredCount = results.filter(Boolean).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -760,15 +783,23 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
       )}
 
       {/* 採点結果サマリー */}
-      {result && (
+      {completed && scoreInfo && (
         <div className="rounded-xl px-4 py-4 text-center" style={{ background: `linear-gradient(135deg, ${t.primary}, ${t.accent})` }}>
-          <p className="text-xs text-white/70 mb-1">採点結果</p>
-          <p className="text-2xl font-black text-white">{result.score} / {result.total} 問 正解</p>
+          <p className="text-xs text-white/70 mb-1">採点結果{attemptNumber > 1 ? `（${attemptNumber}回目の挑戦）` : ""}</p>
+          <p className="text-2xl font-black text-white">{scoreInfo.score} / {scoreInfo.total} 問 正解</p>
         </div>
       )}
 
+      {/* 進捗（解答中のみ表示） */}
+      {!completed && (
+        <p className="text-xs text-center" style={{ color: t.text, opacity: 0.7 }}>
+          {answeredCount} / {questions.length} 問 解答済み
+          {attemptNumber > 1 ? `（${attemptNumber}回目の挑戦）` : ""}
+        </p>
+      )}
+
       {/* スコアに応じたキャラクターからのひとこと（世界観演出：採点して終わりにせず、結果に応じて反応してくれる） */}
-      {result && result.character_comment && (
+      {completed && scoreInfo && scoreInfo.character_comment && (
         <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
           {charTheme?.image_url ? (
             <img src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost/api")}${charTheme.image_url}`}
@@ -783,7 +814,7 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
           )}
           <div className="min-w-0">
             <p className="text-xs font-bold mb-0.5" style={{ color: t.accent }}>💬 {charTheme?.name ?? "先生"}より</p>
-            <p className="text-sm leading-relaxed" style={{ color: t.text }}>{renderInlineMarkdown(String(result.character_comment), t)}</p>
+            <p className="text-sm leading-relaxed" style={{ color: t.text }}>{renderInlineMarkdown(String(scoreInfo?.character_comment ?? ""), t)}</p>
           </div>
         </div>
       )}
@@ -791,7 +822,8 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
       {/* 設問一覧 */}
       <div className="flex flex-col gap-3">
         {questions.map((q, qi) => {
-          const r = result?.results?.[qi];
+          const r = results[qi];
+          const isAnswering = answeringIndex === qi;
           return (
             <div key={qi} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${t.border}` }}>
               <div className="px-4 py-2 flex items-center justify-between" style={{ background: t.example_bg }}>
@@ -800,12 +832,6 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
                   <span className="text-xs font-black px-2 py-0.5 rounded-full text-white"
                     style={{ background: r.is_correct ? "#3aa76d" : "#d9534f" }}>
                     {r.is_correct ? "○ 正解" : "✕ 不正解"}
-                  </span>
-                )}
-                {!r && checks[qi] !== null && (
-                  <span className="text-xs font-black px-2 py-0.5 rounded-full text-white"
-                    style={{ background: checks[qi] ? "#3aa76d" : "#d9534f" }}>
-                    {checks[qi] ? "○" : "✕"}
                   </span>
                 )}
               </div>
@@ -826,10 +852,10 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
                       style = { borderColor: t.primary, color: "white", background: t.primary };
                     }
                     return (
-                      <button key={ci} type="button" disabled={!!result}
+                      <button key={ci} type="button" disabled={!!r || isAnswering}
                         onClick={() => choose(qi, ci)}
                         className="text-left text-sm px-3 py-2 rounded-lg border-2 transition-all"
-                        style={{ ...style, cursor: result ? "default" : "pointer" }}>
+                        style={{ ...style, cursor: (r || isAnswering) ? "default" : "pointer", opacity: isAnswering ? 0.6 : 1 }}>
                         <span className="font-bold mr-1.5">{String.fromCharCode(65 + ci)}.</span>
                         {choice}
                         {r && isCorrectChoice && <span className="ml-2 text-xs">← 正解</span>}
@@ -851,17 +877,22 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
 
       {errMsg && <p className="text-xs font-bold text-center" style={{ color: "#d9534f" }}>{errMsg}</p>}
 
-      {!result && (
-        <button type="button" onClick={handleSubmit} disabled={submitting}
-          className="self-center px-8 py-2.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md disabled:opacity-50"
-          style={{ borderColor: t.primary, color: "white", background: t.primary }}>
-          {submitting ? "採点中…" : "✓ 採点する"}
-        </button>
-      )}
-      {result && (
+      {!completed && (
         <p className="text-xs text-center" style={{ color: t.accent }}>
-          採点が完了しました。間違えた問題は解説を読み返して、復習に役立ててね。
+          選択肢を選ぶとその場で正解・解説が表示され、選択肢は変更できなくなります。最後まで解答すると採点結果が表示されます。
         </p>
+      )}
+      {completed && (
+        <>
+          <p className="text-xs text-center" style={{ color: t.accent }}>
+            採点が完了しました。間違えた問題は解説を読み返して、復習に役立ててね。
+          </p>
+          <button type="button" onClick={retry}
+            className="self-center px-8 py-2.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md"
+            style={{ borderColor: t.primary, color: "white", background: t.primary }}>
+            🔄 もう一度挑戦する
+          </button>
+        </>
       )}
     </div>
   );
@@ -869,14 +900,22 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
 
 function WrittenExercise({ article, theme: t }: { article: Article; theme: ReturnType<typeof resolveTheme> }) {
   const data = article.exercise_data ?? {};
+  const isSpeaking = data.skill === "speaking";
   const [answer, setAnswer] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errMsg, setErrMsg] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
 
   function openConfirm() {
-    if (!answer.trim()) {
+    if (isSpeaking) {
+      if (!mediaFile) {
+        setErrMsg("音声または動画ファイルを選択してから提出してください");
+        return;
+      }
+    } else if (!answer.trim()) {
       setErrMsg("解答を入力してから提出してください");
       return;
     }
@@ -888,7 +927,11 @@ function WrittenExercise({ article, theme: t }: { article: Article; theme: Retur
     setShowConfirm(false);
     setSubmitting(true);
     try {
-      await api.submitWrittenExercise(article.id, answer);
+      if (isSpeaking && mediaFile) {
+        await api.submitSpeakingExercise(article.id, mediaFile, note.trim() || undefined);
+      } else {
+        await api.submitWrittenExercise(article.id, answer);
+      }
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: unknown) {
@@ -909,10 +952,10 @@ function WrittenExercise({ article, theme: t }: { article: Article; theme: Retur
       {data.prompt && (
         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${t.border}` }}>
           <div className="px-4 py-2" style={{ background: t.example_bg }}>
-            <span className="text-xs font-black" style={{ color: t.accent }}>📝 お題</span>
+            <span className="text-xs font-black" style={{ color: t.accent }}>📝 お題{isSpeaking ? "（音声）" : ""}</span>
           </div>
           <div className="px-4 py-3" style={{ background: t.card }}>
-            <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap" style={{ color: t.text }}>{String(data.prompt)}</p>
+            <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap" style={{ color: t.text }}>{renderInlineMarkdown(String(data.prompt), t)}</p>
           </div>
         </div>
       )}
@@ -925,14 +968,40 @@ function WrittenExercise({ article, theme: t }: { article: Article; theme: Retur
         </div>
       ) : (
         <>
-          <div>
-            <label className="text-xs font-bold block mb-1.5" style={{ color: t.accent }}>あなたの解答</label>
-            <textarea rows={8} value={answer} onChange={e => setAnswer(e.target.value)}
-              placeholder="ここに解答を入力してください…"
-              className="w-full text-sm rounded-xl px-3 py-2.5 outline-none"
-              style={{ border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontFamily: t.fontFamily }} />
-            <p className="text-xs mt-1 text-right" style={{ color: t.accent, opacity: 0.7 }}>{answer.length} 文字</p>
-          </div>
+          {isSpeaking ? (
+            <>
+              <div>
+                <label className="text-xs font-bold block mb-1.5" style={{ color: t.accent }}>あなたの解答（音声または動画ファイル）</label>
+                <input type="file" accept="audio/*,video/*"
+                  onChange={e => setMediaFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm rounded-xl px-3 py-2.5 outline-none"
+                  style={{ border: `1px solid ${t.border}`, background: t.bg, color: t.text }} />
+                {mediaFile && (
+                  mediaFile.type.startsWith("video/") ? (
+                    <video controls src={URL.createObjectURL(mediaFile)} className="w-full rounded-xl mt-2 max-h-64" />
+                  ) : (
+                    <audio controls src={URL.createObjectURL(mediaFile)} className="w-full mt-2" />
+                  )
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold block mb-1.5" style={{ color: t.accent }}>メモ（任意）</label>
+                <textarea rows={3} value={note} onChange={e => setNote(e.target.value)}
+                  placeholder="伝えておきたいことがあれば入力してください（任意）…"
+                  className="w-full text-sm rounded-xl px-3 py-2.5 outline-none"
+                  style={{ border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontFamily: t.fontFamily }} />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs font-bold block mb-1.5" style={{ color: t.accent }}>あなたの解答</label>
+              <textarea rows={8} value={answer} onChange={e => setAnswer(e.target.value)}
+                placeholder="ここに解答を入力してください…"
+                className="w-full text-sm rounded-xl px-3 py-2.5 outline-none"
+                style={{ border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontFamily: t.fontFamily }} />
+              <p className="text-xs mt-1 text-right" style={{ color: t.accent, opacity: 0.7 }}>{answer.length} 文字</p>
+            </div>
+          )}
           {errMsg && <p className="text-xs font-bold text-center" style={{ color: "#d9534f" }}>{errMsg}</p>}
           <button type="button" onClick={openConfirm} disabled={submitting}
             className="self-center px-8 py-2.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md disabled:opacity-50"

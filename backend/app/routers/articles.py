@@ -1,7 +1,8 @@
 import os
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Form
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.core.database import get_db
@@ -13,6 +14,7 @@ from app.models.correction_request import CorrectionRequest
 from app.models.access_log import AccessLog
 from app.models.customer import Customer
 from app.models.character import Character
+from app.models.exercise_submission import ExerciseSubmission
 from app.core.intimacy import get_intimacy_settings
 from app.core.character_voice import customer_display_name
 from app.core.welcome_articles import claim_welcome_article_for_customer, swap_welcome_article_if_character_ready
@@ -45,6 +47,7 @@ class ArticleOut(BaseModel):
     unlock_cost: int = 0
     opened_at: Optional[str] = None
     locked: bool = False
+    exercise_progress: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -79,7 +82,61 @@ def _sanitized_exercise_data_for_customer(article: Article) -> Optional[dict]:
     return data
 
 
-def _serialize_article_for_customer(article: Article) -> dict:
+def _get_exercise_progress(db: Session, article: Article, customer_id: int) -> Optional[dict]:
+    """選択式演習問題（リーディング・リスニング）の、現在の挑戦（最新attempt_number）における
+    設問ごとの解答状況を返す。
+
+    顧客が設問を選んだ瞬間にロックされる仕様のため、画面再読み込み後もロック状態・正誤・解説を
+    復元できるようにする。
+    """
+    if article.exercise_format != "multiple_choice":
+        return None
+
+    latest_attempt = db.query(func.max(ExerciseSubmission.attempt_number)).filter(
+        ExerciseSubmission.article_id == article.id,
+        ExerciseSubmission.customer_id == customer_id,
+    ).scalar()
+    if latest_attempt is None:
+        return {"attempt_number": 1, "answers": {}, "completed": False}
+
+    submissions = db.query(ExerciseSubmission).filter(
+        ExerciseSubmission.article_id == article.id,
+        ExerciseSubmission.customer_id == customer_id,
+        ExerciseSubmission.attempt_number == latest_attempt,
+    ).all()
+
+    questions = (article.exercise_data or {}).get("questions") or []
+    answers = {}
+    for s in submissions:
+        q = questions[s.question_index] if s.question_index < len(questions) else {}
+        if s.is_correct:
+            explanation = q.get("explanation_correct") or q.get("explanation")
+        else:
+            explanation = q.get("explanation_incorrect") or q.get("explanation")
+        answers[str(s.question_index)] = {
+            "chosen_index": s.chosen_index,
+            "is_correct": s.is_correct,
+            "correct_index": q.get("correct_index"),
+            "explanation": explanation,
+        }
+
+    completed = len(questions) > 0 and len(submissions) >= len(questions)
+    result = {"attempt_number": latest_attempt, "answers": answers, "completed": completed}
+    if completed:
+        correct_count = sum(1 for s in submissions if s.is_correct)
+        total = len(questions)
+        score_comments = (article.exercise_data or {}).get("score_comments") or {}
+        if correct_count == total:
+            character_comment = score_comments.get("perfect")
+        elif correct_count * 2 >= total:
+            character_comment = score_comments.get("good")
+        else:
+            character_comment = score_comments.get("encourage")
+        result.update({"score": correct_count, "total": total, "character_comment": character_comment})
+    return result
+
+
+def _serialize_article_for_customer(article: Article, db: Optional[Session] = None, customer_id: Optional[int] = None) -> dict:
     """顧客向けに記事をシリアライズする。未開封の有料記事（unlock_cost > 0 かつ未開封）は
     本文等を省略し、locked=True として返す（本棚・詳細画面でロック表示するため）。
     """
@@ -97,6 +154,7 @@ def _serialize_article_for_customer(article: Article) -> dict:
         "unlock_cost": article.unlock_cost or 0,
         "opened_at": article.opened_at.isoformat() if article.opened_at else None,
         "locked": locked,
+        "exercise_progress": None,
     }
     if locked:
         data.update({"content": None, "tips": None, "example_sentences": None, "exercise_data": None})
@@ -107,6 +165,8 @@ def _serialize_article_for_customer(article: Article) -> dict:
             "example_sentences": article.example_sentences,
             "exercise_data": _sanitized_exercise_data_for_customer(article),
         })
+        if db is not None and customer_id is not None:
+            data["exercise_progress"] = _get_exercise_progress(db, article, customer_id)
     return data
 
 # ===== 顧客向け =====
@@ -131,7 +191,7 @@ def get_my_articles(
         Article.customer_id == current_user.id,
         Article.status == "published"
     ).all()
-    return [_serialize_article_for_customer(a) for a in articles]
+    return [_serialize_article_for_customer(a, db, current_user.id) for a in articles]
 
 @router.get("/character/{character_id}/blog-posts")
 def get_character_blog_posts(
@@ -196,7 +256,7 @@ def get_article(
 
     # 演習問題（選択式）は、答え・解説を見せる前にまず自力で解いてもらいたいので、
     # 詳細表示の時点では問題文・選択肢のみを返し、正解・解説は採点エンドポイント経由で渡す
-    return _serialize_article_for_customer(article)
+    return _serialize_article_for_customer(article, db, current_user.id)
 
 
 @router.post("/{article_id}/unlock", response_model=ArticleOut)
@@ -222,7 +282,7 @@ def unlock_article(
         db.commit()
         db.refresh(article)
 
-    return _serialize_article_for_customer(article)
+    return _serialize_article_for_customer(article, db, current_user.id)
 
 
 class ExerciseSubmitMC(BaseModel):
@@ -236,6 +296,13 @@ class ExerciseSubmitWritten(BaseModel):
 class ExerciseCheckAnswer(BaseModel):
     question_index: int
     chosen_index: Optional[int] = None
+
+
+class ExerciseAnswerQuestion(BaseModel):
+    question_index: int
+    chosen_index: Optional[int] = None
+    time_taken: Optional[float] = None
+    attempt_number: Optional[int] = None
 
 
 @router.post("/{article_id}/check-answer")
@@ -269,6 +336,128 @@ def check_multiple_choice_answer(
     correct_index = questions[data.question_index].get("correct_index")
     is_correct = data.chosen_index is not None and data.chosen_index == correct_index
     return {"is_correct": is_correct}
+
+
+@router.post("/{article_id}/answer-question")
+def answer_exercise_question(
+    article_id: int,
+    data: ExerciseAnswerQuestion,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """選択式演習問題（リーディング・リスニング）の設問に解答し、その場でロック＋採点する。
+
+    1問解答するたびに ExerciseSubmission を記録し、即座に正誤・解説を返す
+    （解答後は選択肢を変更できない「ロック式」UIのバックエンド側の挙動）。
+    全設問に解答し終えたら、score・score_comments によるキャラクターからの総評も合わせて返す。
+    """
+    article = db.query(Article).filter(
+        Article.id == article_id,
+        Article.status == "published",
+        Article.article_type == "exercise",
+        Article.exercise_format == "multiple_choice",
+    ).first()
+    if not article:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="演習問題が見つかりません")
+    if article.customer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="演習問題が見つかりません")
+
+    questions = (article.exercise_data or {}).get("questions") or []
+    if not (0 <= data.question_index < len(questions)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="設問が見つかりません")
+
+    if data.attempt_number is not None:
+        attempt_number = data.attempt_number
+    else:
+        latest_attempt = db.query(func.max(ExerciseSubmission.attempt_number)).filter(
+            ExerciseSubmission.article_id == article_id,
+            ExerciseSubmission.customer_id == current_user.id,
+        ).scalar()
+        attempt_number = latest_attempt or 1
+
+    q = questions[data.question_index]
+    correct_index = q.get("correct_index")
+
+    existing = db.query(ExerciseSubmission).filter(
+        ExerciseSubmission.article_id == article_id,
+        ExerciseSubmission.customer_id == current_user.id,
+        ExerciseSubmission.attempt_number == attempt_number,
+        ExerciseSubmission.question_index == data.question_index,
+    ).first()
+
+    if existing:
+        is_correct = existing.is_correct
+        chosen_index = existing.chosen_index
+    else:
+        is_correct = data.chosen_index is not None and data.chosen_index == correct_index
+        chosen_index = data.chosen_index
+        submission = ExerciseSubmission(
+            article_id=article_id,
+            customer_id=current_user.id,
+            attempt_number=attempt_number,
+            question_index=data.question_index,
+            chosen_index=chosen_index,
+            is_correct=is_correct,
+            time_taken=data.time_taken,
+            customer_proficiency_snapshot={
+                "intimacy_points": current_user.intimacy_points,
+                "credit_balance": current_user.credit_balance,
+            },
+        )
+        db.add(submission)
+
+    if is_correct:
+        explanation = q.get("explanation_correct") or q.get("explanation")
+    else:
+        explanation = q.get("explanation_incorrect") or q.get("explanation")
+
+    answered_count = db.query(ExerciseSubmission).filter(
+        ExerciseSubmission.article_id == article_id,
+        ExerciseSubmission.customer_id == current_user.id,
+        ExerciseSubmission.attempt_number == attempt_number,
+    ).count()
+    if not existing:
+        answered_count += 1  # 上の query はまだ commit 前のため、新規分を加算しておく
+
+    total = len(questions)
+    completed = answered_count >= total
+    result = {
+        "is_correct": is_correct,
+        "correct_index": correct_index,
+        "explanation": explanation,
+        "attempt_number": attempt_number,
+        "answered_count": answered_count,
+        "total": total,
+        "completed": completed,
+    }
+
+    if completed:
+        correct_count = db.query(ExerciseSubmission).filter(
+            ExerciseSubmission.article_id == article_id,
+            ExerciseSubmission.customer_id == current_user.id,
+            ExerciseSubmission.attempt_number == attempt_number,
+            ExerciseSubmission.is_correct == True,  # noqa: E712
+        ).count()
+        if not existing and is_correct:
+            correct_count += 1
+
+        score_comments = (article.exercise_data or {}).get("score_comments") or {}
+        if correct_count == total:
+            character_comment = score_comments.get("perfect")
+        elif correct_count * 2 >= total:
+            character_comment = score_comments.get("good")
+        else:
+            character_comment = score_comments.get("encourage")
+
+        result.update({"score": correct_count, "character_comment": character_comment})
+
+        if not existing:
+            settings_row = get_intimacy_settings(db)
+            current_user.intimacy_points = (current_user.intimacy_points or 0) + settings_row.points_per_exercise_submit
+            check_and_unlock_rewards(db, current_user)
+
+    db.commit()
+    return result
 
 
 @router.post("/{article_id}/submit-mc")
@@ -372,9 +561,10 @@ def submit_written_exercise(
     if not data.answer or not data.answer.strip():
         raise HTTPException(status_code=400, detail="解答を入力してください")
 
+    answer = data.answer.strip()
     content = (
         f"【演習問題「{article.title}」への解答を提出します】\n\n"
-        f"{data.answer.strip()}"
+        f"{answer}"
     )
     msg = Message(
         customer_id=current_user.id,
@@ -385,7 +575,94 @@ def submit_written_exercise(
         article_id=article.id,
     )
     db.add(msg)
+
+    skill = (article.exercise_data or {}).get("skill")
+    if skill in ("writing", "speaking"):
+        cr = CorrectionRequest(
+            customer_id=current_user.id,
+            character_id=article.character_id,
+            correction_type=skill,
+            status="pending",
+            text_content=answer,
+            source_article_id=article.id,
+        )
+        db.add(cr)
+
     # 演習への回答提出でも親密度を加算（学習への取り組みで絆が深まる）
+    settings_row = get_intimacy_settings(db)
+    current_user.intimacy_points = (current_user.intimacy_points or 0) + settings_row.points_per_exercise_submit
+    check_and_unlock_rewards(db, current_user)
+    db.commit()
+    return {"message": "解答を提出しました。キャラクターからのフィードバックをお待ちください。"}
+
+
+@router.post("/{article_id}/submit-written/media")
+def submit_written_exercise_media(
+    article_id: int,
+    file: UploadFile = File(...),
+    note: Optional[str] = Form(None),
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """記述式の演習問題（主にスピーキング）に、音声・動画ファイルで解答を提出する。
+
+    添削（CorrectionRequest）として記録し、運営側の文字起こし・キャラクターからの
+    フィードバックにつなげる。
+    """
+    article = db.query(Article).filter(
+        Article.id == article_id,
+        Article.status == "published",
+        Article.article_type == "exercise",
+        Article.exercise_format == "written_response",
+    ).first()
+    if not article:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="演習問題が見つかりません")
+    if article.customer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="演習問題が見つかりません")
+
+    skill = (article.exercise_data or {}).get("skill")
+    if skill != "speaking":
+        raise HTTPException(status_code=400, detail="この演習問題は音声・動画での提出に対応していません")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    media_type = validate_media_ext(ext, None)
+
+    raw = file.file.read()
+    if len(raw) > MAX_MEDIA_SIZE:
+        raise HTTPException(status_code=400, detail="ファイルサイズが大きすぎます（50MBまで）")
+
+    correction_media_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "correction_media")
+    os.makedirs(correction_media_dir, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(correction_media_dir, filename), "wb") as f:
+        f.write(raw)
+    media_url = f"/static/correction_media/{filename}"
+
+    content = (
+        f"【演習問題「{article.title}」への解答（{'動画' if media_type == 'video' else '音声'}）を提出します】"
+    )
+    msg = Message(
+        customer_id=current_user.id,
+        character_id=article.character_id,
+        sender="customer",
+        content=content,
+        is_exercise_submission=True,
+        article_id=article.id,
+    )
+    db.add(msg)
+
+    cr = CorrectionRequest(
+        customer_id=current_user.id,
+        character_id=article.character_id,
+        correction_type="speaking",
+        status="pending",
+        media_url=media_url,
+        media_type=media_type,
+        note=note.strip() if note else None,
+        source_article_id=article.id,
+    )
+    db.add(cr)
+
     settings_row = get_intimacy_settings(db)
     current_user.intimacy_points = (current_user.intimacy_points or 0) + settings_row.points_per_exercise_submit
     check_and_unlock_rewards(db, current_user)
@@ -418,6 +695,8 @@ def _validate_exercise_data(exercise_format: Optional[str], exercise_data: Optio
     elif exercise_format == "written_response":
         if not exercise_data.get("prompt"):
             raise ValueError("記述式の演習問題には prompt（お題・設問文）が必要です")
+        if exercise_data.get("skill") not in ("writing", "speaking"):
+            raise ValueError("記述式の演習問題には skill（'writing' または 'speaking'）の指定が必要です")
     else:
         raise ValueError("exercise_format は 'multiple_choice'（選択式）か 'written_response'（記述式）を指定してください")
 

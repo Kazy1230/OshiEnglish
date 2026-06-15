@@ -35,12 +35,17 @@ def serialize_correction_request(cr: CorrectionRequest, with_customer_info: bool
         "media_url": cr.media_url,
         "media_type": cr.media_type,
         "note": cr.note,
+        "transcript": cr.transcript,
+        "source_article_id": cr.source_article_id,
         "feedback_article_id": cr.feedback_article_id,
         "created_at": cr.created_at.isoformat() if cr.created_at else None,
     }
     if with_customer_info:
         data["username"] = cr.customer.username if cr.customer else None
         data["character_name"] = cr.character.name if cr.character else None
+    if cr.source_article:
+        data["source_article_title"] = cr.source_article.title
+        data["source_article_prompt"] = (cr.source_article.exercise_data or {}).get("prompt")
     return data
 
 
@@ -138,6 +143,10 @@ class CorrectionStatusUpdate(BaseModel):
     status: str
 
 
+class CorrectionTranscriptUpdate(BaseModel):
+    transcript: str
+
+
 @router.get("/admin/")
 def list_correction_requests(
     status: Optional[str] = None,
@@ -190,6 +199,27 @@ def update_correction_status(
         raise HTTPException(status_code=404, detail="添削リクエストが見つかりません")
 
     cr.status = data.status
+    db.commit()
+    db.refresh(cr)
+    return serialize_correction_request(cr, with_customer_info=True)
+
+
+@router.patch("/admin/{correction_id}/transcript")
+def update_correction_transcript(
+    correction_id: int,
+    data: CorrectionTranscriptUpdate,
+    admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """管理者向け：スピーキング提出の音声/動画を手動で文字起こしした結果を保存する。
+
+    保存した内容はFB記事作成プロンプトの「生徒の提出内容」として使われる。
+    """
+    cr = db.query(CorrectionRequest).filter(CorrectionRequest.id == correction_id).first()
+    if not cr:
+        raise HTTPException(status_code=404, detail="添削リクエストが見つかりません")
+
+    cr.transcript = data.transcript.strip() if data.transcript and data.transcript.strip() else None
     db.commit()
     db.refresh(cr)
     return serialize_correction_request(cr, with_customer_info=True)
