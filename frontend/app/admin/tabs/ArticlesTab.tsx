@@ -398,6 +398,18 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // カテゴリ選択時の新規作成フォーム初期値を組み立てる
+  // welcome_original は「対象キャラ」必須（公式キャラのような汎用テンプレート選択肢が無い）ため、
+  // 最初のオリキャラを自動選択しておく
+  function formForCategory(cat: string) {
+    const merged = { ...emptyArticleForm, ...categoryFormDefaults(cat) };
+    if (cat === "welcome_original") {
+      const original = characters.find(c => c.is_preset === false);
+      if (original) merged.template_character_id = String(original.id);
+    }
+    return merged;
+  }
+
   function cancelForm() {
     setShowForm(false);
     setEditingArticle(null);
@@ -573,7 +585,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               cancelForm();
               setSelectedCategory(cat);
               if (!cat.startsWith("stock_")) {
-                setForm({ ...emptyArticleForm, ...categoryFormDefaults(cat) });
+                setForm(formForCategory(cat));
               }
             }}>
             {ARTICLE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
@@ -581,7 +593,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
           {!isStockCategory && (
             <button className="btn-accent" onClick={() => {
               if (showForm) { cancelForm(); return; }
-              setForm({ ...emptyArticleForm, ...categoryFormDefaults(selectedCategory) });
+              setForm(formForCategory(selectedCategory));
               setShowForm(true);
             }}>
               {showForm ? "キャンセル" : "+ 新規記事"}
@@ -1156,7 +1168,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
             <div>
               <div className="flex items-center justify-between gap-2 mb-1">
                 <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-                  対象キャラ（キャラ専用テンプレートにする場合のみ選択）
+                  対象キャラ{selectedCategory === "welcome_official" ? "（キャラ専用テンプレートにする場合のみ選択）" : "（オリキャラ専用ウェルカムページの対象キャラ）"}
                 </label>
                 <button
                   type="button"
@@ -1170,15 +1182,25 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   📋 ウェルカムページ作成プロンプトをコピー
                 </button>
               </div>
-              <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}
-                disabled={!!form.customer_id}>
-                {selectedCategory === "welcome_official" && <option value="">汎用テンプレート（対象キャラを指定しない）</option>}
-                {characters
-                  .filter(c => selectedCategory === "welcome_original" ? c.is_preset === false : c.is_preset !== false)
-                  .map(c => (
-                    <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
-                  ))}
-              </select>
+              {(() => {
+                const candidates = characters.filter(c => selectedCategory === "welcome_original" ? c.is_preset === false : c.is_preset !== false);
+                if (selectedCategory === "welcome_original" && candidates.length === 0) {
+                  return (
+                    <p className="text-xs" style={{ color: "#c0392b" }}>
+                      オリジナルキャラクターがまだ作成されていません。キャラビルダーでオリキャラが作成されると、ここで選択できるようになります。
+                    </p>
+                  );
+                }
+                return (
+                  <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}
+                    disabled={!!form.customer_id} required={selectedCategory === "welcome_original"}>
+                    {selectedCategory === "welcome_official" && <option value="">汎用テンプレート（対象キャラを指定しない）</option>}
+                    {candidates.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
+                    ))}
+                  </select>
+                );
+              })()}
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
                 キャラを選択すると、そのキャラが割り当てられた顧客専用のウェルカムページになります
                 （公式キャラ：申し込み時に選択した顧客 / オリジナルキャラ：キャラ作成完了時にそのキャラが割り当てられた顧客）。
