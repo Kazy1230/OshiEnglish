@@ -42,7 +42,7 @@ type Relationship = "teacher" | "senpai" | "kohai" | "other";
 type Personality  = "gentle" | "strict" | "cool" | "energetic" | "tsundere" | "other";
 type CharChoice   = "builder" | "custom" | "preset";
 type BuilderStep  = 1 | 2 | 3;
-type PresetCharId = "yukina" | "rei";
+type PresetCharId = "yukina" | "rei" | "chloe" | "frederick";
 
 interface ThemeVars {
   bg: string; card: string; primary: string; accent: string;
@@ -112,8 +112,11 @@ interface PresetCharacter {
   id: PresetCharId;
   name: string; reading: string;
   gender: Gender; relationship: Relationship; personality: Personality;
+  // カード表示用（既存のPersonality enumに当てはまらない表記を表示するための上書き）
+  personalityLabel?: string;
+  level: string;
   hobby: string; quote: string;
-  instagram: string;
+  instagram?: string;
   themeOverride: Partial<ThemeVars>;
 }
 
@@ -121,6 +124,7 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
   {
     id: "yukina", name: "白河雪菜", reading: "しらかわ ゆきな",
     gender: "female", relationship: "senpai", personality: "tsundere",
+    level: "日常会話",
     hobby: "映画鑑賞・音楽鑑賞",
     quote: "「べ、別にあなたのために教えてるわけじゃないですから」",
     instagram: "https://www.instagram.com/shirakawa_yukina._.a",
@@ -134,6 +138,7 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
   {
     id: "rei", name: "蒼井零", reading: "あおい れい",
     gender: "male", relationship: "kohai", personality: "cool",
+    level: "ビジネス英語",
     hobby: "読書・天文",
     quote: "「……先輩のことは、まあ、認めてますよ」",
     instagram: "https://www.instagram.com/aoi_rei_rei_aoi",
@@ -142,6 +147,36 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
       bg: "#10141c", card: "#1a1f2b", primary: "#9db8e0", accent: "#5b8ad1",
       accentLight: "#1e2a3d", border: "#2c3445", text: "#e3e8f1", muted: "#8590a3",
       gradA: "#0b0e15", gradB: "#2c3e5c", isDark: true,
+    },
+  },
+  {
+    id: "chloe", name: "Chloe", reading: "クロエ",
+    gender: "female", relationship: "teacher", personality: "energetic",
+    personalityLabel: "明るい・フレンドリー",
+    level: "日常会話",
+    hobby: "カフェ巡り・写真撮影",
+    quote: "「Hey! Let's have fun learning English together! 😊」",
+    // インスタリンクなし
+    // 暖色系・ポップ
+    themeOverride: {
+      bg: "#fff7ed", card: "#fffbf5", primary: "#ea580c", accent: "#fbbf24",
+      accentLight: "#ffedd5", border: "#fde4cb", text: "#7c2d12", muted: "#c2785a",
+      gradA: "#ea580c", gradB: "#fbbf24",
+    },
+  },
+  {
+    id: "frederick", name: "Frederick", reading: "フレデリック",
+    gender: "male", relationship: "teacher", personality: "cool",
+    personalityLabel: "知的・丁寧",
+    level: "アカデミック",
+    hobby: "読書・クラシック音楽鑑賞",
+    quote: "「Good day. Shall we begin today's lesson?」",
+    // インスタリンクなし
+    // 紺・グレー系・知的
+    themeOverride: {
+      bg: "#0f172a", card: "#1e293b", primary: "#cbd5e1", accent: "#3b82f6",
+      accentLight: "#1e2a3d", border: "#334155", text: "#e2e8f0", muted: "#8b98ad",
+      gradA: "#0f172a", gradB: "#334155", isDark: true,
     },
   },
 ];
@@ -1335,7 +1370,7 @@ export default function ApplyPage() {
                             </span>
                           </p>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: ".35rem", margin: ".55rem 0" }}>
-                            {[REL_LABEL[p.relationship], PERS_LABEL[p.personality]].map(b => (
+                            {[REL_LABEL[p.relationship], p.personalityLabel ?? PERS_LABEL[p.personality], p.level].map(b => (
                               <span key={b} style={{
                                 fontSize: ".75rem", fontWeight: 600, padding: ".18rem .65rem",
                                 borderRadius: "99px", background: theme.bg, color: theme.primary,
@@ -1355,7 +1390,10 @@ export default function ApplyPage() {
                             display: "flex", flexWrap: "wrap", gap: ".3rem .5rem", margin: "0 0 .6rem", padding: 0,
                             listStyle: "none",
                           }}>
-                            {["キャラ作成無料", "20クレジット付与", "即日スタート", "限定称号・壁紙あり", "隠しセリフ多数", "公式インスタあり"].map(b => (
+                            {[
+                              "キャラ作成無料", "20クレジット付与", "即日スタート", "限定称号・壁紙あり", "隠しセリフ多数",
+                              ...(p.instagram ? ["公式インスタあり"] : []),
+                            ].map(b => (
                               <li key={b} style={{
                                 fontSize: ".7rem", fontWeight: 700, padding: ".15rem .55rem",
                                 borderRadius: "99px", background: theme.accentLight, color: theme.text,
@@ -1365,21 +1403,23 @@ export default function ApplyPage() {
                               </li>
                             ))}
                           </ul>
-                          <a
-                            href={p.instagram}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: ".35rem",
-                              fontSize: ".78rem", fontWeight: 700,
-                              color: p.themeOverride.accent ?? theme.accent,
-                              textDecoration: "none", fontFamily: theme.fontFamily,
-                              transition: `color ${T}`,
-                            }}
-                          >
-                            📷 公式Instagramをフォローする
-                          </a>
+                          {p.instagram && (
+                            <a
+                              href={p.instagram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: ".35rem",
+                                fontSize: ".78rem", fontWeight: 700,
+                                color: p.themeOverride.accent ?? theme.accent,
+                                textDecoration: "none", fontFamily: theme.fontFamily,
+                                transition: `color ${T}`,
+                              }}
+                            >
+                              📷 公式Instagramをフォローする
+                            </a>
+                          )}
                         </div>
                       );
                     })}
