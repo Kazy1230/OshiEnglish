@@ -15,6 +15,8 @@ class ExerciseTemplate(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     exercise_category = Column(String(100), nullable=False, index=True)
+    # exercise_subcategory: reading / listening（記事管理画面のストック分類用）
+    exercise_subcategory = Column(String(20), nullable=True, index=True)
     difficulty = Column(String(10), nullable=False, default="medium")  # easy / medium / hard
     exercise_data = Column(JSON, nullable=False)  # questions本体・音声情報のみ（解説・score_commentsは含まない）
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -14,6 +14,7 @@ def _serialize(t: ExerciseTemplate) -> dict:
     return {
         "id": t.id,
         "exercise_category": t.exercise_category,
+        "exercise_subcategory": t.exercise_subcategory,
         "difficulty": t.difficulty,
         "exercise_data": t.exercise_data,
         "created_at": t.created_at.isoformat() if t.created_at else None,
@@ -23,6 +24,7 @@ def _serialize(t: ExerciseTemplate) -> dict:
 @router.get("/admin/")
 def list_exercise_templates(
     exercise_category: Optional[str] = None,
+    exercise_subcategory: Optional[str] = None,
     admin=Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -30,10 +32,13 @@ def list_exercise_templates(
     キャラ要素を含まない問題本体ストックの一覧。
 
     exercise_categoryを指定すると部分一致で絞り込む（同じ試験・パートの既存ストックを探す用途）。
+    exercise_subcategoryを指定すると一致するもの（reading/listening）のみに絞り込む。
     """
     query = db.query(ExerciseTemplate)
     if exercise_category:
         query = query.filter(ExerciseTemplate.exercise_category.ilike(f"%{exercise_category}%"))
+    if exercise_subcategory:
+        query = query.filter(ExerciseTemplate.exercise_subcategory == exercise_subcategory)
     items = query.order_by(ExerciseTemplate.created_at.desc()).all()
     return [_serialize(t) for t in items]
 
@@ -57,6 +62,7 @@ def _validate_question_body(exercise_data: Optional[dict]):
 
 class ExerciseTemplateCreate(BaseModel):
     exercise_category: str
+    exercise_subcategory: Optional[str] = None  # reading / listening
     difficulty: str = "medium"
     exercise_data: dict
 
@@ -71,10 +77,13 @@ def create_exercise_template(
         raise HTTPException(status_code=400, detail="difficulty は easy/medium/hard のいずれかを指定してください")
     if not data.exercise_category.strip():
         raise HTTPException(status_code=400, detail="exercise_category は必須です")
+    if data.exercise_subcategory is not None and data.exercise_subcategory not in ("reading", "listening"):
+        raise HTTPException(status_code=400, detail="exercise_subcategory は reading/listening のいずれかを指定してください")
     _validate_question_body(data.exercise_data)
 
     template = ExerciseTemplate(
         exercise_category=data.exercise_category.strip(),
+        exercise_subcategory=data.exercise_subcategory,
         difficulty=data.difficulty,
         exercise_data=data.exercise_data,
     )

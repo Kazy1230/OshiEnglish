@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections, preview, article_templates, exercise_templates
+from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections, preview, article_templates, exercise_templates, template_article_templates
 
 # テーブル自動作成（開発用。本番はAlembicマイグレーションを使用）
 Base.metadata.create_all(bind=engine)
@@ -258,6 +258,51 @@ _migrate_tone_profile_extensions()
 _ensure_column("correction_requests", "source_article_id", "INT NULL")
 _ensure_index("correction_requests", "ix_correction_requests_source_article_id", "(source_article_id)")
 _ensure_column("correction_requests", "transcript", "TEXT NULL")
+
+# 簡易マイグレーション㉛: 記事管理タブの15カテゴリ化
+# - articles.exercise_subcategory / exercise_templates.exercise_subcategory:
+#   演習問題の細分類（reading / listening / speaking / writing）を明示的に保存する。
+# - 既存のexercise記事は、exercise_format・exercise_data（音声情報・skill）から推測してバックフィルする。
+_ensure_column("articles", "exercise_subcategory", "VARCHAR(20) NULL")
+_ensure_column("exercise_templates", "exercise_subcategory", "VARCHAR(20) NULL")
+
+
+def _backfill_exercise_subcategory():
+    from app.models.article import Article
+
+    db = SessionLocal()
+    try:
+        articles_to_fix = db.query(Article).filter(
+            Article.article_type == "exercise",
+            Article.exercise_subcategory.is_(None),
+        ).all()
+        changed = False
+        for a in articles_to_fix:
+            data = a.exercise_data or {}
+            if a.exercise_format == "written_response":
+                skill = data.get("skill")
+                if skill in ("writing", "speaking"):
+                    a.exercise_subcategory = skill
+                    changed = True
+            else:
+                has_audio = bool(data.get("audio_url"))
+                if not has_audio:
+                    for q in (data.get("questions") or []):
+                        if isinstance(q, dict) and q.get("audio_url"):
+                            has_audio = True
+                            break
+                if not has_audio:
+                    text_blob = str(data)
+                    has_audio = "[[audio:" in text_blob
+                a.exercise_subcategory = "listening" if has_audio else "reading"
+                changed = True
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
+_backfill_exercise_subcategory()
 
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
@@ -576,6 +621,7 @@ app.include_router(corrections.router)
 app.include_router(preview.router)
 app.include_router(article_templates.router)
 app.include_router(exercise_templates.router)
+app.include_router(template_article_templates.router)
 
 @app.get("/health")
 def health():

@@ -154,12 +154,25 @@ export const api = {
     apiFetch(`/article-templates/admin/${id}`, { method: "DELETE" }),
 
   // 管理者：問題本体ストック（②選択式演習の2段階生成）
-  adminListExerciseTemplates: (exerciseCategory?: string) =>
-    apiFetch(`/exercise-templates/admin/${exerciseCategory ? `?exercise_category=${encodeURIComponent(exerciseCategory)}` : ""}`),
-  adminCreateExerciseTemplate: (data: { exercise_category: string; difficulty: string; exercise_data: object }) =>
+  adminListExerciseTemplates: (exerciseCategory?: string, exerciseSubcategory?: string) => {
+    const params = new URLSearchParams();
+    if (exerciseCategory) params.set("exercise_category", exerciseCategory);
+    if (exerciseSubcategory) params.set("exercise_subcategory", exerciseSubcategory);
+    const qs = params.toString();
+    return apiFetch(`/exercise-templates/admin/${qs ? `?${qs}` : ""}`);
+  },
+  adminCreateExerciseTemplate: (data: { exercise_category: string; exercise_subcategory?: string; difficulty: string; exercise_data: object }) =>
     apiFetch("/exercise-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
   adminDeleteExerciseTemplate: (id: number) =>
     apiFetch(`/exercise-templates/admin/${id}`, { method: "DELETE" }),
+
+  // 管理者：定期便ストック（④定期便プールの2段階生成）
+  adminListTemplateArticleTemplates: (topic?: string) =>
+    apiFetch(`/template-article-templates/admin/${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
+  adminCreateTemplateArticleTemplate: (data: { topic?: string; difficulty: string; content: string; example_sentences?: string[]; tips?: string[] }) =>
+    apiFetch("/template-article-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
+  adminDeleteTemplateArticleTemplate: (id: number) =>
+    apiFetch(`/template-article-templates/admin/${id}`, { method: "DELETE" }),
 
   // 管理者：顧客
   adminGetCustomers: () => apiFetch("/customers/"),

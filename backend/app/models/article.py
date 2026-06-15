@@ -28,6 +28,9 @@ class Article(Base):
     exercise_category = Column(String(100), nullable=True)
     # exercise_data: 形式に応じた構造化データ（質問・選択肢・正解・解説、もしくはお題・評価観点メモ）をJSONで保持
     exercise_data = Column(JSON, nullable=True)
+    # exercise_subcategory: 演習問題の細分類（reading / listening / speaking / writing）。
+    # 記事管理画面の15カテゴリ表示・絞り込みのために明示的に保存する。
+    exercise_subcategory = Column(String(20), nullable=True)
     title = Column(String(300), nullable=False)
     content = Column(Text, nullable=False)           # 本文 Markdown
     tips = Column(JSON, nullable=True)               # Tips リスト

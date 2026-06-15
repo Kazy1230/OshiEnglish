@@ -40,6 +40,7 @@ class ArticleOut(BaseModel):
     article_type: str = "request"
     exercise_format: Optional[str] = None
     exercise_category: Optional[str] = None
+    exercise_subcategory: Optional[str] = None
     exercise_data: Optional[dict] = None
     grammar_master_id: Optional[int] = None
     character_id: int
@@ -48,6 +49,7 @@ class ArticleOut(BaseModel):
     opened_at: Optional[str] = None
     locked: bool = False
     exercise_progress: Optional[dict] = None
+    template_character_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -714,6 +716,7 @@ class ArticleCreate(BaseModel):
     is_llm_drafted: bool = False
     exercise_format: Optional[str] = None
     exercise_category: Optional[str] = None
+    exercise_subcategory: Optional[str] = None  # reading / listening / speaking / writing
     exercise_data: Optional[dict] = None
     request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
@@ -738,6 +741,7 @@ class ArticleCreate(BaseModel):
                 raise ValueError("依頼記事には本文の入力が必須です")
             self.exercise_format = None
             self.exercise_category = None
+            self.exercise_subcategory = None
             self.exercise_data = None
         elif self.article_type == "blog":
             if not self.content:
@@ -747,6 +751,7 @@ class ArticleCreate(BaseModel):
             self.grammar_master_id = None
             self.exercise_format = None
             self.exercise_category = None
+            self.exercise_subcategory = None
             self.exercise_data = None
         elif self.article_type in ("writing_feedback", "speaking_feedback"):
             # ライティング／スピーキングフィードバック：
@@ -759,6 +764,7 @@ class ArticleCreate(BaseModel):
             self.grammar_master_id = None
             self.exercise_format = None
             self.exercise_category = None
+            self.exercise_subcategory = None
             self.exercise_data = None
         elif self.article_type == "welcome":
             # ウェルカムページ：新規顧客の本棚に最初に届くテンプレート記事。
@@ -770,6 +776,7 @@ class ArticleCreate(BaseModel):
             self.grammar_master_id = None
             self.exercise_format = None
             self.exercise_category = None
+            self.exercise_subcategory = None
             self.exercise_data = None
             if self.customer_id is not None:
                 self.is_welcome_template = False
@@ -784,6 +791,7 @@ class ArticleCreate(BaseModel):
             self.grammar_master_id = None
             self.exercise_format = None
             self.exercise_category = None
+            self.exercise_subcategory = None
             self.exercise_data = None
         else:
             # 演習問題：特定の顧客に向けて出題する（依頼記事と同様、顧客の本棚に届く）
@@ -791,6 +799,8 @@ class ArticleCreate(BaseModel):
                 raise ValueError("演習問題には「顧客」の指定が必須です")
             self.grammar_master_id = None
             _validate_exercise_data(self.exercise_format, self.exercise_data)
+            if self.exercise_subcategory not in ("reading", "listening", "speaking", "writing"):
+                raise ValueError("演習問題には exercise_subcategory（reading/listening/speaking/writing）の指定が必須です")
             if not self.content:
                 self.content = ""
         return self
@@ -807,6 +817,7 @@ class ArticleUpdate(BaseModel):
     customer_id: Optional[int] = None
     exercise_format: Optional[str] = None
     exercise_category: Optional[str] = None
+    exercise_subcategory: Optional[str] = None  # reading / listening / speaking / writing
     exercise_data: Optional[dict] = None
     request_message_id: Optional[int] = None  # 元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
@@ -850,6 +861,7 @@ def admin_get_all_articles(
             "article_type": a.article_type,
             "exercise_format": a.exercise_format,
             "exercise_category": a.exercise_category,
+            "exercise_subcategory": a.exercise_subcategory,
             "exercise_data": a.exercise_data,
             "grammar_master_id": a.grammar_master_id,
             "character_id": a.character_id,

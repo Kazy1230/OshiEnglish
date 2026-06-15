@@ -18,6 +18,8 @@ import {
   buildArticleAdaptationPrompt,
   buildExerciseBodyPrompt,
   buildExerciseAdaptationPrompt,
+  buildTemplateMaterialPrompt,
+  buildTemplateAdaptationPrompt,
   getCustomerDisplayName,
 } from "../lib/promptBuilders";
 import { hasListeningAudio } from "@/lib/exercise";
@@ -26,6 +28,8 @@ const emptyArticleForm = {
   article_type: "request", customer_id: "", character_id: "", grammar_master_id: "", title: "", content: "", tips: "", example_sentences: "", status: "draft",
   // ----- 演習問題（exercise）専用 -----
   exercise_format: "multiple_choice", exercise_category: "", exercise_data_text: "",
+  // 演習問題の細分類（reading/listening/speaking/writing）：記事管理画面の15カテゴリ表示用
+  exercise_subcategory: "",
   // 記述式（written_response）専用：ライティング/スピーキングの区別（exercise_data.skillに格納）
   exercise_skill: "writing",
   // 依頼記事：元になった記事リクエストメッセージ（公開時にステータス自動更新に使う）
@@ -37,6 +41,68 @@ const emptyArticleForm = {
   // 開封コスト（任意・未入力時はサーバー側のデフォルト計算に従う）
   unlock_cost: "",
 };
+
+// 記事管理画面の15カテゴリ
+const ARTICLE_CATEGORIES: { id: string; label: string }[] = [
+  { id: "stock_grammar", label: "📦 ストック：文法・トピック（①記事）" },
+  { id: "stock_reading", label: "📦 ストック：リーディング問題（②演習）" },
+  { id: "stock_listening", label: "📦 ストック：リスニング問題（②演習）" },
+  { id: "stock_template", label: "📦 ストック：定期便（④定期便）" },
+  { id: "request", label: "✉️ 依頼記事" },
+  { id: "blog", label: "📰 ブログ記事" },
+  { id: "exercise_reading", label: "🧩 演習問題（リーディング）" },
+  { id: "exercise_listening", label: "🎧 演習問題（リスニング）" },
+  { id: "exercise_speaking", label: "🗣 演習問題（スピーキング）" },
+  { id: "exercise_writing", label: "✍️ 演習問題（ライティング）" },
+  { id: "writing_feedback", label: "📝 ライティングFB" },
+  { id: "speaking_feedback", label: "🎤 スピーキングFB" },
+  { id: "welcome_official", label: "👋 ウェルカムページ（公式・デフォルト）" },
+  { id: "welcome_original", label: "👋 ウェルカムページ（オリキャラ）" },
+  { id: "template_pool", label: "🗂 定期便プール" },
+];
+
+// 記事 → 15カテゴリのいずれかへの分類
+function getArticleCategory(a: any, characters: any[]): string {
+  switch (a.article_type) {
+    case "request": return "request";
+    case "blog": return "blog";
+    case "writing_feedback": return "writing_feedback";
+    case "speaking_feedback": return "speaking_feedback";
+    case "template": return "template_pool";
+    case "welcome": {
+      if (!a.template_character_id) return "welcome_official";
+      const ch = characters.find(c => c.id === a.template_character_id);
+      return ch && ch.is_preset === false ? "welcome_original" : "welcome_official";
+    }
+    case "exercise": {
+      if (a.exercise_subcategory) return `exercise_${a.exercise_subcategory}`;
+      // レガシー記事（exercise_subcategory未設定）のフォールバック判定
+      if (a.exercise_format === "written_response") {
+        return a.exercise_data?.skill === "speaking" ? "exercise_speaking" : "exercise_writing";
+      }
+      return hasListeningAudio(a.exercise_data) ? "exercise_listening" : "exercise_reading";
+    }
+    default: return "request";
+  }
+}
+
+// カテゴリ選択時に新規作成フォームへセットするデフォルト値
+function categoryFormDefaults(categoryId: string): Partial<typeof emptyArticleForm> {
+  switch (categoryId) {
+    case "request": return { article_type: "request" };
+    case "blog": return { article_type: "blog" };
+    case "writing_feedback": return { article_type: "writing_feedback" };
+    case "speaking_feedback": return { article_type: "speaking_feedback" };
+    case "template_pool": return { article_type: "template" };
+    case "welcome_official": return { article_type: "welcome" };
+    case "welcome_original": return { article_type: "welcome" };
+    case "exercise_reading": return { article_type: "exercise", exercise_format: "multiple_choice", exercise_subcategory: "reading" };
+    case "exercise_listening": return { article_type: "exercise", exercise_format: "multiple_choice", exercise_subcategory: "listening" };
+    case "exercise_speaking": return { article_type: "exercise", exercise_format: "written_response", exercise_subcategory: "speaking", exercise_skill: "speaking" };
+    case "exercise_writing": return { article_type: "exercise", exercise_format: "written_response", exercise_subcategory: "writing", exercise_skill: "writing" };
+    default: return {};
+  }
+}
 
 export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pendingArticleRequest, onConsumePendingArticleRequest, pendingWelcomePage, onConsumePendingWelcomePage }: {
   pendingCorrection?: any;
@@ -90,11 +156,21 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   const [exStockPasteText, setExStockPasteText] = useState("");
   const [selectedExerciseTemplateId, setSelectedExerciseTemplateId] = useState("");
   const [exAdaptationPasteText, setExAdaptationPasteText] = useState("");
-  // 2段階生成ストック管理パネルの開閉
-  const [showStockPanel, setShowStockPanel] = useState(false);
 
-  const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters(), api.adminListArticleTemplates(), api.adminListExerciseTemplates()])
-    .then(([a, c, ch, g, at, et]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); setArticleTemplates(at); setExerciseTemplates(et); });
+  // ④定期便プール2段階化：定期便素材ストック（キャラ非依存の素材記事）
+  const [templateArticleTemplates, setTemplateArticleTemplates] = useState<any[]>([]);
+  const [templateStockTopic, setTemplateStockTopic] = useState("");
+  const [templateStockDifficulty, setTemplateStockDifficulty] = useState("medium");
+  const [templateStockPasteText, setTemplateStockPasteText] = useState("");
+  const [selectedTemplateStockId, setSelectedTemplateStockId] = useState("");
+  const [templateAdaptCharacterId, setTemplateAdaptCharacterId] = useState("");
+  const [templateAdaptationPasteText, setTemplateAdaptationPasteText] = useState("");
+
+  // 記事管理：15カテゴリのうちどれを表示しているか
+  const [selectedCategory, setSelectedCategory] = useState("request");
+
+  const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters(), api.adminListArticleTemplates(), api.adminListExerciseTemplates(), api.adminListTemplateArticleTemplates()])
+    .then(([a, c, ch, g, at, et, tat]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); setArticleTemplates(at); setExerciseTemplates(et); setTemplateArticleTemplates(tat); });
 
   // ①素材記事ストックに保存（第1段階のLLM出力を貼り付けて登録）
   async function saveArticleTemplate() {
@@ -122,7 +198,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   }
 
   // ②問題本体ストックに保存（第1段階のLLM出力＝JSONを貼り付けて登録）
-  async function saveExerciseTemplate() {
+  async function saveExerciseTemplate(exerciseSubcategory: "reading" | "listening") {
     if (!exStockCategory.trim()) { toast("出題カテゴリを入力してください", "error"); return; }
     if (!exStockPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
     let parsed: any;
@@ -133,7 +209,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       return;
     }
     try {
-      const created = await api.adminCreateExerciseTemplate({ exercise_category: exStockCategory.trim(), difficulty: exStockDifficulty, exercise_data: parsed });
+      const created = await api.adminCreateExerciseTemplate({ exercise_category: exStockCategory.trim(), exercise_subcategory: exerciseSubcategory, difficulty: exStockDifficulty, exercise_data: parsed });
       setExerciseTemplates(prev => [created, ...prev]);
       setExStockPasteText("");
       toast("問題本体ストックに保存しました", "success");
@@ -151,6 +227,64 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
     }
+  }
+
+  // ④定期便素材ストックに保存（第1段階のLLM出力を貼り付けて登録）
+  async function saveTemplateArticleTemplate() {
+    if (!templateStockPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
+    const result = parseArticleGenerationOutput(templateStockPasteText);
+    if (!result.content) { toast("LLMの出力を解析できませんでした。出力全体をそのまま貼り付けてください", "error"); return; }
+    try {
+      const created = await api.adminCreateTemplateArticleTemplate({
+        topic: templateStockTopic.trim() || undefined,
+        difficulty: templateStockDifficulty,
+        content: result.content,
+        example_sentences: result.example_sentences ? result.example_sentences.split("\n").filter(Boolean) : undefined,
+        tips: result.tips ? result.tips.split("\n").filter(Boolean) : undefined,
+      });
+      setTemplateArticleTemplates(prev => [created, ...prev]);
+      setTemplateStockPasteText("");
+      toast("定期便ストックに保存しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    }
+  }
+
+  async function deleteTemplateArticleTemplate(id: number) {
+    if (!confirm("このストックを削除しますか？")) return;
+    try {
+      await api.adminDeleteTemplateArticleTemplate(id);
+      setTemplateArticleTemplates(prev => prev.filter(t => t.id !== id));
+      toast("削除しました", "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    }
+  }
+
+  // ④定期便：選択中の定期便ストック＋キャラ適応出力を「本文／例文／Tips」欄に反映し、
+  // 定期便プールとして保存できる状態にする
+  function applyTemplateAdaptation() {
+    const template = templateArticleTemplates.find(t => String(t.id) === selectedTemplateStockId);
+    if (!template) { toast("先に定期便ストックを選択してください", "error"); return; }
+    if (!templateAdaptationPasteText.trim()) { toast("キャラ適応LLMの出力を貼り付けてください", "error"); return; }
+    const result = parseArticleGenerationOutput(templateAdaptationPasteText);
+    if (!result.content && !result.example_sentences && !result.tips) {
+      toast("LLMの出力を解析できませんでした。出力全体をそのまま貼り付けてください", "error");
+      return;
+    }
+    setSelectedCategory("template_pool");
+    setForm(f => ({
+      ...f,
+      ...categoryFormDefaults("template_pool"),
+      character_id: templateAdaptCharacterId || f.character_id,
+      title: f.title || (template.topic ? `定期便：${template.topic}` : f.title),
+      content: result.content ?? f.content,
+      example_sentences: result.example_sentences ?? f.example_sentences,
+      tips: result.tips ?? f.tips,
+    }));
+    setShowForm(true);
+    setTemplateAdaptationPasteText("");
+    toast("定期便プールの作成フォームに反映しました。内容を確認して保存してください", "success");
   }
 
   // ②演習問題：選択中の問題本体ストック＋キャラ適応出力（解説・score_comments）をマージして
@@ -249,6 +383,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       status: a.status,
       exercise_format: a.exercise_format ?? "multiple_choice",
       exercise_category: a.exercise_category ?? "",
+      exercise_subcategory: a.exercise_subcategory ?? "",
       exercise_data_text: a.exercise_data ? JSON.stringify(a.exercise_data, null, 2) : "",
       exercise_skill: a.exercise_data?.skill === "speaking" ? "speaking" : "writing",
       request_message_id: a.request_message_id ? String(a.request_message_id) : "",
@@ -256,6 +391,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       template_character_id: a.template_character_id ? String(a.template_character_id) : "",
       unlock_cost: a.unlock_cost != null ? String(a.unlock_cost) : "",
     });
+    setSelectedCategory(getArticleCategory(a, characters));
     setCorrectionSubmission(null);
     setTranscriptText("");
     setShowForm(true);
@@ -321,6 +457,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       payload.customer_id = Number(form.customer_id);
       payload.exercise_format = form.exercise_format;
       payload.exercise_category = form.exercise_category;
+      payload.exercise_subcategory = form.exercise_subcategory;
       payload.request_message_id = form.request_message_id ? Number(form.request_message_id) : null;
       if (!form.exercise_data_text.trim()) {
         toast("演習問題データ（JSON）を入力・読み込みしてください", "error");
@@ -416,34 +553,50 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       (a.grammar_topic ?? "").toLowerCase().includes(filterText.toLowerCase());
     const matchStatus = !filterStatus || a.status === filterStatus;
     const matchCustomer = !filterCustomer || String(a.customer_id) === filterCustomer;
-    return matchText && matchStatus && matchCustomer;
+    const matchCategory = getArticleCategory(a, characters) === selectedCategory;
+    return matchText && matchStatus && matchCustomer && matchCategory;
   });
+
+  const isStockCategory = selectedCategory.startsWith("stock_");
 
   if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>📝 記事管理</h2>
         <div className="flex items-center gap-2">
-          <button className="btn-ghost" onClick={() => setShowStockPanel(s => !s)}>
-            {showStockPanel ? "🏭 ストック管理を閉じる" : "🏭 2段階生成ストック管理"}
-          </button>
-          <button className="btn-accent" onClick={() => showForm ? cancelForm() : setShowForm(true)}>
-            {showForm ? "キャンセル" : "+ 新規記事"}
-          </button>
+          <select
+            value={selectedCategory}
+            onChange={e => {
+              const cat = e.target.value;
+              cancelForm();
+              setSelectedCategory(cat);
+              if (!cat.startsWith("stock_")) {
+                setForm({ ...emptyArticleForm, ...categoryFormDefaults(cat) });
+              }
+            }}>
+            {ARTICLE_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+          {!isStockCategory && (
+            <button className="btn-accent" onClick={() => {
+              if (showForm) { cancelForm(); return; }
+              setForm({ ...emptyArticleForm, ...categoryFormDefaults(selectedCategory) });
+              setShowForm(true);
+            }}>
+              {showForm ? "キャンセル" : "+ 新規記事"}
+            </button>
+          )}
         </div>
       </div>
 
-      {showStockPanel && (
+      {selectedCategory === "stock_grammar" && (
         <div className="card mb-6 flex flex-col gap-4">
-          <h3 className="font-bold" style={{ color: "var(--primary)" }}>🏭 2段階生成ストック管理</h3>
+          <h3 className="font-bold" style={{ color: "var(--primary)" }}>📦 2段階生成ストック管理：文法・トピック（①記事）</h3>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
             第1段階（キャラ非依存の素材）をまとめて作っておき、第2段階（キャラへの適応）で使い回すためのストックです。
-            ここで作成したストックは、下の記事作成フォームの「②キャラに適応プロンプトをコピー」で選択して利用します。
+            ここで作成したストックは、「依頼記事」作成フォームの「②キャラに適応プロンプトをコピー」で選択して利用します。
           </p>
-
-          {/* 教育記事ストック（①記事作成） */}
           <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
             <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>📄 教育記事ストック（①記事作成・第1段階）</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -480,44 +633,148 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               </div>
             )}
           </div>
+        </div>
+      )}
 
-          {/* 問題本体ストック（②演習問題） */}
+      {(selectedCategory === "stock_reading" || selectedCategory === "stock_listening") && (() => {
+        const subcategory = selectedCategory === "stock_listening" ? "listening" : "reading";
+        const label = selectedCategory === "stock_listening" ? "リスニング" : "リーディング";
+        const filteredExerciseTemplates = exerciseTemplates.filter(t => t.exercise_subcategory === subcategory);
+        return (
+          <div className="card mb-6 flex flex-col gap-4">
+            <h3 className="font-bold" style={{ color: "var(--primary)" }}>📦 2段階生成ストック管理：{label}問題（②演習）</h3>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              第1段階（キャラ非依存の問題本体）をまとめて作っておき、第2段階（キャラへの適応）で使い回すためのストックです。
+              ここで作成したストックは、「演習問題（{label}）」作成フォームの「②キャラに適応プロンプトをコピー」で選択して利用します。
+            </p>
+            <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+              <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>🧩 問題本体ストック（②演習問題・第1段階）</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input value={exStockCategory} onChange={e => setExStockCategory(e.target.value)} placeholder="出題カテゴリ（例：TOEIC Part 5）" />
+                <select value={exStockDifficulty} onChange={e => setExStockDifficulty(e.target.value)}>
+                  <option value="easy">easy（初級）</option>
+                  <option value="medium">medium（中級）</option>
+                  <option value="hard">hard（上級）</option>
+                </select>
+                <input value={exStockTopic} onChange={e => setExStockTopic(e.target.value)} placeholder="トピック（任意）" />
+              </div>
+              <button type="button"
+                className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+                style={{ borderColor: "#7b5cff", color: "#7b5cff", background: "var(--card-bg, #fff)" }}
+                onClick={() => {
+                  navigator.clipboard.writeText(buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined));
+                  toast("第1段階（問題本体生成）プロンプトをコピーしました", "success");
+                }}>
+                📋 第1段階プロンプトをコピー
+              </button>
+              <textarea rows={6} value={exStockPasteText} onChange={e => setExStockPasteText(e.target.value)}
+                placeholder="LLMの出力（JSON：instructions/questions等）をここに貼り付け"
+                style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+              <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start"
+                onClick={() => saveExerciseTemplate(subcategory)}>
+                💾 ストックに保存
+              </button>
+              {filteredExerciseTemplates.length > 0 && (
+                <div className="flex flex-col gap-1 mt-1">
+                  {filteredExerciseTemplates.map(t => (
+                    <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
+                      <span>🧩 {t.exercise_category}（{t.difficulty}・{(t.exercise_data?.questions ?? []).length}問）#{t.id}</span>
+                      <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteExerciseTemplate(t.id)}>削除</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {selectedCategory === "stock_template" && (
+        <div className="card mb-6 flex flex-col gap-4">
+          <h3 className="font-bold" style={{ color: "var(--primary)" }}>📦 2段階生成ストック管理：定期便（④定期便）</h3>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            第1段階（キャラ非依存の素材）をまとめて作っておき、第2段階（キャラへの適応）で「定期便プール」に登録するためのストックです。
+          </p>
           <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
-            <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>🧩 問題本体ストック（②演習問題・第1段階）</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <input value={exStockCategory} onChange={e => setExStockCategory(e.target.value)} placeholder="出題カテゴリ（例：TOEIC Part 5）" />
-              <select value={exStockDifficulty} onChange={e => setExStockDifficulty(e.target.value)}>
+            <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>📄 定期便ストック（①素材生成・第1段階）</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input value={templateStockTopic} onChange={e => setTemplateStockTopic(e.target.value)} placeholder="トピック（任意・例：道案内の表現）" />
+              <select value={templateStockDifficulty} onChange={e => setTemplateStockDifficulty(e.target.value)}>
                 <option value="easy">easy（初級）</option>
                 <option value="medium">medium（中級）</option>
                 <option value="hard">hard（上級）</option>
               </select>
-              <input value={exStockTopic} onChange={e => setExStockTopic(e.target.value)} placeholder="トピック（任意）" />
             </div>
             <button type="button"
               className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
-              style={{ borderColor: "#7b5cff", color: "#7b5cff", background: "var(--card-bg, #fff)" }}
+              style={{ borderColor: "#8e44ad", color: "#8e44ad", background: "var(--card-bg, #fff)" }}
               onClick={() => {
-                navigator.clipboard.writeText(buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined));
-                toast("第1段階（問題本体生成）プロンプトをコピーしました", "success");
+                navigator.clipboard.writeText(buildTemplateMaterialPrompt(templateStockTopic.trim() || undefined, templateStockDifficulty));
+                toast("第1段階（定期便素材生成）プロンプトをコピーしました", "success");
               }}>
               📋 第1段階プロンプトをコピー
             </button>
-            <textarea rows={6} value={exStockPasteText} onChange={e => setExStockPasteText(e.target.value)}
-              placeholder="LLMの出力（JSON：instructions/questions等）をここに貼り付け"
+            <textarea rows={5} value={templateStockPasteText} onChange={e => setTemplateStockPasteText(e.target.value)}
+              placeholder="LLMの出力（CONTENT/EXAMPLES/TIPS）をここに貼り付け"
               style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
-            <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start" onClick={saveExerciseTemplate}>
+            <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start" onClick={saveTemplateArticleTemplate}>
               💾 ストックに保存
             </button>
-            {exerciseTemplates.length > 0 && (
+            {templateArticleTemplates.length > 0 && (
               <div className="flex flex-col gap-1 mt-1">
-                {exerciseTemplates.map(t => (
+                {templateArticleTemplates.map(t => (
                   <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
-                    <span>🧩 {t.exercise_category}（{t.difficulty}・{(t.exercise_data?.questions ?? []).length}問）#{t.id}</span>
-                    <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteExerciseTemplate(t.id)}>削除</button>
+                    <span>📄 {t.topic || "（トピック未設定）"}（{t.difficulty}）#{t.id}</span>
+                    <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteTemplateArticleTemplate(t.id)}>削除</button>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "#8e44ad" }}>
+            <p className="text-sm font-bold" style={{ color: "#8e44ad" }}>🏭 2段階生成：定期便ストックからキャラに適応</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <select value={selectedTemplateStockId} onChange={e => setSelectedTemplateStockId(e.target.value)}>
+                <option value="">定期便ストックを選択…</option>
+                {templateArticleTemplates.map(t => (
+                  <option key={t.id} value={t.id}>📄 {t.topic || "（トピック未設定）"}（{t.difficulty}）#{t.id}</option>
+                ))}
+              </select>
+              <select value={templateAdaptCharacterId} onChange={e => setTemplateAdaptCharacterId(e.target.value)}>
+                <option value="">キャラクターを選択…</option>
+                {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <button type="button"
+              className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
+              style={{ borderColor: "#8e44ad", color: "#8e44ad", background: "var(--card-bg, #fff)" }}
+              disabled={!templateAdaptCharacterId || !selectedTemplateStockId}
+              onClick={() => {
+                const c = characters.find(ch => String(ch.id) === templateAdaptCharacterId);
+                const template = templateArticleTemplates.find(t => String(t.id) === selectedTemplateStockId);
+                if (!c || !template) { toast("キャラクターと定期便ストックを選択してください", "error"); return; }
+                navigator.clipboard.writeText(buildTemplateAdaptationPrompt(
+                  c,
+                  template.content,
+                  (template.example_sentences ?? []).join("\n"),
+                  (template.tips ?? []).join("\n"),
+                  template.topic ?? undefined,
+                ));
+                toast("第2段階（キャラ適応）プロンプトをコピーしました", "success");
+              }}>
+              📋 第2段階プロンプトをコピー
+              {(!templateAdaptCharacterId || !selectedTemplateStockId) && "（先にキャラクターとストックを選択）"}
+            </button>
+            <textarea rows={5} value={templateAdaptationPasteText} onChange={e => setTemplateAdaptationPasteText(e.target.value)}
+              placeholder="キャラ適応LLMの出力（CONTENT/EXAMPLES/TIPS）をここに貼り付け"
+              style={{ fontFamily: "monospace", fontSize: "0.8rem" }} />
+            <button type="button" className="btn-ghost text-xs py-1.5 px-3 self-start" onClick={applyTemplateAdaptation}>
+              ✅ 定期便プールの作成フォームに反映する
+            </button>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              反映すると「定期便プール」カテゴリの新規作成フォームが開き、本文・例文・Tips・キャラクターが自動入力されます。内容を確認して保存してください。
+            </p>
           </div>
         </div>
       )}
@@ -528,45 +785,31 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
             {editingArticle ? `📝 記事編集：${editingArticle.title}` : "新規記事作成"}
           </h3>
 
-          {/* 記事タイプ切り替え */}
+          {/* カテゴリの説明 */}
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>記事タイプ</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {([
-                ["request",          "📩 依頼記事",            "var(--primary)"],
-                ["blog",             "📰 ブログ記事",          "var(--accent)"],
-                ["exercise",         "🧩 演習問題",            "#7b5cff"],
-                ["writing_feedback", "✍️ ライティングFB",      "#e67e22"],
-                ["speaking_feedback","🎤 スピーキングFB",      "#16a085"],
-                ["welcome",          "🏠 ウェルカムページ",    "#2980b9"],
-                ["template",         "🗂 定期便プール",        "#8e44ad"],
-              ] as [string, string, string][]).map(([type, label, color]) => (
-                <button key={type} type="button"
-                  disabled={!!editingArticle}
-                  className="text-sm py-2 px-3 rounded-xl border-2 font-bold transition-all"
-                  style={form.article_type === type
-                    ? { borderColor: color, background: color, color: "white" }
-                    : { borderColor: "var(--border)", background: "var(--card-bg, #fff)", color: "var(--muted)" }}
-                  onClick={() => setForm({ ...form, article_type: type })}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
-              {form.article_type === "blog"
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              {selectedCategory === "blog"
                 ? "ブログ記事：特定の顧客向けではなく、キャラクターが趣味で書いている体の簡易記事です。記事閲覧画面のサイドバーに紹介され、世界観の演出に使われます（顧客・文法マスターの指定は不要）。"
-                : form.article_type === "exercise"
-                ? "演習問題：TOEIC・英検・IELTS・TOEFLなどの出題形式に合わせた問題を作成します。「選択式」は解答後すぐに自動採点・解説表示、「記述式」は提出された解答がキャラクターへのチャットとして送られ、運営が手動でフィードバックします。"
-                : form.article_type === "writing_feedback"
+                : selectedCategory === "exercise_reading"
+                ? "演習問題（リーディング）：選択式の読解問題です。解答後すぐに自動採点・解説表示されます。"
+                : selectedCategory === "exercise_listening"
+                ? "演習問題（リスニング）：選択式のリスニング問題です。解答後すぐに自動採点・解説表示されます。"
+                : selectedCategory === "exercise_speaking"
+                ? "演習問題（スピーキング）：記述式（音声/動画提出）の問題です。提出された解答はキャラクターへのチャットとして送られ、運営が手動でスピーキングFBを作成します。"
+                : selectedCategory === "exercise_writing"
+                ? "演習問題（ライティング）：記述式（テキスト提出）の問題です。提出された解答はキャラクターへのチャットとして送られ、運営が手動でライティングFBを作成します。"
+                : selectedCategory === "writing_feedback"
                 ? "ライティングFB：記述式演習で提出されたライティング答案に対するキャラクターからのフィードバック記事です。採点・添削結果を顧客の本棚に届けます（文法マスター・演習データは不要）。"
-                : form.article_type === "speaking_feedback"
+                : selectedCategory === "speaking_feedback"
                 ? "スピーキングFB：記述式演習で提出されたスピーキング音声・テキストに対するキャラクターからのフィードバック記事です。評価・改善アドバイスを顧客の本棚に届けます（文法マスター・演習データは不要）。"
-                : form.article_type === "welcome"
-                ? "ウェルカムページ：新規登録した顧客の本棚に最初に届くテンプレート記事です。「対象キャラ」を指定すると、その公式キャラを選んだ顧客専用のテンプレートになります。空欄のまま保存すると、キャラビルダー利用者など対象キャラ未指定の顧客向けの汎用テンプレートになります。"
-                : form.article_type === "template"
+                : selectedCategory === "welcome_official"
+                ? "ウェルカムページ（公式・デフォルト）：新規登録した顧客の本棚に最初に届くテンプレート記事です。「対象キャラ」を公式キャラに指定するとその顧客専用、空欄のまま保存すると汎用テンプレートになります。"
+                : selectedCategory === "welcome_original"
+                ? "ウェルカムページ（オリキャラ）：キャラビルダーで作成したオリジナルキャラクターが割り当てられた顧客に届くウェルカムページです。「対象キャラ」でオリジナルキャラを選択してください。"
+                : selectedCategory === "template_pool"
                 ? "定期便プール：customer_idを指定せずに保管する「特別記事」のひな形です。3〜5日に1本のランダムな間隔で、各顧客の本棚に無料で自動配布されます（開封には50クレジット必要・unlock_costで変更可）。"
                 : "依頼記事：特定の顧客からの依頼に応じて作成する、通常の文法解説記事です。"}
-              {editingArticle && "（記事タイプは作成後に変更できません）"}
+              {editingArticle && "（カテゴリは作成後に変更できません）"}
             </p>
             {(form.article_type === "request" || form.article_type === "blog" || form.article_type === "exercise") && (
               <label className="mt-2 flex items-center gap-2 text-xs" style={{ color: "var(--muted)" }}>
@@ -626,36 +869,17 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
             )}
             {form.article_type === "exercise" && (
               <div className="mt-2 flex flex-col gap-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>出題形式</label>
-                    <select value={form.exercise_format} disabled={!!editingArticle}
-                      onChange={e => setForm({ ...form, exercise_format: e.target.value })}>
-                      <option value="multiple_choice">選択式（リーディング・リスニング等／自動採点）</option>
-                      <option value="written_response">記述式（ライティング・スピーキング等／キャラフィードバック）</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>顧客（誰の本棚に届けるか）</label>
-                    <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} required>
-                      <option value="">選択してください</option>
-                      {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
-                    </select>
-                  </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>顧客（誰の本棚に届けるか）</label>
+                  <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} required>
+                    <option value="">選択してください</option>
+                    {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
+                  </select>
                 </div>
-                {form.exercise_format === "written_response" && (
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-                      スキル（解答提出後、どの添削フローに連携するか）
-                    </label>
-                    <select value={form.exercise_skill} onChange={e => setForm({ ...form, exercise_skill: e.target.value })}>
-                      <option value="writing">ライティング（テキスト解答 → ライティングFBへ）</option>
-                      <option value="speaking">スピーキング（音声/動画解答 → スピーキングFBへ）</option>
-                    </select>
-                    <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-                      顧客が解答を提出すると、ここで選んだスキルの添削リクエストが自動作成され、添削タブ・このタブのFB作成画面に連携されます。
-                    </p>
-                  </div>
+                {(selectedCategory === "exercise_speaking" || selectedCategory === "exercise_writing") && (
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    顧客が解答を提出すると、{selectedCategory === "exercise_speaking" ? "スピーキング" : "ライティング"}の添削リクエストが自動作成され、添削タブ・このタブのFB作成画面に連携されます。
+                  </p>
                 )}
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
@@ -689,7 +913,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     </p>
                     <select value={selectedExerciseTemplateId} onChange={e => setSelectedExerciseTemplateId(e.target.value)}>
                       <option value="">問題本体ストックを選択…</option>
-                      {exerciseTemplates.map(t => (
+                      {exerciseTemplates.filter(t => t.exercise_subcategory === form.exercise_subcategory).map(t => (
                         <option key={t.id} value={t.id}>
                           🧩 {t.exercise_category}（{t.difficulty}・{(t.exercise_data?.questions ?? []).length}問）#{t.id}
                         </option>
@@ -722,10 +946,10 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     </p>
                   </div>
                 )}
-                {form.exercise_format === "multiple_choice" && (
+                {selectedCategory === "exercise_listening" && (
                   <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
                     <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
-                      🎧 リスニング音声（リスニング問題の場合のみ）
+                      🎧 リスニング音声
                     </p>
                     <p className="text-xs" style={{ color: "var(--muted)" }}>
                       音声ファイル（mp3/wav/m4a/webm/ogg）をアップロードすると、貼り付け用のコードがクリップボードにコピーされます。
@@ -948,10 +1172,12 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               </div>
               <select value={form.template_character_id} onChange={e => setForm({ ...form, template_character_id: e.target.value })}
                 disabled={!!form.customer_id}>
-                <option value="">汎用テンプレート（対象キャラを指定しない）</option>
-                {characters.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
-                ))}
+                {selectedCategory === "welcome_official" && <option value="">汎用テンプレート（対象キャラを指定しない）</option>}
+                {characters
+                  .filter(c => selectedCategory === "welcome_original" ? c.is_preset === false : c.is_preset !== false)
+                  .map(c => (
+                    <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
+                  ))}
               </select>
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
                 キャラを選択すると、そのキャラが割り当てられた顧客専用のウェルカムページになります
@@ -1212,7 +1438,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       )}
 
       {/* 検索・フィルターバー */}
-      {!showForm && (
+      {!isStockCategory && !showForm && (
         <div className="flex flex-wrap gap-2 mb-4 p-3 rounded-xl" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
           <input className="flex-1 min-w-40 text-sm py-1.5 px-3 rounded-lg" style={{ border: "1px solid var(--border)" }}
             placeholder="タイトル・顧客・キャラ・文法で検索…"
@@ -1242,7 +1468,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       )}
 
       <div className="flex flex-col gap-3">
-        {filtered.map(a => (
+        {!isStockCategory && filtered.map(a => (
           <div key={a.id} className="card" style={{ background: statusColor[a.status] }}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">

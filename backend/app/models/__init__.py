@@ -15,4 +15,5 @@ from app.models.credit_transaction import CreditTransaction
 from app.models.preview_example import PreviewExample
 from app.models.article_template import ArticleTemplate
 from app.models.exercise_template import ExerciseTemplate
+from app.models.template_article_template import TemplateArticleTemplate
 from app.models.exercise_submission import ExerciseSubmission
