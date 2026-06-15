@@ -34,7 +34,7 @@ type Article = {
   opened_at?: string | null;
   locked?: boolean;
 };
-type Me = { username: string; display_name?: string };
+type Me = { username: string; display_name?: string; character_id?: number | null };
 type BlogPost = { id: number; title: string; created_at: string | null };
 
 const PAGE_BREAK_MARKER = "<!--PAGE-->";
@@ -123,7 +123,10 @@ export default function ArticlePage() {
         setPageIndex(0);
         // ページタイトルを動的に設定
         document.title = `${data.title} | 推しEnglish`;
-        if (data.character_id) {
+        // オリキャラ作成中（顧客にキャラ未割り当て）の場合、汎用ウェルカム記事の
+        // character_id は記事作成時にたまたま選ばれたキャラ（公式キャラ等）を指しているだけで
+        // 顧客自身のキャラではないため、テーマ・キャラ表示はしない
+        if (data.character_id && user.character_id) {
           const charTheme = await api.getCharacterTheme(data.character_id);
           setTheme(charTheme);
           setGreeting(pickGreeting(charTheme));
