@@ -12,3 +12,4 @@ from app.models.credit_settings import CreditSettings
 from app.models.correction_request import CorrectionRequest
 from app.models.reward import RewardItem, CustomerReward
 from app.models.credit_transaction import CreditTransaction
+from app.models.preview_example import PreviewExample

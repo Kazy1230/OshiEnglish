@@ -110,6 +110,37 @@ ${renderToneProfile(tp)}
 すべて「${character?.name ?? "キャラクター"}」が実際に話しかけているような、口調の整った一文にしてください。`.trim();
 }
 
+/** キャラクター作成後プレビュー用の会話例文5パターンを外部LLMで生成するためのプロンプト */
+export function buildPreviewExamplePrompt(character: any): string {
+  const tp = character?.tone_profile ?? {};
+  const personality = tp.personality ?? "";
+  const speechStyle = tp.speech_style ?? "";
+  const ngExpressions: string[] = Array.isArray(tp.ng_expressions) ? tp.ng_expressions : [];
+  const conversationRules: string[] = Array.isArray(tp.conversation_rules) ? tp.conversation_rules : [];
+  const reactionExamples = renderReactionExamples(tp);
+
+  return `以下のキャラクター設定をもとに、
+英語学習サービス「Oshi English」での
+ユーザーとの会話例を5パターン生成してください。
+
+【キャラクター設定】
+personality: ${personality}
+speech_style: ${speechStyle}
+ng_expressions: ${ngExpressions.join("、")}
+reaction_examples: ${reactionExamples}
+conversation_rules: ${conversationRules.join("、")}
+
+【生成する会話例のパターン】
+ユーザーが間違えた時
+ユーザーが質問する時
+ユーザーが正解した時
+ユーザーが励ましを求める時
+雑談的な一言
+
+各パターンについて「ユーザーのメッセージ」と
+「キャラクターの返答」をセットで出力してください。`;
+}
+
 export function parseOrderCharSpec(order: any): {
   type: "builder" | "custom" | "leave_it" | "unknown";
   gender?: string; rel?: string; pers?: string;

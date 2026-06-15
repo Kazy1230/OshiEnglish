@@ -193,7 +193,7 @@ export default function AdminPage() {
         />}
         {tab === "messages" && <MessagesTab initialCustomerId={pendingMessagesCustomerId} onConsumeInitialCustomerId={() => setPendingMessagesCustomerId(null)} />}
         {tab === "corrections" && <CorrectionsTab onCreateFeedbackArticle={(item) => { setPendingCorrection(item); setTab("articles"); }} />}
-        {tab === "suggestions" && <SuggestionsTab />}
+        {tab === "suggestions" && <SuggestionsTab onNavigate={setTab} />}
         {tab === "articles" && <ArticlesTab pendingCorrection={pendingCorrection} onConsumePendingCorrection={() => setPendingCorrection(null)} pendingArticleRequest={pendingArticleRequest} onConsumePendingArticleRequest={() => setPendingArticleRequest(null)} pendingWelcomePage={pendingWelcomePage} onConsumePendingWelcomePage={() => setPendingWelcomePage(null)} />}
         {tab === "customers" && <CustomersTab />}
         {tab === "characters" && <CharactersTab />}

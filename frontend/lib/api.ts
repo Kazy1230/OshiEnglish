@@ -290,4 +290,15 @@ export const api = {
   ackRewardUnlock: (id: number) => apiFetch(`/rewards/me/${id}/ack`, { method: "POST" }),
   applyWallpaper: (id: number) => apiFetch(`/rewards/me/wallpaper/${id}/apply`, { method: "POST" }),
   clearWallpaper: () => apiFetch("/rewards/me/wallpaper", { method: "DELETE" }),
+
+  // 管理者：キャラクター作成後プレビュー（例文評価）
+  adminGetPreviewExamples: (customerId: number) => apiFetch(`/preview/admin/${customerId}`),
+  adminSavePreviewExamples: (customerId: number, examples: { example_number: number; user_message: string; character_response: string }[]) =>
+    apiFetch(`/preview/admin/${customerId}`, { method: "PUT", body: JSON.stringify({ examples }) }),
+  adminListPreviewCorrectionRequests: () => apiFetch("/preview/admin/requests/list"),
+
+  // 顧客：キャラクター作成後プレビュー（例文評価）
+  getMyPreview: () => apiFetch("/preview/me"),
+  submitMyPreview: (ratings: { id: number; rating: "good" | "unsure"; feedback_text?: string }[]) =>
+    apiFetch("/preview/me/submit", { method: "POST", body: JSON.stringify({ ratings }) }),
 };

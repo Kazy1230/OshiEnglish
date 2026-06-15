@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { reportError } from "@/lib/reportError";
+import type { Tab } from "../types";
 
 const REACTION_CATEGORIES: { value: string; label: string }[] = [
   { value: "mistake", label: "ミスへの反応" },
@@ -11,11 +12,12 @@ const REACTION_CATEGORIES: { value: string; label: string }[] = [
   { value: "encouragement", label: "励まし" },
 ];
 
-export function SuggestionsTab() {
+export function SuggestionsTab({ onNavigate }: { onNavigate?: (tab: Tab) => void } = {}) {
   const [characters, setCharacters] = useState<any[]>([]);
   const [characterId, setCharacterId] = useState<string>("");
   const [goodItems, setGoodItems] = useState<any[]>([]);
   const [badItems, setBadItems] = useState<any[]>([]);
+  const [previewRequests, setPreviewRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [categoryChoice, setCategoryChoice] = useState<Record<number, string>>({});
@@ -27,12 +29,14 @@ export function SuggestionsTab() {
       setCharacters(charList);
       const params: any = {};
       if (characterId) params.characterId = Number(characterId);
-      const [good, bad] = await Promise.all([
+      const [good, bad, previewReqs] = await Promise.all([
         api.adminListMessageFeedback({ ...params, rating: "good" }),
         api.adminListMessageFeedback({ ...params, rating: "bad" }),
+        api.adminListPreviewCorrectionRequests(),
       ]);
       setGoodItems(good);
       setBadItems(bad);
+      setPreviewRequests(previewReqs);
     } catch (err: any) {
       reportError("admin:adminListMessageFeedback", err);
       toast(err.message || "読み込みに失敗しました", "error");
@@ -167,6 +171,47 @@ export function SuggestionsTab() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {!loading && (
+        <div className="mt-6">
+          <h3 className="text-sm font-black mb-2" style={{ color: "var(--primary)" }}>
+            🎬 プレビュー修正リクエスト一覧（{previewRequests.length}）
+          </h3>
+          {previewRequests.length === 0 ? (
+            <div className="card text-center py-8" style={{ color: "var(--muted)" }}>修正リクエストはありません</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {previewRequests.map((item: any) => (
+                <div key={item.id} className="card">
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                    <p className="font-bold text-sm" style={{ color: "var(--primary)" }}>
+                      {item.character_name || "(キャラクター不明)"}
+                      <span className="ml-2 text-xs font-normal" style={{ color: "var(--muted)" }}>
+                        {item.customer_name}
+                      </span>
+                    </p>
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>
+                      {item.created_at ? new Date(item.created_at).toLocaleString("ja-JP") : ""}
+                    </span>
+                  </div>
+                  <div className="text-sm p-3 rounded-lg mb-2 whitespace-pre-wrap break-words" style={{ background: "var(--bg)" }}>
+                    <p>ユーザー：「{item.user_message}」</p>
+                    <p>キャラ：「{item.character_response}」</p>
+                  </div>
+                  <div className="text-sm p-3 rounded-lg mb-2 whitespace-pre-wrap break-words" style={{ background: "#fff8e1" }}>
+                    🤔 修正内容: {item.feedback_text || "(コメントなし)"}
+                  </div>
+                  {onNavigate && (
+                    <button className="btn-ghost text-xs px-3 py-1.5" onClick={() => onNavigate("characters")}>
+                      キャラクター編集画面へ →
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

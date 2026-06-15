@@ -2,6 +2,11 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { buildPreviewExamplePrompt } from "@/app/admin/lib/promptBuilders";
+
+type PreviewExampleForm = { id?: number; user_message: string; character_response: string };
+const emptyPreviewExamples = (): PreviewExampleForm[] =>
+  Array.from({ length: 5 }, () => ({ user_message: "", character_response: "" }));
 export function CustomersTab() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [characters, setCharacters] = useState<any[]>([]);
@@ -30,6 +35,12 @@ export function CustomersTab() {
   const [creditDelta, setCreditDelta] = useState<string>("");
   const [creditReason, setCreditReason] = useState<string>("");
   const [adjustingCreditId, setAdjustingCreditId] = useState<number | null>(null);
+
+  // キャラクター作成後プレビュー（会話例文）
+  const [previewExamples, setPreviewExamples] = useState<PreviewExampleForm[]>(emptyPreviewExamples());
+  const [previewStatus, setPreviewStatus] = useState<{ preview_ready: boolean; preview_submitted: boolean }>({ preview_ready: false, preview_submitted: false });
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewSavingId, setPreviewSavingId] = useState<number | null>(null);
 
   const reload = () => Promise.all([api.adminGetCustomers(), api.adminGetCharacters()])
     .then(([c, ch]) => { setCustomers(c); setCharacters(ch); });
@@ -83,6 +94,62 @@ export function CustomersTab() {
       toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function loadPreviewExamples(customerId: number) {
+    setPreviewLoading(true);
+    try {
+      const res = await api.adminGetPreviewExamples(customerId);
+      setPreviewStatus({ preview_ready: res.preview_ready, preview_submitted: res.preview_submitted });
+      const byNumber = new Map<number, any>();
+      for (const e of res.examples ?? []) byNumber.set(e.example_number, e);
+      setPreviewExamples(Array.from({ length: 5 }, (_, i) => {
+        const e = byNumber.get(i + 1);
+        return { id: e?.id, user_message: e?.user_message ?? "", character_response: e?.character_response ?? "" };
+      }));
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "プレビュー例文の取得に失敗しました", "error");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function handleCopyPreviewPrompt(c: any) {
+    const character = characters.find(ch => ch.id === c.character_id);
+    if (!character) {
+      toast("キャラクターが紐付けられていません", "error");
+      return;
+    }
+    const prompt = buildPreviewExamplePrompt(character);
+    navigator.clipboard.writeText(prompt);
+    toast("例文生成用プロンプトをコピーしました", "success");
+  }
+
+  async function handleSavePreviewExamples(customerId: number) {
+    if (previewExamples.some(e => !e.user_message.trim() || !e.character_response.trim())) {
+      toast("5つすべての例文（ユーザーメッセージ・キャラ応答）を入力してください", "error");
+      return;
+    }
+    setPreviewSavingId(customerId);
+    try {
+      const res = await api.adminSavePreviewExamples(customerId, previewExamples.map((e, i) => ({
+        example_number: i + 1,
+        user_message: e.user_message,
+        character_response: e.character_response,
+      })));
+      setPreviewStatus({ preview_ready: res.preview_ready, preview_submitted: res.preview_submitted });
+      const byNumber = new Map<number, any>();
+      for (const e of res.examples ?? []) byNumber.set(e.example_number, e);
+      setPreviewExamples(Array.from({ length: 5 }, (_, i) => {
+        const e = byNumber.get(i + 1);
+        return { id: e?.id, user_message: e?.user_message ?? "", character_response: e?.character_response ?? "" };
+      }));
+      toast("プレビュー例文を保存しました（顧客にメールで通知されます）", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+    } finally {
+      setPreviewSavingId(null);
     }
   }
 
@@ -269,6 +336,9 @@ export function CustomersTab() {
                       setEditFavorites((mem.favorites ?? []).join("\n"));
                       setEditEpisodes((mem.episodes ?? []).join("\n"));
                       setEditToneNotes(mem.tone_notes ?? "");
+                      setPreviewExamples(emptyPreviewExamples());
+                      setPreviewStatus({ preview_ready: false, preview_submitted: false });
+                      loadPreviewExamples(c.id);
                     }
                   }}>
                     {isEditing ? "閉じる" : "編集"}
@@ -382,6 +452,53 @@ export function CustomersTab() {
                         <textarea rows={3} value={editEpisodes} onChange={e => setEditEpisodes(e.target.value)} placeholder={"前回、文化祭の話で盛り上がった\n最近、模試の結果を喜んで報告してくれた"} style={{ fontSize: "0.8rem" }} />
                       </div>
                     </div>
+                  </div>
+
+                  {/* キャラクター作成後プレビュー（会話例文） */}
+                  <div className="rounded-xl p-3 flex flex-col gap-2" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                        🎬 プレビュー例文（キャラ作成後・初回ログイン時に表示）
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {previewStatus.preview_submitted && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#e8f4fd" }}>✅ 評価済み</span>}
+                        {!previewStatus.preview_submitted && previewStatus.preview_ready && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#fff8e1" }}>⏳ 評価待ち</span>}
+                        {!previewStatus.preview_ready && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#fce8e8" }}>未設定</span>}
+                      </div>
+                    </div>
+                    <p className="text-xs" style={{ color: "var(--muted)" }}>
+                      ①「例文生成用プロンプトをコピー」→ 外部のClaude等で会話例5パターンを生成 →
+                      ② 結果を以下の5つに貼り付けて「保存」。保存すると顧客にプレビュー閲覧可能メールが送信され、
+                      初回ログイン時にポップアップで表示されます。
+                    </p>
+                    <button type="button" className="btn-ghost text-xs py-1 px-3 self-start" onClick={() => handleCopyPreviewPrompt(c)}>
+                      📋 例文生成用プロンプトをコピー
+                    </button>
+                    {previewLoading ? (
+                      <p className="text-xs" style={{ color: "var(--muted)" }}>読み込み中…</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {previewExamples.map((ex, i) => (
+                          <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg p-2" style={{ background: "var(--card-bg, #fff)", border: "1px solid var(--border)" }}>
+                            <div>
+                              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>例文{i + 1}：ユーザーのメッセージ</label>
+                              <textarea rows={2} value={ex.user_message}
+                                onChange={e => setPreviewExamples(prev => prev.map((p, j) => j === i ? { ...p, user_message: e.target.value } : p))}
+                                style={{ fontSize: "0.8rem" }} placeholder="例: I have went to school yesterday." />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>例文{i + 1}：キャラクターの返答</label>
+                              <textarea rows={2} value={ex.character_response}
+                                onChange={e => setPreviewExamples(prev => prev.map((p, j) => j === i ? { ...p, character_response: e.target.value } : p))}
+                                style={{ fontSize: "0.8rem" }} placeholder="例: あ〜、それは『went』じゃなくて『gone』だね！" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button className="btn-accent text-xs py-2 px-4 self-start disabled:opacity-50" disabled={previewSavingId === c.id || previewLoading} onClick={() => handleSavePreviewExamples(c.id)}>
+                      {previewSavingId === c.id ? "保存中…" : "プレビュー例文を保存"}
+                    </button>
                   </div>
 
                   <button className="btn-accent text-xs py-2 px-4 self-start disabled:opacity-50" disabled={savingId === c.id} onClick={() => saveCharacter(c.id)}>

@@ -58,6 +58,10 @@ class Customer(Base):
     # 管理者向け二段階認証（メール認証コード）
     two_factor_code = Column(String(10), nullable=True)
     two_factor_code_expires = Column(DateTime(timezone=True), nullable=True)
+    # キャラクター作成後のプレビュー機能: 管理者が例文を保存したらTrue（顧客にポップアップ表示）
+    preview_ready = Column(Boolean, nullable=False, default=False)
+    # 顧客がプレビューの評価を送信済みかどうか（一人一回限りのポップアップ表示制御）
+    preview_submitted = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     assigned_admin = relationship("Customer", remote_side=[id], foreign_keys=[assigned_admin_id])

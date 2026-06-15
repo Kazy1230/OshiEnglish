@@ -11,6 +11,7 @@ import { reportError } from "@/lib/reportError";
 import { toast } from "@/components/Toast";
 import { RequestArticleModal } from "@/components/RequestArticleModal";
 import { CorrectionSubmissionModal } from "@/components/CorrectionSubmissionModal";
+import { PreviewPopup } from "@/components/PreviewPopup";
 import { hasListeningAudio } from "@/lib/exercise";
 
 type Article = {
@@ -44,6 +45,7 @@ function ShelfContent() {
   const [withdrawing, setWithdrawing] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [correctionModalType, setCorrectionModalType] = useState<"writing" | "speaking" | null>(null);
+  const [preview, setPreview] = useState<{ character_name?: string | null; examples: any[] } | null>(null);
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
@@ -60,6 +62,10 @@ function ShelfContent() {
         setArticles(data);
         setTheme(charTheme);
         setGreeting(pickGreeting(charTheme));
+        try {
+          const previewRes = await api.getMyPreview();
+          if (previewRes.show) setPreview(previewRes);
+        } catch (err) { reportError("shelf:getMyPreview", err); }
       } catch {
         clearToken();
         router.replace("/login");
@@ -317,6 +323,12 @@ function ShelfContent() {
         <CorrectionSubmissionModal theme={t} initialType={correctionModalType}
           onClose={() => setCorrectionModalType(null)}
           onBack={() => { setCorrectionModalType(null); setShowRequestModal(true); }} />
+      )}
+
+      {/* キャラクター作成後プレビューポップアップ（初回ログイン時、一人一回限り） */}
+      {preview && (
+        <PreviewPopup theme={t} characterName={preview.character_name} examples={preview.examples}
+          onClose={() => setPreview(null)} />
       )}
 
       {/* 退会確認モーダル */}

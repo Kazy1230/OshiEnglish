@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections
+from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections, preview
 
 # テーブル自動作成（開発用。本番はAlembicマイグレーションを使用）
 Base.metadata.create_all(bind=engine)
@@ -203,6 +203,13 @@ _ensure_column("articles", "template_source_id", "INT NULL")
 _ensure_index("articles", "ix_articles_template_source_id", "(template_source_id)")
 _ensure_column("messages", "credit_cost", "INT NULL")
 _ensure_column("customers", "last_template_article_at", "DATETIME NULL")
+
+# 簡易マイグレーション㉙: キャラクター作成後のプレビュー機能
+# - customers.preview_ready: 管理者が例文を保存したらTrue（顧客にポップアップ表示）
+# - customers.preview_submitted: 顧客が評価を送信済みかどうか（一人一回限り）
+# - preview_examplesテーブル自体はcreate_all()で自動作成される
+_ensure_column("customers", "preview_ready", "TINYINT(1) NOT NULL DEFAULT 0")
+_ensure_column("customers", "preview_submitted", "TINYINT(1) NOT NULL DEFAULT 0")
 
 # 簡易マイグレーション㉗: クレジット購入の購入履歴・領収書対応
 # - orders.order_type: character_creation（キャラ作成申し込み）/ credit_purchase（クレジット購入）
@@ -558,6 +565,7 @@ app.include_router(credit_settings.router)
 app.include_router(payments.router)
 app.include_router(rewards.router)
 app.include_router(corrections.router)
+app.include_router(preview.router)
 
 @app.get("/health")
 def health():
