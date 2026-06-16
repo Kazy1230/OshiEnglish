@@ -4,8 +4,18 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { parseOrderCharSpec, buildCharacterGenerationPromptFromOrder } from "../lib/promptBuilders";
 
+function inferExerciseCategoryFromTopic(topic: string | null | undefined): string {
+  if (!topic) return "request";
+  const t = topic.toLowerCase();
+  if (t.includes("リスニング") || t.includes("listening")) return "stock_listening";
+  if (t.includes("スピーキング") || t.includes("speaking")) return "exercise_speaking";
+  if (t.includes("ライティング") || t.includes("writing")) return "exercise_writing";
+  if (t.includes("リーディング") || t.includes("reading")) return "stock_reading";
+  return "request";
+}
+
 export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onNavigateToWelcomePage, onNavigateToMessages }: {
-  onCreateArticleFromRequest?: (order: any, request: any) => void;
+  onCreateArticleFromRequest?: (order: any, request: any, targetCategory?: string) => void;
   onNavigateToRewards?: (characterId: number) => void;
   onNavigateToWelcomePage?: (characterId: number) => void;
   onNavigateToMessages?: (customerId: number) => void;
@@ -477,7 +487,7 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
                             <button type="button"
                               className="text-xs px-2 py-0.5 rounded-full font-bold"
                               style={{ background: "#2471a3", color: "#fff" }}
-                              onClick={() => onCreateArticleFromRequest(o, r)}>
+                              onClick={() => onCreateArticleFromRequest(o, r, inferExerciseCategoryFromTopic(r.grammar_topic))}>
                               📝 記事を作成 ▸
                             </button>
                           )}

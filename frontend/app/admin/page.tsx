@@ -186,7 +186,7 @@ export default function AdminPage() {
       <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 min-w-0 md:h-screen">
         {tab === "dashboard" && <DashboardTab onNavigate={setTab} />}
         {tab === "orders" && <OrdersTab
-          onCreateArticleFromRequest={(order, request) => { setPendingArticleRequest({ order, request }); setTab("articles"); }}
+          onCreateArticleFromRequest={(order, request, targetCategory) => { setPendingArticleRequest({ order, request, targetCategory }); setTab("articles"); }}
           onNavigateToRewards={(characterId) => { setPendingRewardsCharacterId(characterId); setTab("rewards"); }}
           onNavigateToWelcomePage={(characterId) => { setPendingWelcomePage({ character_id: characterId }); setTab("articles"); }}
           onNavigateToMessages={(customerId) => { setPendingMessagesCustomerId(customerId); setTab("messages"); }}

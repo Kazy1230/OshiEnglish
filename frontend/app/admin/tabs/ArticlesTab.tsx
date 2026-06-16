@@ -334,10 +334,13 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   // OrdersTabから「記事を作成」で遷移してきた場合、フォームに自動入力する
   useEffect(() => {
     if (!pendingArticleRequest) return;
-    const { order, request } = pendingArticleRequest;
+    const { order, request, targetCategory } = pendingArticleRequest;
+    const cat = targetCategory ?? "request";
+    setSelectedCategory(cat);
+    const catDefaults = categoryFormDefaults(cat);
     setForm(f => ({
       ...emptyArticleForm,
-      article_type: "request",
+      ...catDefaults,
       customer_id: order.customer_id ? String(order.customer_id) : "",
       character_id: order.customer_character_id ? String(order.customer_character_id) : f.character_id,
       request_message_id: request?.id ? String(request.id) : "",
