@@ -142,6 +142,7 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
   const [msgBusyId, setMsgBusyId] = useState<number | null>(null);
   const [adjustingIntimacy, setAdjustingIntimacy] = useState(false);
   const [suggestionSeed, setSuggestionSeed] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [draftingReply, setDraftingReply] = useState(false);
@@ -492,62 +493,6 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
         ))}
       </div>
 
-      {/* 質問サジェスト：話しかけのネタ切れを防ぐための提案パネル */}
-      {(() => {
-        const charForPrompt = {
-          name: data.customer.character_name,
-          description: data.customer.character_description,
-          tone_profile: data.customer.tone_profile,
-        };
-        const pool = buildSuggestedQuestions(data.customer, charForPrompt);
-        if (pool.length === 0) return null;
-        // suggestionSeed を種に、毎回違う組み合わせを最大4件ピックアップする
-        const picks: SuggestedQuestion[] = [];
-        const used = new Set<number>();
-        for (let i = 0; i < Math.min(4, pool.length); i++) {
-          const idx = (suggestionSeed * 7 + i * 13) % pool.length;
-          let j = idx;
-          while (used.has(j)) j = (j + 1) % pool.length;
-          used.add(j);
-          picks.push(pool[j]);
-        }
-        return (
-          <div className="card flex flex-col gap-2" style={{ borderLeft: `4px solid ${cAccent}` }}>
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="text-sm font-bold flex items-center gap-1.5" style={{ color: cPrimary }}>
-                💡 質問サジェスト
-                <span className="text-xs font-normal" style={{ color: "var(--muted)" }}>
-                  （タップで返信欄に挿入できます）
-                </span>
-              </p>
-              <div className="flex items-center gap-2">
-                <button type="button" className="text-xs px-2.5 py-1 rounded-lg" style={{ color: "var(--muted)", border: "1px solid var(--border)" }}
-                  onClick={() => setSuggestionSeed(s => s + 1)}>
-                  🔄 別の質問にする
-                </button>
-                <button type="button" className="text-xs px-2.5 py-1 rounded-lg font-bold" style={{ color: cAccent, border: `1px solid ${cAccent}` }}
-                  onClick={() => {
-                    navigator.clipboard.writeText(buildQuestionIdeaPrompt(charForPrompt, data.customer));
-                    toast("質問アイデア出し用のLLMプロンプトをコピーしました", "success");
-                  }}>
-                  📋 LLMに質問を考えてもらうプロンプトをコピー
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {picks.map((q, i) => (
-                <button key={i} type="button" title={q.text}
-                  className="text-xs rounded-full px-2.5 py-1 font-bold text-white transition-all hover:opacity-80"
-                  style={{ background: cAccent }}
-                  onClick={() => setReply(prev => prev ? `${prev}\n${q.text}` : q.text)}>
-                  {q.icon} {q.category}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* 返信フォーム */}
       <form onSubmit={handleReply} className="card flex flex-col gap-2" style={{ borderLeft: `4px solid ${cPrimary}` }}>
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -577,11 +522,74 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
             {sending ? "送信中..." : "返信する"}
           </button>
         </div>
-        <label className="text-xs flex items-center gap-1.5" style={{ color: "var(--muted)" }}>
-          <input type="checkbox" checked={suggestCorrection} onChange={e => setSuggestCorrection(e.target.checked)} />
-          📝「添削してもらう」ボタンをこのメッセージに付ける
-        </label>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <label className="text-xs flex items-center gap-1.5" style={{ color: "var(--muted)" }}>
+            <input type="checkbox" checked={suggestCorrection} onChange={e => setSuggestCorrection(e.target.checked)} />
+            📝「添削してもらう」ボタンをこのメッセージに付ける
+          </label>
+          <button type="button"
+            className="text-xs px-2.5 py-1 rounded-lg transition-all"
+            style={{ color: showSuggestions ? cAccent : "var(--muted)", border: `1px solid ${showSuggestions ? cAccent : "var(--border)"}` }}
+            onClick={() => setShowSuggestions(s => !s)}>
+            💡 質問サジェスト {showSuggestions ? "▲" : "▼"}
+          </button>
+        </div>
       </form>
+
+      {/* 質問サジェスト：話しかけのネタ切れを防ぐための提案パネル（トグルで開閉） */}
+      {showSuggestions && (() => {
+        const charForPrompt = {
+          name: data.customer.character_name,
+          description: data.customer.character_description,
+          tone_profile: data.customer.tone_profile,
+        };
+        const pool = buildSuggestedQuestions(data.customer, charForPrompt);
+        if (pool.length === 0) return null;
+        const picks: SuggestedQuestion[] = [];
+        const used = new Set<number>();
+        for (let i = 0; i < Math.min(4, pool.length); i++) {
+          const idx = (suggestionSeed * 7 + i * 13) % pool.length;
+          let j = idx;
+          while (used.has(j)) j = (j + 1) % pool.length;
+          used.add(j);
+          picks.push(pool[j]);
+        }
+        return (
+          <div className="card flex flex-col gap-2" style={{ borderLeft: `4px solid ${cAccent}` }}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs font-bold flex items-center gap-1.5" style={{ color: cPrimary }}>
+                💡 質問サジェスト
+                <span className="text-xs font-normal" style={{ color: "var(--muted)" }}>
+                  （タップで返信欄に挿入）
+                </span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button type="button" className="text-xs px-2.5 py-1 rounded-lg" style={{ color: "var(--muted)", border: "1px solid var(--border)" }}
+                  onClick={() => setSuggestionSeed(s => s + 1)}>
+                  🔄 別の質問
+                </button>
+                <button type="button" className="text-xs px-2.5 py-1 rounded-lg font-bold" style={{ color: cAccent, border: `1px solid ${cAccent}` }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(buildQuestionIdeaPrompt(charForPrompt, data.customer));
+                    toast("質問アイデア出し用のLLMプロンプトをコピーしました", "success");
+                  }}>
+                  📋 LLMに考えてもらう
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {picks.map((q, i) => (
+                <button key={i} type="button" title={q.text}
+                  className="text-xs rounded-full px-2.5 py-1 font-bold text-white transition-all hover:opacity-80"
+                  style={{ background: cAccent }}
+                  onClick={() => setReply(prev => prev ? `${prev}\n${q.text}` : q.text)}>
+                  {q.icon} {q.category}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       <p className="text-xs -mt-2" style={{ color: "var(--muted)" }}>
         ※「下書き生成」はAIが提案する文章です。内容を確認・編集してから送信してください。
         送信した内容はそのまま「{data.customer.character_name || "キャラクター"}」からのメッセージとして顧客に届きます。
