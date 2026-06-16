@@ -762,6 +762,13 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
         </div>
       )}
 
+      {/* リーディングパッセージ（大題本文。設問共通で1回だけ表示） */}
+      {data.passage && (
+        <div className="rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: t.card, color: t.text, border: `1px solid ${t.border}` }}>
+          {String(data.passage)}
+        </div>
+      )}
+
       {/* リスニング音声（設問共通。存在する場合のみ表示） */}
       {data.audio_url && (
         <div className="rounded-xl px-4 py-3" style={{ background: t.example_bg, border: `1px solid ${t.border}` }}>
@@ -863,7 +870,7 @@ function MultipleChoiceExercise({ article, theme: t, charTheme }: { article: Art
                     );
                   })}
                 </div>
-                {r && r.explanation && (
+                {r && r.explanation && completed && (
                   <div className="rounded-lg px-3 py-2.5 text-xs leading-relaxed mt-1" style={{ background: t.tips_bg, border: `1px dashed ${t.accent}`, color: t.text }}>
                     <p className="font-bold mb-1" style={{ color: t.accent }}>💡 解説</p>
                     <p className="whitespace-pre-wrap">{renderInlineMarkdown(String(r.explanation), t)}</p>
