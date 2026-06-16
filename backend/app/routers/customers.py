@@ -97,10 +97,12 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
         .all()
     )
 
+    from app.core.character_voice import customer_display_name
     return [
         {
             "id": c.id,
             "username": c.username,
+            "display_name": customer_display_name(c),
             "email": c.email,
             "is_admin": c.is_admin,
             "is_active": c.is_active,

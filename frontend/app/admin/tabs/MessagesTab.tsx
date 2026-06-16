@@ -95,7 +95,7 @@ export function MessagesTab({ initialCustomerId, onConsumeInitialCustomerId }: {
                   }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="font-bold text-sm truncate" style={{ color: charColor || "var(--primary)" }}>{th.username}</p>
+                      <p className="font-bold text-sm truncate" style={{ color: charColor || "var(--primary)" }}>{th.display_name ?? th.username}</p>
                       {badge > 0 && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black text-white flex-shrink-0" style={{ background: "var(--accent)" }}>
                           {badge}
@@ -300,9 +300,9 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
       <div className="flex flex-wrap gap-4 items-stretch">
         <div className="card flex flex-col gap-2 justify-center flex-1 min-w-[260px]" style={{ borderLeft: `4px solid ${cPrimary}` }}>
           <div>
-            <p className="font-black" style={{ color: cPrimary }}>{data.customer.username}</p>
+            <p className="font-black" style={{ color: cPrimary }}>{data.customer.display_name ?? data.customer.username}</p>
             <p className="text-xs" style={{ color: "var(--muted)" }}>
-              担当キャラクター：{data.customer.character_name || "未割当"}
+              @{data.customer.username}　担当キャラクター：{data.customer.character_name || "未割当"}
             </p>
           </div>
           <div className="text-xs flex items-center gap-3 flex-wrap">
@@ -486,7 +486,7 @@ function ThreadDetail({ customerId, onChanged, operators }: { customerId: number
               </div>
             )}
             <p className="text-[10px] mt-0.5" style={{ color: "var(--muted)" }}>
-              {m.sender === "character" ? "あなた（キャラクターとして）" : data.customer.username} ・ {new Date(m.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {m.sender === "character" ? "あなた（キャラクターとして）" : (data.customer.display_name ?? data.customer.username)} ・{new Date(m.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
             </p>
           </div>
         ))}

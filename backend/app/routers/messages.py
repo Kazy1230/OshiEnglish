@@ -12,6 +12,7 @@ from app.models.article import Article
 from app.models.credit_transaction import CreditTransaction
 from app.models.order import Order
 from app.core.intimacy import intimacy_info, POINTS_PER_CHARACTER_REPLY, get_intimacy_settings
+from app.core.character_voice import customer_display_name
 from app.core.rewards import check_and_unlock_rewards
 from app.core.credits import grant_credits, consume_credits, ARTICLE_REQUEST_FEE, ALLOWED_ARTICLE_REQUEST_CREDIT_COSTS, DM_SEND_COST
 from app.core.llm import generate_text, LLMError
@@ -349,6 +350,7 @@ def list_threads(
         result.append({
             "customer_id": c.id,
             "username": c.username,
+            "display_name": customer_display_name(c),
             "character_id": c.character_id,
             "character_name": c.character.name if c.character else None,
             "character_color_scheme": c.character.color_scheme if c.character else None,
@@ -520,7 +522,7 @@ def get_thread_admin(
             db.commit()
 
     return {
-        "customer": {"id": customer.id, "username": customer.username, "character_id": customer.character_id,
+        "customer": {"id": customer.id, "username": customer.username, "display_name": customer_display_name(customer), "character_id": customer.character_id,
                      "character_name": customer.character.name if customer.character else None,
                      "character_color_scheme": customer.character.color_scheme if customer.character else None,
                      "character_memory": customer.character_memory,

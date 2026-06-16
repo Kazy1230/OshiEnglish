@@ -292,7 +292,7 @@ export function CustomersTab() {
         const filteredCustomers = customers.filter(c => !c.is_admin).filter(c => {
           if (!search.trim()) return true;
           const q = search.trim().toLowerCase();
-          return c.username?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q);
+          return c.username?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || c.display_name?.toLowerCase().includes(q);
         });
         if (filteredCustomers.length === 0) {
           return <p className="text-sm" style={{ color: "var(--muted)" }}>該当する顧客が見つかりません</p>;
@@ -307,8 +307,8 @@ export function CustomersTab() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="font-bold" style={{ color: "var(--primary)" }}>{c.username}</p>
-                    <span className="text-xs" style={{ color: "var(--muted)" }}>#{c.id}</span>
+                    <p className="font-bold" style={{ color: "var(--primary)" }}>{c.display_name ?? c.username}</p>
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>@{c.username} #{c.id}</span>
                     {c.is_password_reset_required && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#fff8e1" }}>🔑 PW未変更</span>}
                     {!c.is_active && <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#fce8e8" }}>⛔ 無効</span>}
                   </div>
