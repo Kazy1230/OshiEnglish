@@ -4,6 +4,8 @@
 
 _TONE_LABELS = {
     "speech_style": "口調・話し方",
+    "first_person": "一人称",
+    "catchphrase": "口癖・文末の癖",
     "keywords": "口癖・キーワード",
     "personality": "性格・特徴",
     "example_prefix": "例文の書き出しイメージ",
@@ -14,7 +16,7 @@ _TONE_LABELS = {
 # render_tone_profileの「未知キーをそのまま出力」ループから除外するキー。
 # これらは個別のrender_*関数で専用の形式に整形して別ブロックとして渡すため、
 # ここで素朴にstr()してしまうと辞書がそのまま文字列化されて読みにくくなる。
-_STRUCTURED_KEYS = {"reaction_examples", "intimacy_variations", "level_tones", "article_style"}
+_STRUCTURED_KEYS = {"reaction_examples", "intimacy_variations", "level_tones", "article_style", "article_sample"}
 
 
 def render_tone_profile(tone_profile: dict | None) -> str:

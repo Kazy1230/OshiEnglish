@@ -300,12 +300,14 @@ export function summarizeExerciseData(format: string, data: any): string {
 // これらは個別のrender*関数で専用の形式に整形して別ブロックとして渡すため、
 // ここで素朴に文字列化してしまうと、オブジェクトがそのまま [object Object] のように
 // 表示されたり、記事生成プロンプトの趣旨に合わない形で混入してしまう。
-const TONE_PROFILE_STRUCTURED_KEYS = new Set(["reaction_examples", "intimacy_variations", "level_tones", "article_style"]);
+const TONE_PROFILE_STRUCTURED_KEYS = new Set(["reaction_examples", "intimacy_variations", "level_tones", "article_style", "article_sample"]);
 
 export function renderToneProfile(tp: any): string {
   if (!tp || typeof tp !== "object") return "";
   const KNOWN: Record<string, string> = {
     speech_style:    "口調・話し方",
+    first_person:    "一人称",
+    catchphrase:     "口癖・文末の癖",
     keywords:        "口癖・キーワード",
     personality:     "性格・特徴",
     example_prefix:  "例文の書き出しイメージ",
@@ -367,6 +369,13 @@ export function renderArticleStyle(tp: any): string {
   return text && String(text).trim() ? String(text).trim() : "";
 }
 
+/** tone_profile.article_sample（サンプル記事）を参考ブロックとして整形する */
+export function renderArticleSample(tp: any): string {
+  const sample = tp?.article_sample;
+  if (!sample || !String(sample).trim()) return "";
+  return `\n==================================================\n【サンプル記事（このキャラクターの文体・構成の参考にしてください）】\n==================================================\n${String(sample).trim()}`;
+}
+
 /** キャラクター情報からLLMに渡すプロンプト文字列を生成 */
 export function buildLLMPrompt(char: any, topic?: string, customer?: any): string {
   const tp = char.tone_profile ?? {};
@@ -380,7 +389,7 @@ export function buildLLMPrompt(char: any, topic?: string, customer?: any): strin
 ==================================================
 ■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}
+${renderToneProfile(tp)}${renderArticleSample(tp)}
 ■ このキャラクターの世界観（関係者・口グセ・定番シチュエーションなど、知っている人がニヤッとできる要素）も自分で補って活用してください。
 
 ==================================================
@@ -575,7 +584,7 @@ export function buildArticleAdaptationPrompt(char: any, customer: any | undefine
 ==================================================
 ■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}
+${renderToneProfile(tp)}${renderArticleSample(tp)}
 ■ このキャラクターの世界観（関係者・口グセ・定番シチュエーションなど、知っている人がニヤッとできる要素）も自分で補って活用してください。
 
 ==================================================
@@ -657,7 +666,7 @@ export function buildBlogLLMPrompt(char: any, theme?: string, customer?: any): s
 ==================================================
 ■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}
+${renderToneProfile(tp)}${renderArticleSample(tp)}
 ■ このキャラクターの世界観（関係者・口グセ・定番シチュエーションなど）も自分で補って活用してください。
 
 ==================================================
@@ -715,7 +724,7 @@ export function buildTemplateArticlePrompt(char: any, topic?: string): string {
 ==================================================
 ■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}
+${renderToneProfile(tp)}${renderArticleSample(tp)}
 ■ このキャラクターの世界観（関係者・口グセ・定番シチュエーションなど、知っている人がニヤッとできる要素）も自分で補って活用してください。
 
 ==================================================
@@ -853,7 +862,7 @@ export function buildTemplateAdaptationPrompt(char: any, stockContent: string, s
 ==================================================
 ■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}
+${renderToneProfile(tp)}${renderArticleSample(tp)}
 ■ このキャラクターの世界観（関係者・口グセ・定番シチュエーションなど、知っている人がニヤッとできる要素）も自分で補って活用してください。
 
 ==================================================
@@ -931,7 +940,7 @@ export function buildWelcomePagePrompt(char?: any): string {
   const charBlock = char
     ? `■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}`
+${renderToneProfile(tp)}${renderArticleSample(tp)}`
     : `（対象キャラ未指定の汎用テンプレートです。特定のキャラクターになりきらず、
 サービス全体を案内する温かいトーンで書いてください。「あなたの先生」「キャラクター」のような
 一般的な呼び方を使い、キャラクター名や口調・口癖は使わないでください）`;
@@ -1490,7 +1499,7 @@ export function buildExerciseAdaptationPrompt(char: any, customer: any | undefin
 ==================================================
 ■ 名前: ${char.name}
 ■ 説明: ${char.description ?? ""}
-${renderToneProfile(tp)}
+${renderToneProfile(tp)}${renderArticleSample(tp)}
 ${intimacyBlock}
 
 ==================================================
@@ -1887,6 +1896,7 @@ const CHARACTER_GENERATION_BLOCK_KEYS: Record<string, string> = {
   FONT_STYLE: "font_style",
   REWARD_PROGRESS_TEMPLATE: "reward_progress_template",
   CHAT_FOOTER_NOTE: "chat_footer_note",
+  ARTICLE_SAMPLE: "article_sample",
 };
 export const CHARACTER_GENERATION_ALL_BLOCKS = Object.keys(CHARACTER_GENERATION_BLOCK_KEYS);
 
@@ -1976,6 +1986,8 @@ ${reference_character || "（指定なし）"}
   "keywords": ["", "", "", "", ""],
   "personality": "",
   "speech_style": "",
+  "first_person": "",
+  "catchphrase": "",
   "ng_expressions": ["", "", ""],
   "reaction_examples": {
     "mistake": ["", "", "", ""],
@@ -2009,6 +2021,12 @@ ${reference_character || "（指定なし）"}
   出力例（このままコピーせず口調に合わせて作り直す）：
   「${DEFAULT_CHAT_FOOTER_NOTE}」）
 
+===ARTICLE_SAMPLE===
+（このキャラクターが実際に書くような、短い記事サンプル。
+  300〜500字程度。キャラクターの一人称・口調・文体・テンションを体現した例として、
+  英語学習に関連するテーマで1本書いてください。
+  このサンプルは後から記事生成プロンプトに自動挿入され、LLMがキャラクターの文体を模倣するための参考として使われます。）
+
 ==================================================
 【厳守事項まとめ】
 ==================================================
@@ -2021,7 +2039,9 @@ ${reference_character || "（指定なし）"}
 7. article_styleは雑談を減らし説明に集中するトーンを記述する
 8. ===REWARD_PROGRESS_TEMPLATE=== と ===CHAT_FOOTER_NOTE=== はキャラクターの口調を反映した1文にする
    （プレースホルダーは指示された変数名をそのまま使うこと）
-9. 7つの区切りブロックを過不足なく出力し、前置き・後書きは付けない`;
+9. first_personはこのキャラクターが使う一人称（例：「俺」「私」「僕」）を記述する
+10. catchphraseはこのキャラクターの代表的な語尾・口癖・文末の癖を記述する
+11. 8つの区切りブロックを過不足なく出力し、前置き・後書きは付けない`;
 
   const targetBlocks = blocks && blocks.length ? blocks : CHARACTER_GENERATION_ALL_BLOCKS;
   if (targetBlocks.length === CHARACTER_GENERATION_ALL_BLOCKS.length) {
@@ -2035,7 +2055,7 @@ ${reference_character || "（指定なし）"}
     "==================================================",
     "【★今回の出力対象についての追加指示（最優先で従うこと）】",
     "==================================================",
-    `今回は、上記7ブロックのうち ${targetLabel} のみを再生成してください。`,
+    `今回は、上記8ブロックのうち ${targetLabel} のみを再生成してください。`,
     "他のブロックは出力しないでください。区切り線・前置き・後書きも不要です。",
   ];
   if (existing && Object.keys(existing).length) {

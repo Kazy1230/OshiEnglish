@@ -97,7 +97,16 @@ export function CharactersTab() {
       setForm(f => ({ ...f, greetings: result.greetings.join("\n") }));
     }
     if (result.tone_profile) {
-      handleToneProfileChange(JSON.stringify(result.tone_profile, null, 2));
+      const tp = result.article_sample
+        ? { ...result.tone_profile, article_sample: result.article_sample }
+        : result.tone_profile;
+      handleToneProfileChange(JSON.stringify(tp, null, 2));
+    } else if (result.article_sample) {
+      setForm(f => {
+        let tp: any = {};
+        try { tp = JSON.parse(f.tone_profile || "{}"); } catch { /* ignore */ }
+        return { ...f, tone_profile: JSON.stringify({ ...tp, article_sample: result.article_sample }, null, 2) };
+      });
     }
     if (result.color_scheme) {
       handleColorSchemeChange(JSON.stringify(result.color_scheme));
