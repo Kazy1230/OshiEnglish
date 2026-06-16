@@ -162,6 +162,7 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
       bg: "#fff7ed", card: "#fffbf5", primary: "#ea580c", accent: "#fbbf24",
       accentLight: "#ffedd5", border: "#fde4cb", text: "#7c2d12", muted: "#c2785a",
       gradA: "#ea580c", gradB: "#fbbf24",
+      submitLabel: "Apply now! 😊",
     },
   },
   {
@@ -177,6 +178,7 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
       bg: "#0f172a", card: "#1e293b", primary: "#cbd5e1", accent: "#3b82f6",
       accentLight: "#1e2a3d", border: "#334155", text: "#e2e8f0", muted: "#8b98ad",
       gradA: "#0f172a", gradB: "#334155", isDark: true,
+      submitLabel: "Submit application",
     },
   },
 ];
@@ -884,13 +886,70 @@ function PreviewCard({ gender, relationship, personality, persQuote, theme, redu
 
 // ─── 送信後ステップ案内 ───────────────────────────────────────────────────────
 
-function NextStepsCard({ theme, gender, relationship, personality, charChoice }: {
+function NextStepsCard({ theme, gender, relationship, personality, charChoice, presetChar }: {
   theme: ThemeVars;
   gender: Gender | null;
   relationship: Relationship | null;
   personality: Personality | null;
   charChoice: CharChoice | null;
+  presetChar?: PresetCharId | null;
 }) {
+  const isEnglish = presetChar === "chloe" || presetChar === "frederick";
+  const charName = isEnglish ? (PRESET_CHARACTERS.find(c => c.id === presetChar)?.name ?? "your teacher") : null;
+
+  if (isEnglish) {
+    const steps = [
+      {
+        icon: "📩",
+        label: "We'll message you in the app",
+        desc: presetChar === "chloe"
+          ? "Chloe will send you a friendly welcome message within 24–48 hours 😊"
+          : "Frederick will be in touch via in-app chat within 24–48 hours.",
+      },
+      {
+        icon: "🎭",
+        label: `Meet ${charName}`,
+        desc: presetChar === "chloe"
+          ? "Chloe will be ready to guide you through fun, everyday English lessons 🌟"
+          : "Frederick will prepare a structured curriculum tailored to your level 📚",
+      },
+      {
+        icon: "🗣️",
+        label: "Start learning!",
+        desc: presetChar === "chloe"
+          ? "Daily upbeat messages and English practice — let's do this! 🔥"
+          : "Daily lessons delivered via in-app messages. Let's begin. 📖",
+      },
+    ];
+    return (
+      <div style={{
+        backgroundColor: theme.isDark ? "rgba(40,44,56,0.82)" : "rgba(255,255,255,0.86)",
+        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        border: `1px solid ${theme.border}`, borderRadius: theme.radius,
+        padding: "1.2rem 1.4rem",
+        transition: `background-color ${T},border-color ${T},border-radius ${T}`,
+      }}>
+        <p style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".1em",
+          color: theme.muted, textTransform: "uppercase", margin: "0 0 .8rem", fontFamily: theme.fontFamily }}>
+          What happens next
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{ display: "flex", gap: ".75rem", alignItems: "flex-start" }}>
+              <span style={{ fontSize: "1.1rem", lineHeight: 1, flexShrink: 0, marginTop: "1px" }}>{s.icon}</span>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: ".84rem", color: theme.text, margin: 0,
+                  fontFamily: theme.fontFamily, transition: `color ${T}` }}>{s.label}</p>
+                <p style={{ fontSize: ".76rem", color: theme.muted, margin: ".1rem 0 0",
+                  fontFamily: theme.fontFamily, transition: `color ${T}` }}>{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const gk = gender as GK | null;
   const rk = relationship as RK | null;
   const pk = personality as PK | null;
@@ -1007,6 +1066,11 @@ export default function ApplyPage() {
 
   const theme = buildPresetTheme(gender, relationship, personality, charChoice === "preset" ? presetChar : null);
   const copy  = getDynamicCopy(gender, relationship);
+  const isEnglishChar = presetChar === "chloe" || presetChar === "frederick";
+  if (isEnglishChar) {
+    const charName = PRESET_CHARACTERS.find(c => c.id === presetChar)?.name ?? "your teacher";
+    copy.successBody = `We're getting everything ready for you!\nYou'll receive a message from ${charName} in the app once your account is set up.\nWe look forward to learning English with you ✨`;
+  }
 
   // ── 選択ハンドラ ──────────────────────────────────────────────────────────
   function triggerShimmer() {
@@ -1158,12 +1222,12 @@ export default function ApplyPage() {
             <div style={{ fontSize: "3.5rem", marginBottom: "1rem" }}>🎉</div>
             <h1 style={{ color: theme.primary, fontWeight: 900, fontSize: "1.5rem",
               margin: "0 0 1rem", fontFamily: theme.fontFamily }}>
-              申し込みを受け付けました！
+              {isEnglishChar ? "Your application has been received!" : "申し込みを受け付けました！"}
             </h1>
             {showWorld && (
               <p style={{ color: theme.accent, fontWeight: 700, fontSize: ".85rem",
                 margin: "0 0 .8rem", fontFamily: theme.fontFamily }}>
-                あなたの推し先生のページが、こんな雰囲気になります
+                {isEnglishChar ? "Here's a preview of your teacher's page" : "あなたの推し先生のページが、こんな雰囲気になります"}
               </p>
             )}
             <p style={{ color: theme.muted, fontSize: ".95rem", lineHeight: 2,
@@ -1176,7 +1240,9 @@ export default function ApplyPage() {
                 {charChoice === "preset" ? (
                   <p style={{ color: theme.text, fontSize: ".88rem", lineHeight: 1.8,
                     fontFamily: theme.fontFamily, margin: "0 0 1rem" }}>
-                    公式キャラクターはキャラ作成費無料です。このまま進むとすぐにアカウントが発行され、<strong>20クレジット</strong>がプレゼントされます。
+                    {isEnglishChar
+                      ? <>No character creation fee. Proceed now to instantly create your account and receive <strong>20 free credits</strong>!</>
+                      : <>公式キャラクターはキャラ作成費無料です。このまま進むとすぐにアカウントが発行され、<strong>20クレジット</strong>がプレゼントされます。</>}
                   </p>
                 ) : (
                   <p style={{ color: theme.text, fontSize: ".88rem", lineHeight: 1.8,
@@ -1191,8 +1257,8 @@ export default function ApplyPage() {
                   style={{ backgroundColor: theme.accent, borderRadius: theme.inputRadius, fontFamily: theme.fontFamily }}
                 >
                   {redirecting
-                    ? (charChoice === "preset" ? "アカウントを準備しています…" : "決済画面に移動しています…")
-                    : (charChoice === "preset" ? "アカウントを発行する →" : "お支払いに進む →")}
+                    ? (isEnglishChar ? "Setting up your account…" : charChoice === "preset" ? "アカウントを準備しています…" : "決済画面に移動しています…")
+                    : (isEnglishChar ? "Create my account →" : charChoice === "preset" ? "アカウントを発行する →" : "お支払いに進む →")}
                 </button>
               </div>
             )}
@@ -1693,11 +1759,11 @@ export default function ApplyPage() {
                     borderRadius: theme.inputRadius, fontFamily: theme.fontFamily,
                     letterSpacing: theme.letterSpacing, boxShadow: theme.cardShadow,
                   }}>
-                    {submitting ? "送信中…" : theme.submitLabel}
+                    {submitting ? (isEnglishChar ? "Submitting…" : "送信中…") : theme.submitLabel}
                   </button>
 
                   {/* 送信後ステップ案内 */}
-                  <NextStepsCard theme={theme} gender={gender} relationship={relationship} personality={personality} charChoice={charChoice} />
+                  <NextStepsCard theme={theme} gender={gender} relationship={relationship} personality={personality} charChoice={charChoice} presetChar={presetChar} />
                 </div>
               )}
 
