@@ -434,9 +434,10 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
     }
     setForm(f => ({
       ...f,
-      content: result.content ?? f.content,
-      example_sentences: result.example_sentences ?? f.example_sentences,
-      tips: result.tips ?? f.tips,
+      ...(result.title           ? { title: result.title }                         : {}),
+      ...(result.content         ? { content: result.content }                     : {}),
+      ...(result.example_sentences ? { example_sentences: result.example_sentences } : {}),
+      ...(result.tips            ? { tips: result.tips }                           : {}),
     }));
     setIsLlmDrafted(true);
     setGenPasteText("");

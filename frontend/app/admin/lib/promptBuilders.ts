@@ -2063,27 +2063,52 @@ export function parseArticleGenerationOutput(text: string): any {
   const fenced = body.match(/^```(?:[a-zA-Z]*)?\s*([\s\S]*?)```\s*$/);
   if (fenced) body = fenced[1].trim();
 
+  // ── フォーマット①：=== CONTENT === / === EXAMPLES === / === TIPS === ──────────
   const blockKeys: Record<string, string> = {
     CONTENT: "content",
     EXAMPLES: "example_sentences",
     TIPS: "tips",
   };
   const pattern = new RegExp(`===\\s*(${Object.keys(blockKeys).join("|")})\\s*===`, "g");
-
-  const result: any = {};
-  const matches = [...body.matchAll(pattern)];
-  for (let i = 0; i < matches.length; i++) {
-    const blockName = matches[i][1];
-    const start = matches[i].index! + matches[i][0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : body.length;
-    const content = body.slice(start, end).trim();
-    const key = blockKeys[blockName];
-    if (!key || !content) continue;
-    result[key] = content;
+  const tripleMatches = [...body.matchAll(pattern)];
+  if (tripleMatches.length > 0) {
+    const result: any = {};
+    for (let i = 0; i < tripleMatches.length; i++) {
+      const blockName = tripleMatches[i][1];
+      const start = tripleMatches[i].index! + tripleMatches[i][0].length;
+      const end = i + 1 < tripleMatches.length ? tripleMatches[i + 1].index! : body.length;
+      const content = body.slice(start, end).trim();
+      const key = blockKeys[blockName];
+      if (!key || !content) continue;
+      result[key] = content;
+    }
+    return result;
   }
 
-  if (Object.keys(result).length === 0 && body) {
-    result.content = body;
+  // ── フォーマット②：ウェルカムページ形式 ─────────────────────────────────────
+  // # タイトル
+  // （本文）
+  // ---
+  // EXAMPLES:
+  // 英文1 / 和訳1
+  // ---
+  // TIPS:
+  // Tips1
+  const welcomeExamples = body.match(/---\s*\nEXAMPLES:\s*\n([\s\S]*?)(?=\n---\s*\nTIPS:|$)/);
+  const welcomeTips     = body.match(/---\s*\nTIPS:\s*\n([\s\S]*?)$/);
+  if (welcomeExamples || welcomeTips) {
+    const result: any = {};
+    const titleMatch = body.match(/^#\s+(.+)/);
+    if (titleMatch) result.title = titleMatch[1].trim();
+    const firstSep = body.search(/\n---\s*\nEXAMPLES:/);
+    const contentRaw = firstSep !== -1 ? body.slice(0, firstSep) : body;
+    const contentBody = contentRaw.replace(/^#\s+.+\n?/, "").trim();
+    if (contentBody) result.content = contentBody;
+    if (welcomeExamples?.[1]?.trim()) result.example_sentences = welcomeExamples[1].trim();
+    if (welcomeTips?.[1]?.trim())     result.tips = welcomeTips[1].trim();
+    return result;
   }
-  return result;
+
+  // ── フォールバック：全文を content として返す ─────────────────────────────────
+  return body ? { content: body } : {};
 }
