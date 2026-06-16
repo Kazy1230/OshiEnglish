@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.article import Article
 from app.models.customer import Customer
 from app.models.order import Order
-from app.core.credits import get_credit_settings, TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS
+from app.core.credits import get_credit_settings, TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS, TEMPLATE_FIRST_DELIVERY_DAYS
 
 
 def _ensure_template_stock_order(db: Session) -> None:
@@ -43,6 +43,14 @@ def distribute_template_article_if_due(db: Session, customer: Customer) -> None:
         interval_days = rng.randint(TEMPLATE_INTERVAL_MIN_DAYS, TEMPLATE_INTERVAL_MAX_DAYS)
         if (now - last) < timedelta(days=interval_days):
             return
+    else:
+        # 初回：アカウント作成から TEMPLATE_FIRST_DELIVERY_DAYS 日経過するまで配布しない
+        created = customer.created_at
+        if created is not None:
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if (now - created) < timedelta(days=TEMPLATE_FIRST_DELIVERY_DAYS):
+                return
 
     received_ids = [
         r[0] for r in db.query(Article.template_source_id).filter(

@@ -17,6 +17,8 @@ TEMPLATE_UNLOCK_COST = 50
 # 定期便の配布間隔（日数）：このランダムな範囲から毎回間隔を決める
 TEMPLATE_INTERVAL_MIN_DAYS = 3
 TEMPLATE_INTERVAL_MAX_DAYS = 5
+# 初回定期便を届けるまでの待機日数（アカウント作成から）
+TEMPLATE_FIRST_DELIVERY_DAYS = 4
 
 
 def get_credit_settings(db: Session):
