@@ -22,6 +22,8 @@ import {
   buildTemplateMaterialPrompt,
   buildTemplateAdaptationPrompt,
   getCustomerDisplayName,
+  EXERCISE_CATEGORY_OPTIONS,
+  type ExerciseCategoryOption,
 } from "../lib/promptBuilders";
 import { hasListeningAudio } from "@/lib/exercise";
 
@@ -672,7 +674,12 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
             <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
               <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>🧩 問題本体ストック（②演習問題・第1段階）</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <input value={exStockCategory} onChange={e => setExStockCategory(e.target.value)} placeholder="出題カテゴリ（例：TOEIC Part 5）" />
+                <select value={exStockCategory} onChange={e => setExStockCategory(e.target.value)}>
+                  <option value="">カテゴリを選択…</option>
+                  {EXERCISE_CATEGORY_OPTIONS[subcategory as "reading" | "listening"].map(o => (
+                    <option key={o.category} value={o.category}>{o.label}</option>
+                  ))}
+                </select>
                 <select value={exStockDifficulty} onChange={e => setExStockDifficulty(e.target.value)}>
                   <option value="easy">easy（初級）</option>
                   <option value="medium">medium（中級）</option>
@@ -684,7 +691,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
                 style={{ borderColor: "#7b5cff", color: "#7b5cff", background: "var(--card-bg, #fff)" }}
                 onClick={() => {
-                  setPromptPreview({ title: "第1段階プロンプト（問題本体生成）", text: buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined) });
+                  const pn = EXERCISE_CATEGORY_OPTIONS[subcategory as "reading" | "listening"].find(o => o.category === exStockCategory)?.promptNote;
+                  setPromptPreview({ title: "第1段階プロンプト（問題本体生成）", text: buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined, pn) });
                 }}>
                 📋 第1段階プロンプトをコピー
               </button>
@@ -908,10 +916,22 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 )}
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-                    出題カテゴリ（料金・メニュー表に対応／例：「TOEIC Part 5」「英検2級 ライティング」「IELTS Reading Academic」）
+                    出題カテゴリ（料金・メニュー表に対応）
                   </label>
-                  <input value={form.exercise_category} onChange={e => setForm({ ...form, exercise_category: e.target.value })}
-                    placeholder="例：TOEIC Part 5" />
+                  {(() => {
+                    const subKey = selectedCategory === "exercise_reading" ? "reading"
+                      : selectedCategory === "exercise_listening" ? "listening"
+                      : selectedCategory === "exercise_speaking" ? "speaking"
+                      : selectedCategory === "exercise_writing" ? "writing"
+                      : null;
+                    const opts: ExerciseCategoryOption[] = subKey ? EXERCISE_CATEGORY_OPTIONS[subKey] : [];
+                    return (
+                      <select value={form.exercise_category} onChange={e => setForm({ ...form, exercise_category: e.target.value })}>
+                        <option value="">カテゴリを選択…</option>
+                        {opts.map(o => <option key={o.category} value={o.category}>{o.label}</option>)}
+                      </select>
+                    );
+                  })()}
                 </div>
                 <button type="button"
                   className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
@@ -922,7 +942,14 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     const cu = form.customer_id ? customers.find(cs => String(cs.id) === String(form.customer_id)) : undefined;
                     if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
                     const topic = window.prompt("追加で指定したいトピック・希望があれば入力してください（空欄でもOK）", "") || undefined;
-                    setPromptPreview({ title: "演習問題作成用LLMプロンプト", text: buildExercisePrompt(c, form.exercise_format as any, form.exercise_category || undefined, topic, cu) });
+                    const exSubKey = selectedCategory === "exercise_reading" ? "reading"
+                      : selectedCategory === "exercise_listening" ? "listening"
+                      : selectedCategory === "exercise_speaking" ? "speaking"
+                      : selectedCategory === "exercise_writing" ? "writing"
+                      : null;
+                    const exOpts: ExerciseCategoryOption[] = exSubKey ? EXERCISE_CATEGORY_OPTIONS[exSubKey] : [];
+                    const pn = exOpts.find(o => o.category === form.exercise_category)?.promptNote;
+                    setPromptPreview({ title: "演習問題作成用LLMプロンプト", text: buildExercisePrompt(c, form.exercise_format as any, form.exercise_category || undefined, topic, cu, pn) });
                   }}>
                   📋 演習問題作成用LLMプロンプトをコピー
                   {!form.character_id

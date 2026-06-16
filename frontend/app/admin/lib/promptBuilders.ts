@@ -1250,7 +1250,7 @@ ${buildIntimacyBlock(customer, tp)}
  * 料金・メニュー表に対応する出題カテゴリ（TOEIC Part5、英検ライティングなど）と
  * キャラクター設定を踏まえ、そのまま管理画面に読み込めるJSON形式での出力を依頼する。
  */
-export function buildExercisePrompt(char: any, format: "multiple_choice" | "written_response", category?: string, topic?: string, customer?: any): string {
+export function buildExercisePrompt(char: any, format: "multiple_choice" | "written_response", category?: string, topic?: string, customer?: any, promptNote?: string): string {
   const tp = char.tone_profile ?? {};
   const charBlock = `==================================================
 【キャラクター設定（解説・コメントの口調に反映してください）】
@@ -1288,7 +1288,9 @@ ${intimacyBlock}
 ==================================================
 1. 出題カテゴリの実際の試験形式・出題傾向に忠実に作問してください
    （文法・語彙レベル、設問数の目安、選択肢数（基本4択）などを実際の試験に合わせる）。
-2. 設問は4〜6問程度を目安に作成してください。
+${promptNote
+    ? `2. 【★設問構成（厳守）】${promptNote}\n   大問数・設問数は上記の通りに厳密に作成してください。絶対に変更しないでください。`
+    : `2. 設問は4〜6問程度を目安に作成してください。`}
 3. リスニング系のカテゴリの場合は、音声内容を文字起こしした "listening_script" を含めてください
    （リーディング系の場合は省略してよく、その場合 "listening_script" キー自体を出力しないでください）。
    "listening_script" は、後で管理者がTTS（音声合成）等で音声化し、その音声ファイルを
@@ -1367,6 +1369,7 @@ ${intimacyBlock}
 ==================================================
 1. 出題カテゴリの実際の試験形式・採点観点に忠実に作問してください
    （字数・語数の目安、トピックの種類、フォーマル度合いなどを実際の試験に合わせる）。
+${promptNote ? `1a. 【★設問構成（厳守）】${promptNote}\n    上記の通りに厳密に作成してください。絶対に変更しないでください。` : ``}
 2. "prompt" には、生徒が読んで取り組む「お題・設問文」をそのまま書いてください
    （英語の問題文に加え、必要なら日本語での補足を続けて書いてもよい）。
 3. "evaluation_notes" は、運営・キャラクターが添削する際に参照する「採点観点メモ」です。
@@ -1387,13 +1390,63 @@ ${intimacyBlock}
 ${codeBlockNote}`.trim();
 }
 
+export type ExerciseCategoryOption = {
+  label: string;
+  category: string;
+  promptNote: string;
+};
+
+/** サービスメニュー表に基づく演習カテゴリ選択肢（subcategoryごと）。大問数・設問数を明示。 */
+export const EXERCISE_CATEGORY_OPTIONS: Record<"reading" | "listening" | "speaking" | "writing", ExerciseCategoryOption[]> = {
+  reading: [
+    { label: "TOEIC Part 5（短文穴埋め・5問）",                  category: "TOEIC Part 5",                           promptNote: "設問5問（各問独立・短文穴埋め）" },
+    { label: "TOEIC Part 6（長文穴埋め・大問2×設問4問＝8問）",   category: "TOEIC Part 6",                           promptNote: "大問2パッセージ・各パッセージ設問4問（合計8問）" },
+    { label: "TOEIC Part 7 シングル（大問1×設問3問）",           category: "TOEIC Part 7 Single",                    promptNote: "大問1パッセージ・設問3問（シングルパッセージ）" },
+    { label: "TOEFL Reading（大問1パッセージ×設問10問）",         category: "TOEFL Reading",                          promptNote: "大問1パッセージ・設問10問" },
+    { label: "英検 短文穴埋め（5級〜準2級・5問）",               category: "英検リーディング 短文穴埋め（5級〜準2級）", promptNote: "設問5問（各問独立・短文穴埋め）" },
+    { label: "英検 短文穴埋め（2級〜1級・5問）",                 category: "英検リーディング 短文穴埋め（2級〜1級）",   promptNote: "設問5問（各問独立・短文穴埋め）" },
+    { label: "英検 長文穴埋め（5級〜準2級・大問1×設問3問）",     category: "英検リーディング 長文穴埋め（5級〜準2級）", promptNote: "大問1パッセージ・設問3問（長文穴埋め）" },
+    { label: "英検 長文穴埋め（2級〜1級・大問1×設問2問）",       category: "英検リーディング 長文穴埋め（2級〜1級）",   promptNote: "大問1パッセージ・設問2問（長文穴埋め）" },
+    { label: "英検 長文読解（5級〜準2級・大問1×設問3問）",       category: "英検リーディング 長文読解（5級〜準2級）",   promptNote: "大問1パッセージ・設問3問（長文読解）" },
+    { label: "英検 長文読解（2級〜1級・大問1×設問2問）",         category: "英検リーディング 長文読解（2級〜1級）",     promptNote: "大問1パッセージ・設問2問（長文読解）" },
+    { label: "IELTS Reading Academic（大問1パッセージ×設問13問）",category: "IELTS Reading Academic",                  promptNote: "大問1パッセージ・設問13問（Academic）" },
+    { label: "IELTS Reading General（大問1パッセージ×設問13問）", category: "IELTS Reading General",                   promptNote: "大問1パッセージ・設問13問（General Training）" },
+  ],
+  listening: [
+    { label: "TOEIC Part 1（写真描写・6問）",                    category: "TOEIC Part 1",                           promptNote: "設問6問（各問独立・写真描写）" },
+    { label: "TOEIC Part 2（応答問題・6問）",                    category: "TOEIC Part 2",                           promptNote: "設問6問（各問独立・応答問題）" },
+    { label: "TOEIC Part 3（会話・大問2×設問3問＝6問）",         category: "TOEIC Part 3",                           promptNote: "大問2会話・各会話設問3問（合計6問）" },
+    { label: "TOEIC Part 4（説明文・大問2×設問3問＝6問）",       category: "TOEIC Part 4",                           promptNote: "大問2トーク・各トーク設問3問（合計6問）" },
+    { label: "TOEFL Listening - Conversation（大問1×設問5問）",  category: "TOEFL Listening Conversation",           promptNote: "大問1会話（Conversation）・設問5問" },
+    { label: "TOEFL Listening - Lecture（大問1×設問6問）",       category: "TOEFL Listening Lecture",                promptNote: "大問1講義（Lecture）・設問6問" },
+    { label: "英検リスニング 5級・4級（10問）",                   category: "英検リスニング 5級・4級",                  promptNote: "設問10問（各問独立）" },
+    { label: "英検リスニング 3級・準2級（8問）",                  category: "英検リスニング 3級・準2級",                promptNote: "設問8問（各問独立）" },
+    { label: "英検リスニング 2級（6問）",                        category: "英検リスニング 2級",                       promptNote: "設問6問（各問独立）" },
+    { label: "英検リスニング 準1級（5問）",                      category: "英検リスニング 準1級",                     promptNote: "設問5問（各問独立）" },
+    { label: "英検リスニング 1級（4問）",                        category: "英検リスニング 1級",                       promptNote: "設問4問（各問独立）" },
+    { label: "IELTS Listening（大問1セクション×設問10問）",       category: "IELTS Listening",                        promptNote: "大問1セクション・設問10問" },
+  ],
+  speaking: [
+    { label: "英検 スピーキング（1タスク）",                      category: "英検 スピーキング",                        promptNote: "1タスク（英検面接形式）" },
+    { label: "TOEFL Speaking（1タスク）",                        category: "TOEFL Speaking",                         promptNote: "1タスク" },
+    { label: "IELTS Speaking Part 1〜3（1セット）",              category: "IELTS Speaking",                         promptNote: "1セット（Part 1〜3まとめて）" },
+  ],
+  writing: [
+    { label: "英検 ライティング（1問）",                          category: "英検 ライティング",                        promptNote: "1問（英検英作文形式）" },
+    { label: "TOEFL Writing Integrated（1問）",                  category: "TOEFL Writing Integrated",               promptNote: "1問（統合型ライティング）" },
+    { label: "TOEFL Writing Academic Discussion（1問）",         category: "TOEFL Writing Academic Discussion",      promptNote: "1問（Academic Discussion）" },
+    { label: "IELTS Writing Task 1（1問）",                      category: "IELTS Writing Task 1",                   promptNote: "1問（グラフ・図表描写）" },
+    { label: "IELTS Writing Task 2（1問）",                      category: "IELTS Writing Task 2",                   promptNote: "1問（エッセイ）" },
+  ],
+};
+
 /**
  * ②選択式演習問題（リーディング・リスニング）の第1段階：
  * キャラ要素を含まない問題本体（questions/choices/correct_index、リスニングの場合はlistening_script・
  * audio挿入位置の目印含む）のみを生成するプロンプト。出力は問題本体ストック（ExerciseTemplate）に保存し、
  * 第2段階（キャラ適応）の入力として使う。
  */
-export function buildExerciseBodyPrompt(category?: string, difficulty: string = "medium", topic?: string): string {
+export function buildExerciseBodyPrompt(category?: string, difficulty: string = "medium", topic?: string, promptNote?: string): string {
   const difficultyLabel: Record<string, string> = {
     easy: "易しい（基礎・初級者向け）",
     medium: "標準（一般的な試験レベル）",
@@ -1425,14 +1478,9 @@ ${difficultyLabel[difficulty] ?? difficultyLabel.medium}
 ==================================================
 1. 出題カテゴリの実際の試験形式・出題傾向に忠実に作問してください
    （文法・語彙レベル、選択肢数（基本4択）などを実際の試験に合わせる）。
-2. 設問数は実際の試験形式に厳密に従ってください。以下は代表的な例です：
-   - TOEFL ITP Reading：1パッセージにつき設問10問
-   - TOEFL iBT Reading：1パッセージにつき設問10問
-   - TOEIC Part 7（シングルパッセージ）：1文書につき設問2〜4問
-   - 英検リーディング（長文読解）：1パッセージにつき設問3〜4問
-   - IELTS Reading：1パッセージにつき設問10〜14問
-   - 短文穴埋め・文法問題系（TOEIC Part 5、英検短文穴埋めなど）：10〜15問
-   上記にない場合も、そのカテゴリの実際の試験形式に合わせた問題数にしてください。
+${promptNote
+    ? `2. 【★設問構成（厳守）】${promptNote}\n   大問数・設問数は上記の通りに厳密に作成してください。絶対に変更しないでください。`
+    : `2. 設問数は実際の試験形式に厳密に従ってください。カテゴリ名から試験の出題数を正確に判断し、その通りに作成してください。`}
 3. リーディング系のカテゴリで「長文パッセージ＋設問」形式の場合は、パッセージ本文を "passage" フィールドに入れてください。
    設問の "prompt" には「Q1. According to the passage, ...」のように設問文のみを書き、パッセージ本文は繰り返さないでください。
    短文穴埋め・文法問題系のように各設問が独立した英文の場合は "passage" フィールドは不要です（キー自体を出力しないでください）。
