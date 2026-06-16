@@ -801,13 +801,19 @@ function StepNav({ step, canNext, theme, onBack, onNext, nextLabel = "次へ →
 
 // ─── キャラクターサマリーカード ───────────────────────────────────────────────
 
-function CharSummaryCard({ gender, relationship, personality, persQuote, theme }: {
+function CharSummaryCard({ gender, relationship, personality, persQuote, theme, isEnglish }: {
   gender: Gender; relationship: Relationship; personality: Personality;
-  persQuote: string; theme: ThemeVars;
+  persQuote: string; theme: ThemeVars; isEnglish?: boolean;
 }) {
-  const GL: Record<Gender, string>       = { male: "♂ 男性", female: "♀ 女性", any: "☯ 性別不問" };
-  const RL: Record<Relationship, string> = { teacher: "📚 先生", senpai: "🌟 先輩", kohai: "🌸 後輩", other: "✨ その他" };
-  const PL: Record<Personality, string>  = { gentle: "🌸 優しい", strict: "⚡ 厳しい", cool: "❄️ クール", energetic: "🔥 元気", tsundere: "💢 ツンデレ", other: "✨ その他" };
+  const GL: Record<Gender, string>       = isEnglish
+    ? { male: "♂ Male", female: "♀ Female", any: "☯ Any" }
+    : { male: "♂ 男性", female: "♀ 女性", any: "☯ 性別不問" };
+  const RL: Record<Relationship, string> = isEnglish
+    ? { teacher: "📚 Teacher", senpai: "🌟 Senpai", kohai: "🌸 Kohai", other: "✨ Other" }
+    : { teacher: "📚 先生", senpai: "🌟 先輩", kohai: "🌸 後輩", other: "✨ その他" };
+  const PL: Record<Personality, string>  = isEnglish
+    ? { gentle: "🌸 Gentle", strict: "⚡ Strict", cool: "❄️ Cool", energetic: "🔥 Energetic", tsundere: "💢 Tsundere", other: "✨ Other" }
+    : { gentle: "🌸 優しい", strict: "⚡ 厳しい", cool: "❄️ クール", energetic: "🔥 元気", tsundere: "💢 ツンデレ", other: "✨ その他" };
 
   return (
     <div className="yt-slide-up" style={{
@@ -817,7 +823,7 @@ function CharSummaryCard({ gender, relationship, personality, persQuote, theme }
     }}>
       <p style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".1em", color: theme.accent,
         textTransform: "uppercase", margin: "0 0 .5rem", fontFamily: theme.fontFamily }}>
-        あなたのキャラクター
+        {isEnglish ? "Your Character" : "あなたのキャラクター"}
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: ".4rem", marginBottom: ".75rem" }}>
         {[GL[gender], RL[relationship], PL[personality]].map(b => (
@@ -842,9 +848,9 @@ function CharSummaryCard({ gender, relationship, personality, persQuote, theme }
 // 「選択したら全部変わる」演出を、このカードの中だけに閉じ込める。
 // ページ全体の背景・フォントは変えず、ここだけがキャラクターの世界観を体験できる窓になる。
 
-function PreviewCard({ gender, relationship, personality, persQuote, theme, reduceMotion, isMobile, shimmerActive }: {
+function PreviewCard({ gender, relationship, personality, persQuote, theme, reduceMotion, isMobile, shimmerActive, isEnglish }: {
   gender: Gender; relationship: Relationship; personality: Personality;
-  persQuote: string; theme: ThemeVars; reduceMotion: boolean; isMobile: boolean; shimmerActive: boolean;
+  persQuote: string; theme: ThemeVars; reduceMotion: boolean; isMobile: boolean; shimmerActive: boolean; isEnglish?: boolean;
 }) {
   return (
     <div className={`yt-slide-up${shimmerActive ? " yt-font-in" : ""}`} style={{
@@ -866,7 +872,7 @@ function PreviewCard({ gender, relationship, personality, persQuote, theme, redu
       <div style={{ position: "relative", zIndex: 3, padding: "1.6rem 1.5rem" }}>
         <p style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".1em", color: theme.accent,
           textTransform: "uppercase", margin: "0 0 .6rem", fontFamily: theme.fontFamily }}>
-          PREVIEW — こんな雰囲気になります
+          {isEnglish ? "PREVIEW — Here's the vibe" : "PREVIEW — こんな雰囲気になります"}
         </p>
         <p style={{ fontSize: "1rem", fontWeight: 800, color: theme.primary, margin: "0 0 .6rem",
           fontFamily: theme.fontFamily, letterSpacing: theme.letterSpacing,
@@ -1730,7 +1736,7 @@ export default function ApplyPage() {
                   <CharSummaryCard
                     gender={gender} relationship={relationship!} personality={personality}
                     persQuote={personality !== "other" ? copy.persQuotes[personality as Exclude<Personality,"other">] : persOther}
-                    theme={theme}
+                    theme={theme} isEnglish={isEnglishChar}
                   />
                   {relationship !== "other" && personality !== "other" && (
                     <div ref={previewRef}>
@@ -1738,7 +1744,7 @@ export default function ApplyPage() {
                         gender={gender} relationship={relationship!} personality={personality}
                         persQuote={copy.persQuotes[personality as Exclude<Personality,"other">]}
                         theme={theme} reduceMotion={reduceMotion} isMobile={isMobile}
-                        shimmerActive={shimmerActive}
+                        shimmerActive={shimmerActive} isEnglish={isEnglishChar}
                       />
                     </div>
                   )}
