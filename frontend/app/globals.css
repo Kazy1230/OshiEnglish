@@ -100,34 +100,10 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
 }
 
-/* ===== 透かし ===== */
-.watermark {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.watermark span {
-  transform: rotate(-30deg);
-  font-size: 5rem;
-  font-weight: 900;
-  color: rgba(46,64,87,0.04);
-  white-space: nowrap;
-  user-select: none;
-}
-:root.dark .watermark span {
-  color: rgba(255,255,255,0.05);
-}
-
 /* ===== 印刷スタイル ===== */
 @media print {
-  /* ヘッダー・サイドバー・透かし・ナビを非表示 */
+  /* ヘッダー・サイドバー・ナビを非表示 */
   header,
-  .watermark,
   aside,
   nav,
   footer,
