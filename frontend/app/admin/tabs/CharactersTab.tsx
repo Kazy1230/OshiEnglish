@@ -19,7 +19,7 @@ const FONT_STYLE_OPTIONS = [
   { value: "monospace",   label: "monospace　— クール・ロボット" },
 ];
 
-const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", instagram_account: "", is_preset: false, linked_customer_id: "" };
+const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", instagram_account: "", is_preset: false, linked_customer_id: "", gen_personality: "", gen_reference: "" };
 
 const GENERATION_BLOCKS: { key: string; label: string }[] = [
   { key: "DESCRIPTION", label: "説明文" },
@@ -29,6 +29,7 @@ const GENERATION_BLOCKS: { key: string; label: string }[] = [
   { key: "FONT_STYLE", label: "フォント" },
   { key: "REWARD_PROGRESS_TEMPLATE", label: "ご褒美の進捗メッセージ" },
   { key: "CHAT_FOOTER_NOTE", label: "入力欄下の注意書き" },
+  { key: "ARTICLE_SAMPLE", label: "サンプル記事" },
 ];
 const FONT_STYLE_VALUES = new Set(["default", "rounded", "serif", "handwriting", "monospace"]);
 
@@ -140,6 +141,8 @@ export function CharactersTab() {
     const prompt = buildCharacterGenerationPrompt({
       character_name: form.name,
       character_description: form.description,
+      user_requested_personality: form.gen_personality,
+      reference_character: form.gen_reference,
       blocks,
       existing,
     });
@@ -181,6 +184,8 @@ export function CharactersTab() {
       instagram_account: c.instagram_account ?? "",
       is_preset: !!c.is_preset,
       linked_customer_id: "",
+      gen_personality: "",
+      gen_reference: "",
     });
     try { setPreviewColors(c.color_scheme); } catch { setPreviewColors(null); }
     setToneProfileError(false);
@@ -284,20 +289,42 @@ export function CharactersTab() {
           <div className="rounded-xl border-2 p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>
-                🤖 LLMの出力を反映
+                🤖 LLMで生成・反映
               </p>
-              <button type="button"
-                className="text-xs px-2 py-1 rounded-lg border transition-all hover:shadow"
-                style={{ borderColor: "var(--border)", color: "var(--accent)" }}
-                onClick={() => setShowGenPanel(v => !v)}>
-                {showGenPanel ? "閉じる" : "開く"}
-              </button>
+              <div className="flex gap-2 flex-wrap">
+                <button type="button"
+                  className="text-xs px-2 py-1 rounded-lg font-bold transition-all hover:opacity-80"
+                  style={{ background: "var(--accent)", color: "white" }}
+                  onClick={() => copyGenPrompt(GENERATION_BLOCKS.map(b => b.key))}>
+                  📋 生成プロンプトをコピー
+                </button>
+                <button type="button"
+                  className="text-xs px-2 py-1 rounded-lg border transition-all hover:shadow"
+                  style={{ borderColor: "var(--border)", color: "var(--accent)" }}
+                  onClick={() => setShowGenPanel(v => !v)}>
+                  {showGenPanel ? "出力反映欄を閉じる" : "出力を反映する"}
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>希望のキャラクター設定（任意）</label>
+                <textarea rows={2} value={form.gen_personality}
+                  onChange={e => setForm({ ...form, gen_personality: e.target.value })}
+                  placeholder="例：ツンデレな先輩、実は優しい、語尾に「〜じゃん」を使う…" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>参考キャラクター（任意）</label>
+                <input value={form.gen_reference}
+                  onChange={e => setForm({ ...form, gen_reference: e.target.value })}
+                  placeholder="例：ハガレンのロイ・マスタング" />
+              </div>
             </div>
             {showGenPanel && (
               <>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  受注リストの「🤖 キャラ設計プロンプト生成」ボタンでコピーしたプロンプトをLLM（claude-sonnet-4-6）に
-                  貼り付けて実行し、その出力を下の欄に貼り付けて「反映」を押すと各入力欄に反映されます
+                  上の「📋 生成プロンプトをコピー」でプロンプトをコピーし、LLM（claude-sonnet-4-6）に貼り付けて実行してください。
+                  その出力を下の欄に貼り付けて「反映」を押すと各入力欄に反映されます
                   （保存はされません。内容を確認・編集してから「保存」を押してください）。
                   個別の項目だけ再生成したい場合は、各入力欄の下にある「↻ 再生成するプロンプトをコピー」ボタンを使ってください。
                 </p>
