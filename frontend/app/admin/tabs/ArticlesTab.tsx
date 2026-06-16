@@ -645,7 +645,11 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 {articleTemplates.map(t => (
                   <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
                     <span>📄 {t.topic}（{t.difficulty}）#{t.id}</span>
-                    <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteArticleTemplate(t.id)}>削除</button>
+                    <div className="flex items-center gap-1">
+                      <button className="btn-ghost text-xs px-2" title="プレビュー"
+                        onClick={() => setPreviewArticle({ article_type: "request", title: t.topic || "（未設定）", content: t.content, example_sentences: t.example_sentences ?? [], tips: t.tips })}>👁</button>
+                      <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteArticleTemplate(t.id)}>削除</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -696,7 +700,11 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   {filteredExerciseTemplates.map(t => (
                     <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
                       <span>🧩 {t.exercise_category}（{t.difficulty}・{(t.exercise_data?.questions ?? []).length}問）#{t.id}</span>
-                      <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteExerciseTemplate(t.id)}>削除</button>
+                      <div className="flex items-center gap-1">
+                        <button className="btn-ghost text-xs px-2" title="プレビュー"
+                          onClick={() => setPreviewArticle({ article_type: "exercise", title: t.exercise_category || "演習問題ストック", exercise_format: "multiple_choice", exercise_category: t.exercise_category, exercise_data: t.exercise_data, content: "" })}>👁</button>
+                        <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteExerciseTemplate(t.id)}>削除</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -741,7 +749,11 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 {templateArticleTemplates.map(t => (
                   <div key={t.id} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg" style={{ background: "var(--bg)" }}>
                     <span>📄 {t.topic || "（トピック未設定）"}（{t.difficulty}）#{t.id}</span>
-                    <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteTemplateArticleTemplate(t.id)}>削除</button>
+                    <div className="flex items-center gap-1">
+                      <button className="btn-ghost text-xs px-2" title="プレビュー"
+                        onClick={() => setPreviewArticle({ article_type: "request", title: t.topic || "（トピック未設定）", content: t.content, example_sentences: t.example_sentences ?? [], tips: t.tips })}>👁</button>
+                      <button className="text-xs px-2" style={{ color: "#c0392b" }} onClick={() => deleteTemplateArticleTemplate(t.id)}>削除</button>
+                    </div>
                   </div>
                 ))}
               </div>
