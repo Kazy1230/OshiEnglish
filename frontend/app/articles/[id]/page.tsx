@@ -196,10 +196,7 @@ export default function ArticlePage() {
 
   return (
     <div className="min-h-screen" style={{ background: t.bg, fontFamily: t.fontFamily, color: t.text }}>
-      {/* 透かし */}
-      <div className="watermark"><span style={{ color: t.primary }}>{me?.display_name || me?.username}</span></div>
-
-      {/* ヘッダー */}
+{/* ヘッダー */}
       <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center gap-4">
           <button onClick={() => router.push("/shelf")} aria-label="本棚に戻る"
