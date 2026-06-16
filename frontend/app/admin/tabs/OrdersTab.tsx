@@ -33,11 +33,14 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  useEffect(() => {
+  function loadData() {
+    setLoading(true);
     Promise.all([api.adminGetOrders(), api.adminGetCustomers()])
       .then(([o, c]) => { setOrders(o); setCustomers(c.filter((cu: any) => !cu.is_admin)); })
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   async function handleLinkCustomer(orderId: number, customerId: number | null) {
     try {
@@ -248,9 +251,16 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
         <div className="card mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-bold" style={{ color: "var(--primary)" }}>🔔 やることリスト</h3>
-            <span className="text-xs" style={{ color: "var(--muted)" }}>
-              対応が必要な受注: <b style={{ color: "var(--accent)" }}>{attentionCount}</b> 件 ／ タスク: <b style={{ color: "var(--accent)" }}>{tasks.length}</b> 件
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                対応が必要な受注: <b style={{ color: "var(--accent)" }}>{attentionCount}</b> 件 ／ タスク: <b style={{ color: "var(--accent)" }}>{tasks.length}</b> 件
+              </span>
+              <button type="button" onClick={loadData} disabled={loading}
+                className="text-xs px-2 py-0.5 rounded border"
+                style={{ borderColor: "var(--border)", color: "var(--muted)", background: "var(--bg)" }}>
+                🔄 更新
+              </button>
+            </div>
           </div>
           {tasks.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--muted)" }}>🎉 現在対応が必要なタスクはありません</p>

@@ -146,8 +146,8 @@ export default function RewardsPage() {
       <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/shelf")} aria-label="本棚へ戻る"
-              className="text-white/70 hover:text-white text-sm">← 本棚</button>
+            <button onClick={() => router.back()} aria-label="戻る"
+              className="text-white/70 hover:text-white text-sm">← 戻る</button>
             <h1 className="text-white font-black text-sm sm:text-base">🎁 ご褒美コレクション</h1>
           </div>
           <div className="flex items-center gap-2">

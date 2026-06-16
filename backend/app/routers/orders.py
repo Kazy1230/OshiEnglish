@@ -122,6 +122,7 @@ def list_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db))
     character_ids = {cid for cid in character_id_map.values() if cid}
     reward_configured_char_ids: set = set()
     welcome_configured_char_ids: set = set()
+    welcome_paged_customer_ids: set = set()
     if character_ids:
         reward_configured_char_ids = {
             cid for (cid,) in db.query(RewardItem.character_id).filter(RewardItem.character_id.in_(character_ids)).distinct().all()
@@ -130,6 +131,14 @@ def list_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db))
             cid for (cid,) in db.query(Article.template_character_id).filter(
                 Article.is_welcome_template == True,  # noqa: E712
                 Article.template_character_id.in_(character_ids),
+            ).distinct().all()
+        }
+    if customer_ids:
+        # 顧客個別のウェルカムページ（is_welcome_template=Falseだがarticle_type="welcome"）も完了扱いにする
+        welcome_paged_customer_ids = {
+            cid for (cid,) in db.query(Article.customer_id).filter(
+                Article.article_type == "welcome",
+                Article.customer_id.in_(customer_ids),
             ).distinct().all()
         }
     greeted_customer_ids: set = set()
@@ -153,7 +162,7 @@ def list_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db))
             bool(o.customer_id) and character_id is None,
             character_id,
             reward_loop_pending=is_character_order and (character_id is None or character_id not in reward_configured_char_ids),
-            welcome_page_pending=is_character_order and (character_id is None or character_id not in welcome_configured_char_ids),
+            welcome_page_pending=is_character_order and (character_id is None or character_id not in welcome_configured_char_ids) and o.customer_id not in welcome_paged_customer_ids,
             greeting_dm_pending=is_character_order and o.customer_id not in greeted_customer_ids,
         ))
     return result
