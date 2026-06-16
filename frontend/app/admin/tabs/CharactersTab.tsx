@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { PromptPreviewModal } from "@/components/PromptPreviewModal";
 import { DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE } from "@/lib/theme";
 import {
   buildLLMPrompt,
@@ -48,6 +49,8 @@ export function CharactersTab() {
   const [genPasteText, setGenPasteText] = useState("");
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
   const [promptCustomerIdByChar, setPromptCustomerIdByChar] = useState<Record<number, string>>({});
+  // プロンプトプレビュー・編集モーダル
+  const [promptPreview, setPromptPreview] = useState<{ title: string; text: string } | null>(null);
 
   function toggleExpanded(id: number) {
     setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
@@ -131,8 +134,8 @@ export function CharactersTab() {
       blocks,
       existing,
     });
-    navigator.clipboard.writeText(prompt);
-    toast(`${blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・")}用のプロンプトをコピーしました。LLMに貼り付けて実行し、出力を下の欄に貼り付けて「反映」を押してください`, "success");
+    const blockLabels = blocks.map(b => GENERATION_BLOCKS.find(g => g.key === b)?.label ?? b).join("・");
+    setPromptPreview({ title: `キャラクター生成プロンプト（${blockLabels}）`, text: prompt });
   }
 
   /** 「反映」ボタン：貼り付けられたLLMの出力（7ブロック形式）をパースして各入力欄に反映する */
@@ -536,9 +539,7 @@ export function CharactersTab() {
                             const cu = promptCustomerIdByChar[c.id] ? customers.find(cs => String(cs.id) === promptCustomerIdByChar[c.id]) : undefined;
                             const topic = window.prompt("今回依頼された文法トピックを入力してください（空欄でもOK）", "") || undefined;
                             const prompt = buildLLMPrompt(c, topic, cu);
-                            navigator.clipboard.writeText(prompt);
-                            const lvMsg = cu?.intimacy ? `💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」を反映` : "汎用プロンプト";
-                            toast(`LLMプロンプトをコピーしました — ${lvMsg}`, "success");
+                            setPromptPreview({ title: `「${c.name}」LLMプロンプト`, text: prompt });
                           }}>
                           📋 LLMプロンプトをコピー
                           {promptCustomerIdByChar[c.id] && (() => {
@@ -600,6 +601,13 @@ export function CharactersTab() {
           );
         })}
       </div>
+      {promptPreview && (
+        <PromptPreviewModal
+          title={promptPreview.title}
+          promptText={promptPreview.text}
+          onClose={() => setPromptPreview(null)}
+        />
+      )}
     </div>
   );
 }

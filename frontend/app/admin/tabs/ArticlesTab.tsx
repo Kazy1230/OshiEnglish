@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { ArticlePreviewModal } from "@/components/ArticlePreviewModal";
+import { PromptPreviewModal } from "@/components/PromptPreviewModal";
 import {
   parseExerciseJsonInput,
   summarizeExerciseData,
@@ -168,6 +169,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
 
   // 記事管理：15カテゴリのうちどれを表示しているか
   const [selectedCategory, setSelectedCategory] = useState("request");
+  // プロンプトプレビュー・編集モーダル
+  const [promptPreview, setPromptPreview] = useState<{ title: string; text: string } | null>(null);
 
   const reload = () => Promise.all([api.adminGetArticles(), api.adminGetCustomers(), api.adminGetCharacters(), api.adminGetGrammarMasters(), api.adminListArticleTemplates(), api.adminListExerciseTemplates(), api.adminListTemplateArticleTemplates()])
     .then(([a, c, ch, g, at, et, tat]) => { setArticles(a); setCustomers(c); setCharacters(ch); setGrammars(g); setArticleTemplates(at); setExerciseTemplates(et); setTemplateArticleTemplates(tat); });
@@ -627,8 +630,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
               style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--card-bg, #fff)" }}
               onClick={() => {
-                navigator.clipboard.writeText(buildEducationalArticlePrompt(stockTopic.trim() || undefined, stockDifficulty));
-                toast("第1段階（素材記事生成）プロンプトをコピーしました", "success");
+                setPromptPreview({ title: "第1段階プロンプト（素材記事生成）", text: buildEducationalArticlePrompt(stockTopic.trim() || undefined, stockDifficulty) });
               }}>
               📋 第1段階プロンプトをコピー
             </button>
@@ -678,8 +680,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
                 style={{ borderColor: "#7b5cff", color: "#7b5cff", background: "var(--card-bg, #fff)" }}
                 onClick={() => {
-                  navigator.clipboard.writeText(buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined));
-                  toast("第1段階（問題本体生成）プロンプトをコピーしました", "success");
+                  setPromptPreview({ title: "第1段階プロンプト（問題本体生成）", text: buildExerciseBodyPrompt(exStockCategory.trim() || undefined, exStockDifficulty, exStockTopic.trim() || undefined) });
                 }}>
                 📋 第1段階プロンプトをコピー
               </button>
@@ -725,8 +726,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               className="text-xs font-bold py-2 px-3 rounded-xl border-2 transition-all hover:opacity-80 self-start"
               style={{ borderColor: "#8e44ad", color: "#8e44ad", background: "var(--card-bg, #fff)" }}
               onClick={() => {
-                navigator.clipboard.writeText(buildTemplateMaterialPrompt(templateStockTopic.trim() || undefined, templateStockDifficulty));
-                toast("第1段階（定期便素材生成）プロンプトをコピーしました", "success");
+                setPromptPreview({ title: "第1段階プロンプト（定期便素材生成）", text: buildTemplateMaterialPrompt(templateStockTopic.trim() || undefined, templateStockDifficulty) });
               }}>
               📋 第1段階プロンプトをコピー
             </button>
@@ -770,14 +770,13 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 const c = characters.find(ch => String(ch.id) === templateAdaptCharacterId);
                 const template = templateArticleTemplates.find(t => String(t.id) === selectedTemplateStockId);
                 if (!c || !template) { toast("キャラクターと定期便ストックを選択してください", "error"); return; }
-                navigator.clipboard.writeText(buildTemplateAdaptationPrompt(
+                setPromptPreview({ title: "第2段階プロンプト（定期便キャラ適応）", text: buildTemplateAdaptationPrompt(
                   c,
                   template.content,
                   (template.example_sentences ?? []).join("\n"),
                   (template.tips ?? []).join("\n"),
                   template.topic ?? undefined,
-                ));
-                toast("第2段階（キャラ適応）プロンプトをコピーしました", "success");
+                ) });
               }}>
               📋 第2段階プロンプトをコピー
               {(!templateAdaptCharacterId || !selectedTemplateStockId) && "（先にキャラクターとストックを選択）"}
@@ -870,9 +869,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
                     const cu = blogPromptCustomerId ? customers.find(cs => String(cs.id) === blogPromptCustomerId) : undefined;
                     const theme = window.prompt("今回のブログのテーマ・お題を入力してください（空欄でもOK）", "") || undefined;
-                    navigator.clipboard.writeText(buildBlogLLMPrompt(c, theme, cu));
-                    const lvMsg = cu?.intimacy ? `💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」の距離感を反映` : "汎用プロンプトをコピー";
-                    toast(`ブログ用LLMプロンプトをコピーしました — ${lvMsg}`, "success");
+                    setPromptPreview({ title: "ブログ用LLMプロンプト", text: buildBlogLLMPrompt(c, theme, cu) });
                   }}>
                   📋 ブログ用LLMプロンプトをコピー
                   {!form.character_id
@@ -913,9 +910,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     const cu = form.customer_id ? customers.find(cs => String(cs.id) === String(form.customer_id)) : undefined;
                     if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
                     const topic = window.prompt("追加で指定したいトピック・希望があれば入力してください（空欄でもOK）", "") || undefined;
-                    navigator.clipboard.writeText(buildExercisePrompt(c, form.exercise_format as any, form.exercise_category || undefined, topic, cu));
-                    const lvLabel = cu?.intimacy ? `💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」を反映` : "（顧客を選択すると親密度も反映されます）";
-                    toast(`演習問題作成用LLMプロンプトをコピーしました — ${lvLabel}`, "success");
+                    setPromptPreview({ title: "演習問題作成用LLMプロンプト", text: buildExercisePrompt(c, form.exercise_format as any, form.exercise_category || undefined, topic, cu) });
                   }}>
                   📋 演習問題作成用LLMプロンプトをコピー
                   {!form.character_id
@@ -944,8 +939,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                         const cu = form.customer_id ? customers.find(cs => String(cs.id) === String(form.customer_id)) : undefined;
                         const template = exerciseTemplates.find(t => String(t.id) === selectedExerciseTemplateId);
                         if (!c || !template) { toast("キャラクターと問題本体ストックを選択してください", "error"); return; }
-                        navigator.clipboard.writeText(buildExerciseAdaptationPrompt(c, cu, template.exercise_data, template.exercise_category));
-                        toast("第2段階（キャラ適応）プロンプトをコピーしました", "success");
+                        setPromptPreview({ title: "第2段階プロンプト（演習キャラ適応）", text: buildExerciseAdaptationPrompt(c, cu, template.exercise_data, template.exercise_category) });
                       }}>
                       📋 第2段階プロンプトをコピー
                       {(!form.character_id || !selectedExerciseTemplateId) && "（先にキャラクターとストックを選択）"}
@@ -1093,10 +1087,8 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     const promptText = form.article_type === "writing_feedback"
                       ? buildWritingFeedbackPrompt(c, cu, originalPrompt, submission)
                       : buildSpeakingFeedbackPrompt(c, cu, originalPrompt, submission);
-                    navigator.clipboard.writeText(promptText);
                     const typeLabel = form.article_type === "writing_feedback" ? "ライティングFB" : "スピーキングFB";
-                    const lvLabel = cu?.intimacy ? `💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」を反映` : "（顧客を選択すると親密度も反映されます）";
-                    toast(`${typeLabel}用LLMプロンプトをコピーしました — ${lvLabel}`, "success");
+                    setPromptPreview({ title: `${typeLabel}用LLMプロンプト`, text: promptText });
                   }}>
                   📋 {form.article_type === "writing_feedback" ? "ライティングFB" : "スピーキングFB"}用LLMプロンプトをコピー
                   {!form.character_id
@@ -1180,8 +1172,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   style={{ borderColor: "var(--border)", color: "var(--accent)" }}
                   onClick={() => {
                     const char = characters.find(c => String(c.id) === form.template_character_id);
-                    navigator.clipboard.writeText(buildWelcomePagePrompt(char));
-                    toast(char ? `「${char.name}」向けウェルカムページ作成プロンプトをコピーしました` : "汎用ウェルカムページ作成プロンプトをコピーしました", "success");
+                    setPromptPreview({ title: char ? `「${char.name}」向けウェルカムページ作成プロンプト` : "汎用ウェルカムページ作成プロンプト", text: buildWelcomePagePrompt(char) });
                   }}>
                   📋 ウェルカムページ作成プロンプトをコピー
                 </button>
@@ -1238,8 +1229,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   const c = characters.find(ch => String(ch.id) === String(form.character_id));
                   if (!c) { toast("先にキャラクターを選択してください", "error"); return; }
                   const topic = window.prompt("今回取り上げたいテーマ・表現があれば入力してください（空欄でもOK）", "") || undefined;
-                  navigator.clipboard.writeText(buildTemplateArticlePrompt(c, topic));
-                  toast("定期便用LLMプロンプトをコピーしました", "success");
+                  setPromptPreview({ title: "定期便用LLMプロンプト", text: buildTemplateArticlePrompt(c, topic) });
                 }}>
                 📋 定期便用LLMプロンプトをコピー
                 {!form.character_id && "（先にキャラクターを選択）"}
@@ -1326,9 +1316,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     const topic = window.prompt("今回依頼された文法トピックを入力してください（空欄でもOK）", "") || undefined;
                     let progress: any = null;
                     try { progress = await api.adminGetCustomerProgress(cu.id); } catch { /* 進捗データが取得できなくても続行 */ }
-                    navigator.clipboard.writeText(buildPersonalizedLLMPrompt(c, cu, topic, progress));
-                    const lvLabel = cu.intimacy ? `Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : "";
-                    toast(`「${getCustomerDisplayName(cu)}さん」専用プロンプトをコピーしました（${lvLabel}・覚えているメモ・進捗を反映）`, "success");
+                    setPromptPreview({ title: `「${getCustomerDisplayName(cu)}さん」専用パーソナライズLLMプロンプト`, text: buildPersonalizedLLMPrompt(c, cu, topic, progress) });
                   }}>
                   🎁 この生徒専用のパーソナライズLLMプロンプトをコピー
                   {(!form.character_id || !form.customer_id)
@@ -1359,8 +1347,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                       const cu = customers.find(cs => String(cs.id) === String(form.customer_id));
                       const template = articleTemplates.find(t => String(t.id) === selectedArticleTemplateId);
                       if (!c || !template) { toast("キャラクターと教育記事ストックを選択してください", "error"); return; }
-                      navigator.clipboard.writeText(buildArticleAdaptationPrompt(c, cu, template.content, template.topic));
-                      toast("第2段階（キャラ適応）プロンプトをコピーしました", "success");
+                      setPromptPreview({ title: "第2段階プロンプト（依頼記事キャラ適応）", text: buildArticleAdaptationPrompt(c, cu, template.content, template.topic) });
                     }}>
                     📋 第2段階プロンプトをコピー
                     {(!form.character_id || !selectedArticleTemplateId) && "（先にキャラクターとストックを選択）"}
@@ -1568,6 +1555,13 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
           article={previewArticle}
           character={characters.find(c => c.id === previewArticle.character_id) ?? null}
           onClose={() => setPreviewArticle(null)}
+        />
+      )}
+      {promptPreview && (
+        <PromptPreviewModal
+          title={promptPreview.title}
+          promptText={promptPreview.text}
+          onClose={() => setPromptPreview(null)}
         />
       )}
     </div>
