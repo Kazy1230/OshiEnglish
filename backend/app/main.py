@@ -577,6 +577,34 @@ def _seed_welcome_articles():
 
 _seed_welcome_articles()
 
+
+def _ensure_preset_characters():
+    """公式キャラクター（is_preset=True）が Characters テーブルに存在することを保証する。
+    seed.py は手動実行のため、新しい公式キャラ追加時にここへ追記することで
+    本番起動時に自動で挿入・更新される。既存レコードの name/is_preset のみ保証する。
+    """
+    from app.models.character import Character
+    presets = [
+        {"name": "白河雪菜"},
+        {"name": "蒼井零"},
+        {"name": "Chloe"},
+        {"name": "Frederick"},
+    ]
+    db = SessionLocal()
+    try:
+        for p in presets:
+            char = db.query(Character).filter(Character.name == p["name"]).first()
+            if char is None:
+                db.add(Character(name=p["name"], is_preset=True))
+            elif not char.is_preset:
+                char.is_preset = True
+        db.commit()
+    finally:
+        db.close()
+
+
+_ensure_preset_characters()
+
 app = FastAPI(
     title="推しEnglish API",
     description="キャラクター英文法解説サービス バックエンドAPI",
