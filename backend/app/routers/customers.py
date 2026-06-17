@@ -16,6 +16,9 @@ from app.models.correction_request import CorrectionRequest
 from app.models.reward import CustomerReward
 from app.models.order import Order
 from app.models.credit_transaction import CreditTransaction
+from app.models.exercise_submission import ExerciseSubmission
+from app.models.message_feedback import MessageFeedback
+from app.models.preview_example import PreviewExample
 from app.core.intimacy import intimacy_info
 from app.core.credentials import generate_temp_password
 from app.core.email import send_email
@@ -306,6 +309,9 @@ def _delete_customer_and_related_data(db: Session, customer: Customer) -> None:
     customer_id = customer.id
 
     db.query(CreditTransaction).filter(CreditTransaction.customer_id == customer_id).delete(synchronize_session=False)
+    db.query(ExerciseSubmission).filter(ExerciseSubmission.customer_id == customer_id).delete(synchronize_session=False)
+    db.query(MessageFeedback).filter(MessageFeedback.customer_id == customer_id).delete(synchronize_session=False)
+    db.query(PreviewExample).filter(PreviewExample.customer_id == customer_id).delete(synchronize_session=False)
     db.query(Message).filter(Message.customer_id == customer_id).delete(synchronize_session=False)
     db.query(AccessLog).filter(AccessLog.customer_id == customer_id).delete(synchronize_session=False)
     db.query(CustomerReward).filter(CustomerReward.customer_id == customer_id).delete(synchronize_session=False)
