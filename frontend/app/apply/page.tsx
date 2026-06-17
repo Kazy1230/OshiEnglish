@@ -123,7 +123,7 @@ interface PresetCharacter {
 const PRESET_CHARACTERS: PresetCharacter[] = [
   {
     id: "yukina", name: "白河雪菜", reading: "しらかわ ゆきな",
-    gender: "female", relationship: "senpai", personality: "tsundere",
+    gender: "female", relationship: "senpai", personality: "strict",
     personalityLabel: "ソフトSM",
     level: "日常会話",
     hobby: "映画鑑賞・音楽鑑賞",
@@ -138,7 +138,7 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
   },
   {
     id: "rei", name: "蒼井零", reading: "あおい れい",
-    gender: "male", relationship: "kohai", personality: "cool",
+    gender: "male", relationship: "kohai", personality: "strict",
     personalityLabel: "ソフトSM",
     level: "ビジネス英語",
     hobby: "読書・天文",
