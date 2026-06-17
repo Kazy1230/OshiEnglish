@@ -86,7 +86,7 @@ const RELATIONSHIP_STYLE: Record<Relationship, Partial<ThemeVars>> = {
 
 const PERSONALITY_DETAIL: Record<Personality, Partial<ThemeVars>> = {
   gentle:   { radius: "30px", inputRadius: "22px", tagline: "一緒に、やさしく丁寧に進めていこう。", submitLabel: "よろしくお願いします 🌸", cardShadow: "0 6px 32px rgba(244,114,182,0.22)", heroPaddingV: "4.5rem 1.5rem 5.5rem", blobOpacity: 0.6 },
-  strict:   { radius: "4px", inputRadius: "2px", tagline: "結果を出したいなら、甘えは禁物だ。", submitLabel: "申し込む", letterSpacing: "0.07em", fontWeight: "600", cardShadow: "none", heroPaddingV: "2.5rem 1.5rem 3rem", blobOpacity: 0.25 },
+  strict:   { radius: "4px", inputRadius: "2px", tagline: "言われた通りにしなさい。甘えは、許さない。", submitLabel: "申し込む", letterSpacing: "0.07em", fontWeight: "600", cardShadow: "none", heroPaddingV: "2.5rem 1.5rem 3rem", blobOpacity: 0.25 },
   cool:     { bg: "#191c25", card: "#21252f", primary: "#7ba8d8", accent: "#3fc5b8", accentLight: "#1a3535", border: "#343840", text: "#e2e4ea", muted: "#9a9ea8", gradA: "#0f1117", gradB: "#1e2a38", radius: "6px", inputRadius: "4px", fontWeight: "300", tagline: "……始めるの？", submitLabel: "送信する", isDark: true, cardShadow: "0 4px 24px rgba(0,0,0,0.45)", heroPaddingV: "2.8rem 1.5rem 3.2rem", blobOpacity: 0.3 },
   energetic:{ radius: "30px", inputRadius: "22px", tagline: "やる気MAX！一緒にがんばろー！🎉", submitLabel: "申し込む！！ 🔥", cardShadow: "0 6px 28px rgba(251,146,60,0.2)", heroPaddingV: "5rem 1.5rem 6rem", blobOpacity: 0.65 },
   tsundere: { tagline: "べ、べつにあなたのためじゃないけど……申し込むなら受け付けてあげる。", submitLabel: "申し込む（べつに何でもないけど）", cardShadow: "0 4px 20px rgba(251,191,36,0.18)", heroPaddingV: "3.5rem 1.5rem 4rem" },
@@ -104,7 +104,7 @@ function buildTheme(g: Gender | null, r: Relationship | null, p: Personality | n
 // ─── 共通ラベル ──────────────────────────────────────────────────────────────
 
 const REL_LABEL:  Record<Relationship, string> = { teacher: "先生", senpai: "先輩", kohai: "後輩", other: "その他" };
-const PERS_LABEL: Record<Personality, string>  = { gentle: "優しい", strict: "厳しい", cool: "クール", energetic: "元気・明るい", tsundere: "ツンデレ", other: "その他" };
+const PERS_LABEL: Record<Personality, string>  = { gentle: "優しい", strict: "ソフトSM", cool: "クール", energetic: "元気・明るい", tsundere: "ツンデレ", other: "その他" };
 
 // ─── 推しEnglish プリセットキャラクター ──────────────────────────────────────
 
@@ -124,9 +124,10 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
   {
     id: "yukina", name: "白河雪菜", reading: "しらかわ ゆきな",
     gender: "female", relationship: "senpai", personality: "tsundere",
+    personalityLabel: "ソフトSM",
     level: "日常会話",
     hobby: "映画鑑賞・音楽鑑賞",
-    quote: "「べ、別にあなたのために教えてるわけじゃないですから」",
+    quote: "「全問正解するまで、帰しませんから」",
     instagram: "https://www.instagram.com/shirakawa_yukina._.a",
     // ピンク・紫・白系
     themeOverride: {
@@ -138,9 +139,10 @@ const PRESET_CHARACTERS: PresetCharacter[] = [
   {
     id: "rei", name: "蒼井零", reading: "あおい れい",
     gender: "male", relationship: "kohai", personality: "cool",
+    personalityLabel: "ソフトSM",
     level: "ビジネス英語",
     hobby: "読書・天文",
-    quote: "「……先輩のことは、まあ、認めてますよ」",
+    quote: "「……先輩は、僕から逃げられませんよ」",
     instagram: "https://www.instagram.com/aoi_rei_rei_aoi",
     // 青・黒・グレー系
     themeOverride: {
@@ -237,7 +239,7 @@ function getDynamicCopy(g: Gender | null, r: Relationship | null): DynamicCopy {
 
   const persQuotes: Record<Exclude<Personality, "other">, string> = {
     gentle:   rk === "kohai" ? ({ male: "「先輩！一緒に頑張りましょう！」", female: "「先輩、私も頑張ります♪」", any: "「先輩、一緒に頑張りましょう！」" })[gk] : ({ male: "「焦らなくていい。ゆっくりやろう」", female: "「大丈夫、一緒に頑張ろうね♪」", any: "「大丈夫、一緒に頑張ろう」" })[gk],
-    strict:   rk === "kohai" ? ({ male: "「先輩！僕、絶対上達します！」", female: "「先輩に認めてもらえるよう頑張ります！」", any: "「先輩に認めてもらえるよう頑張ります！」" })[gk] : ({ male: "「甘えは禁物。でも実力はつけてやる」", female: "「甘えは許さないわよ。でも結果は出してあげる」", any: "「甘えは禁物。でも実力はつく」" })[gk],
+    strict:   rk === "kohai" ? ({ male: "「先輩……逃がしませんよ？」", female: "「全問正解するまで帰しません。わかった？」", any: "「逃げることは、許しませんよ」" })[gk] : ({ male: "「甘えは許さない。全部、言う通りにしろ」", female: "「甘えは許さないわよ。言われた通りにしなさい」", any: "「甘えは許さない。言われた通りにしなさい」" })[gk],
     cool:     rk === "kohai" ? ({ male: "「……先輩のことは、まあ、認めてますよ」", female: "「……先輩だから、ついてきてあげてもいいです」", any: "「……先輩のことは特別だと思ってます」" })[gk] : ({ male: "「……まあ、付き合ってやるよ」", female: "「……別に教えてあげてもいいけど」", any: "「……始めるの？」" })[gk],
     energetic:rk === "kohai" ? ({ male: "「先輩！絶対一緒に上達しましょう🔥」", female: "「先輩先輩！一緒にやりましょーっ🌟」", any: "「先輩！絶対一緒に上達できます🎉」" })[gk] : ({ male: "「やろうぜ！一緒に上り詰めようぜ🔥」", female: "「絶対できる！一緒にがんばろー！🌟」", any: "「絶対できる！一緒にやろー！」" })[gk],
     tsundere: rk === "kohai" ? ({ male: "「べ、別に先輩のためじゃないですから！」", female: "「先輩のためじゃなく自分のためです！勘違いしないでください！」", any: "「別に先輩だから特別扱いしてるわけじゃ…」" })[gk] : ({ male: "「お、お前のために言ってるんじゃないからな！」", female: "「べ、べつにあなたのためじゃないし！」", any: "「べ、別に心配してるわけじゃ…」" })[gk],
@@ -812,8 +814,8 @@ function CharSummaryCard({ gender, relationship, personality, persQuote, theme, 
     ? { teacher: "📚 Teacher", senpai: "🌟 Senpai", kohai: "🌸 Kohai", other: "✨ Other" }
     : { teacher: "📚 先生", senpai: "🌟 先輩", kohai: "🌸 後輩", other: "✨ その他" };
   const PL: Record<Personality, string>  = isEnglish
-    ? { gentle: "🌸 Gentle", strict: "⚡ Strict", cool: "❄️ Cool", energetic: "🔥 Energetic", tsundere: "💢 Tsundere", other: "✨ Other" }
-    : { gentle: "🌸 優しい", strict: "⚡ 厳しい", cool: "❄️ クール", energetic: "🔥 元気", tsundere: "💢 ツンデレ", other: "✨ その他" };
+    ? { gentle: "🌸 Gentle", strict: "⚡ Soft SM", cool: "❄️ Cool", energetic: "🔥 Energetic", tsundere: "💢 Tsundere", other: "✨ Other" }
+    : { gentle: "🌸 優しい", strict: "⚡ ソフトSM", cool: "❄️ クール", energetic: "🔥 元気", tsundere: "💢 ツンデレ", other: "✨ その他" };
 
   return (
     <div className="yt-slide-up" style={{
@@ -997,7 +999,7 @@ function NextStepsCard({ theme, gender, relationship, personality, charChoice, p
     const found = hit(STEP3);
     if (found) return found;
     if (pk === "gentle")    return "毎日やさしくサポートしてもらいながら英語を続けましょう 🌸";
-    if (pk === "strict")    return "毎日アプリのメッセージで厳しく鍛えてもらおう。甘えは禁物！⚡";
+    if (pk === "strict")    return "毎日アプリのメッセージで支配系キャラに追い込んでもらおう。逃げは許されない⚡";
     if (pk === "cool")      return "毎日『……今日の課題』。短く的確なメッセージがアプリに届きます ❄️";
     if (pk === "energetic") return "毎日元気なメッセージと英語でテンション爆上がり！🔥";
     if (pk === "tsundere")  return "毎日『べ、別にあなたのためじゃないけど…』というメッセージがアプリに届きます 💢";
@@ -1161,7 +1163,7 @@ export default function ApplyPage() {
     setSubmitting(true); setError("");
     const GL: Record<Gender, string>       = { male: "男性", female: "女性", any: "どちらでもOK" };
     const RL: Record<Relationship, string> = { teacher: "先生", senpai: "先輩", kohai: "後輩", other: relOther };
-    const PL: Record<Personality, string>  = { gentle: "優しい", strict: "厳しい", cool: "クール", energetic: "元気・明るい", tsundere: "ツンデレ", other: persOther };
+    const PL: Record<Personality, string>  = { gentle: "優しい", strict: "ソフトSM", cool: "クール", energetic: "元気・明るい", tsundere: "ツンデレ", other: persOther };
     let charName = ""; const nl: string[] = [];
     if (charChoice === "builder" && gender && relationship && personality) {
       charName = `[ビルダー] ${GL[gender]}/${RL[relationship]}/${PL[personality]}`;
@@ -1331,7 +1333,7 @@ export default function ApplyPage() {
           <div style={{ marginTop: "1.3rem", display: "flex", justifyContent: "center", flexWrap: "wrap", gap: ".4rem" }}>
             {gender     && <span style={{ background: "rgba(255,255,255,.18)", backdropFilter: "blur(8px)", color: "#fff", fontSize: ".74rem", padding: ".25rem .7rem", borderRadius: "999px", fontFamily: theme.fontFamily }}>{{ male:"♂ 男性", female:"♀ 女性", any:"☯ どちらでも" }[gender]}</span>}
             {relationship && <span style={{ background: "rgba(255,255,255,.18)", backdropFilter: "blur(8px)", color: "#fff", fontSize: ".74rem", padding: ".25rem .7rem", borderRadius: "999px", fontFamily: theme.fontFamily }}>{{ teacher:"📚 先生", senpai:"🌟 先輩", kohai:"🌸 後輩", other:"✨ その他" }[relationship]}</span>}
-            {personality  && <span style={{ background: "rgba(255,255,255,.18)", backdropFilter: "blur(8px)", color: "#fff", fontSize: ".74rem", padding: ".25rem .7rem", borderRadius: "999px", fontFamily: theme.fontFamily }}>{{ gentle:"🌸 優しい", strict:"⚡ 厳しい", cool:"❄️ クール", energetic:"🔥 元気", tsundere:"💢 ツンデレ", other:"✨ その他" }[personality]}</span>}
+            {personality  && <span style={{ background: "rgba(255,255,255,.18)", backdropFilter: "blur(8px)", color: "#fff", fontSize: ".74rem", padding: ".25rem .7rem", borderRadius: "999px", fontFamily: theme.fontFamily }}>{{ gentle:"🌸 優しい", strict:"⚡ ソフトSM", cool:"❄️ クール", energetic:"🔥 元気", tsundere:"💢 ツンデレ", other:"✨ その他" }[personality]}</span>}
           </div>
         )}
       </div>
@@ -1619,13 +1621,13 @@ export default function ApplyPage() {
                           </div>
                         </div>
 
-                        {/* 厳しい */}
+                        {/* ソフトSM */}
                         <div className="yt-card pc-strict yt-pop d2" onClick={() => handlePersSelect("strict")}
                           style={{ borderColor: personality==="strict"?"#71717a":undefined, padding:"1.1rem", position:"relative" }}>
                           {personality==="strict" && <span className="yt-check" style={{position:"absolute",top:".4rem",right:".5rem",color:"#a1a1aa"}}>✓</span>}
                           <div style={{ textAlign:"center" }}>
                             <span style={{fontSize:"1.8rem"}}>⚡</span>
-                            <p style={{fontWeight:800,fontSize:".92rem",color:"#e4e4e7",margin:".3rem 0 .4rem",letterSpacing:".06em"}}>厳しい</p>
+                            <p style={{fontWeight:800,fontSize:".92rem",color:"#e4e4e7",margin:".3rem 0 .4rem",letterSpacing:".06em"}}>ソフトSM</p>
                             <p style={{fontSize:".82rem",color:"#a1a1aa",lineHeight:1.55,margin:0}}>{copy.persQuotes.strict}</p>
                           </div>
                         </div>
