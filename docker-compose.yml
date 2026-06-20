@@ -20,6 +20,7 @@ services:
     container_name: yt_frontend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost/api
+      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -40,7 +40,7 @@ def seed():
             admin = Customer(
                 username="admin",
                 hashed_password=hash_password("Admin1234!"),
-                is_admin=True,
+                role="admin",
                 is_password_reset_required=False,
                 is_active=True,
             )
@@ -195,7 +195,6 @@ def seed():
             },
             font_style="rounded",
             instagram_account="shirakawa_yukina._.a",
-            is_preset=True,
         )
 
         char4 = upsert_character(
@@ -272,7 +271,6 @@ def seed():
             },
             font_style="serif",
             instagram_account="aoi_rei_rei_aoi",
-            is_preset=True,
         )
 
         char5 = upsert_character(
@@ -348,7 +346,6 @@ def seed():
                 "example_bg": "#fef3c7", "tips_bg": "#ffedd5",
             },
             font_style="rounded",
-            is_preset=True,
         )
 
         char6 = upsert_character(
@@ -424,7 +421,6 @@ def seed():
                 "example_bg": "#1e2a3d", "tips_bg": "#1e293b",
             },
             font_style="serif",
-            is_preset=True,
         )
 
         # ===== 公式キャラ限定 隠しセリフ =====
@@ -471,7 +467,7 @@ def seed():
                 upsert_line_reward(char, "article_count", i, text, official_only=True)
 
         # ===== 「最初の1つ無料」ウェルカム記事テンプレート =====
-        # 公式キャラ（is_preset=True）は専用テンプレート、それ以外（キャラクタービルダー使用）は
+        # 公式キャラは専用テンプレート、それ以外（キャラクタービルダー使用）は
         # 汎用テンプレート（template_character_id=NULL）を本棚の最初の記事としてコピーする。
         def upsert_welcome_template(template_character_id, character_id, title, content, tips, example_sentences):
             query = db.query(Article).filter(Article.is_welcome_template == True)  # noqa: E712

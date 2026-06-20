@@ -18,8 +18,10 @@ from app.core.welcome_articles import claim_welcome_article_for_customer
 from app.models.order import Order
 from app.models.customer import Customer
 from app.models.character import Character
-from app.models.credit_transaction import CreditTransaction
-from app.core.credits import grant_credits
+from app.models.course import Course
+from app.models.lesson import Lesson
+from app.models.purchase import Purchase
+from app.models.lesson_progress import LessonProgress
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,11 @@ router = APIRouter(prefix="/payments", tags=["決済（Stripe）"])
 
 def _stripe_configured() -> bool:
     return bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_PRICE_ID)
+
+
+def _stripe_key_configured() -> bool:
+    """コース購入(PaymentIntent方式)はSTRIPE_PRICE_IDを使わないため、SECRET_KEYのみで判定する"""
+    return bool(settings.STRIPE_SECRET_KEY)
 
 
 def _get_stripe():
@@ -41,63 +48,16 @@ class CreateCheckoutSessionRequest(BaseModel):
     order_id: int
 
 
-class CreditCheckoutSessionRequest(BaseModel):
-    credits: int
-
-
-@router.post("/credits/checkout-session")
-def create_credit_checkout_session(
-    data: CreditCheckoutSessionRequest,
-    current_user: Customer = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """ログイン中の顧客がクレジットを購入するためのStripe Checkoutセッションを発行する。
-
-    クレジットは1クレジット=1円・500クレジット単位でのみ購入できる。
-    """
-    if data.credits <= 0 or data.credits % 500 != 0:
-        raise HTTPException(status_code=400, detail="クレジットは500単位で指定してください")
-
-    if not _stripe_configured():
-        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
-
-    stripe = _get_stripe()
-    try:
-        session = stripe.checkout.Session.create(
-            mode="payment",
-            line_items=[{
-                "price_data": {
-                    "currency": "jpy",
-                    "product_data": {"name": f"クレジット {data.credits}"},
-                    "unit_amount": data.credits,
-                },
-                "quantity": 1,
-            }],
-            customer_email=current_user.email or None,
-            invoice_creation={"enabled": True},
-            success_url=f"{settings.FRONTEND_URL}/credits?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{settings.FRONTEND_URL}/credits",
-            metadata={
-                "type": "credit_purchase",
-                "customer_id": str(current_user.id),
-                "credits": str(data.credits),
-            },
-        )
-    except Exception as e:
-        logger.exception("[Stripe] クレジット購入用Checkout Sessionの作成に失敗しました")
-        raise HTTPException(status_code=502, detail="決済画面の作成に失敗しました") from e
-
-    return {"checkout_url": session.url}
+# 旧is_presetフラグ廃止に伴う暫定対応: キャラ作成費用が無料の「公式キャラ」は
+# 名前で判定する（マーケットプレイス化に伴うキャラ所有権の再設計はStep3で行う）。
+_FREE_OFFICIAL_CHARACTER_NAMES = {"白河雪菜", "蒼井零", "Chloe", "Frederick"}
 
 
 def _get_preset_character(db: Session, order: Order):
-    """注文のキャラクター選択が公式キャラ（is_preset）に一致する場合、そのCharacterを返す"""
-    if not order.character_name:
+    """注文のキャラクター選択が無料の公式キャラに一致する場合、そのCharacterを返す"""
+    if not order.character_name or order.character_name not in _FREE_OFFICIAL_CHARACTER_NAMES:
         return None
-    return db.query(Character).filter(
-        Character.is_preset == True,  # noqa: E712
-        Character.name == order.character_name,
-    ).first()
+    return db.query(Character).filter(Character.name == order.character_name).first()
 
 
 @router.post("/create-checkout-session", tags=["公開フォーム"])
@@ -179,9 +139,7 @@ def _issue_account(db: Session, order: Order):
     if preset_character:
         # 公式キャラクターを選択した場合は、即日チャット開始できるようそのキャラクターを直接割り当てる
         customer.character_id = preset_character.id
-        grant_credits(db, customer, 20, reason="signup_bonus_preset")
     else:
-        grant_credits(db, customer, 500, reason="signup_bonus_original")
         # 公式キャラ以外（オーダーメイド）の場合は character_id を割り当てない。
         # 顧客専用のキャラクターは後ほど運営者がLLM下書き＋承認のうえ作成し、
         # customers.character_id を更新して案内メールを送る（PATCH /customers/{id}）。
@@ -253,6 +211,100 @@ def _issue_free_account_for_preset(db: Session, order: Order):
     return {"checkout_url": f"{settings.FRONTEND_URL}/apply/complete?session_id={session_id}"}
 
 
+class CourseCheckoutRequest(BaseModel):
+    course_id: int
+
+
+@router.post("/checkout")
+def checkout_course(
+    data: CourseCheckoutRequest,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """コース購入用のStripe Payment Intentを作成する。"""
+    course = db.query(Course).filter(Course.id == data.course_id).first()
+    if not course or course.status != "published":
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+
+    if course.is_free:
+        raise HTTPException(status_code=400, detail="このコースは無料です")
+
+    existing = db.query(Purchase).filter(
+        Purchase.user_id == current_user.id,
+        Purchase.course_id == course.id,
+        Purchase.status == "succeeded",
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="このコースはすでに購入済みです")
+
+    if not _stripe_key_configured():
+        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
+
+    stripe = _get_stripe()
+    idempotency_key = f"{current_user.id}_{course.id}_{int(datetime.utcnow().timestamp())}"
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=course.price,
+            currency="jpy",
+            metadata={"user_id": str(current_user.id), "course_id": str(course.id)},
+            idempotency_key=idempotency_key,
+        )
+    except Exception as e:
+        logger.exception("[Stripe] コース購入用Payment Intentの作成に失敗しました")
+        raise HTTPException(status_code=502, detail="決済処理の作成に失敗しました") from e
+
+    db.add(Purchase(
+        user_id=current_user.id,
+        course_id=course.id,
+        amount=course.price,
+        stripe_payment_intent_id=intent.id,
+        status="pending",
+    ))
+    db.commit()
+
+    return {
+        "client_secret": intent.client_secret,
+        "amount": course.price,
+        "currency": "jpy",
+        "course_title": course.title,
+    }
+
+
+def _handle_course_payment_succeeded(db: Session, payment_intent: dict):
+    """payment_intent.succeeded を処理し、コース購入を完了させる（冪等）"""
+    purchase = db.query(Purchase).filter(
+        Purchase.stripe_payment_intent_id == payment_intent.get("id")
+    ).first()
+    if not purchase or purchase.status == "succeeded":
+        return
+
+    purchase.status = "succeeded"
+    db.flush()
+
+    lessons = db.query(Lesson).filter(Lesson.course_id == purchase.course_id).all()
+    for lesson in lessons:
+        existing_progress = db.query(LessonProgress).filter(
+            LessonProgress.user_id == purchase.user_id,
+            LessonProgress.lesson_id == lesson.id,
+        ).first()
+        if not existing_progress:
+            db.add(LessonProgress(user_id=purchase.user_id, lesson_id=lesson.id, is_completed=False))
+
+    db.commit()
+    logger.info(f"[Stripe] コース購入が完了しました: purchase_id={purchase.id}, course_id={purchase.course_id}")
+
+
+def _handle_course_payment_failed(db: Session, payment_intent: dict):
+    """payment_intent.payment_failed を処理する（冪等）"""
+    purchase = db.query(Purchase).filter(
+        Purchase.stripe_payment_intent_id == payment_intent.get("id")
+    ).first()
+    if not purchase or purchase.status != "pending":
+        return
+    purchase.status = "failed"
+    db.commit()
+
+
 def _handle_checkout_completed(db: Session, session: dict):
     """checkout.session.completed を処理し、アカウントを自動発行する（冪等）"""
     order = db.query(Order).filter(Order.stripe_session_id == session.get("id")).first()
@@ -273,58 +325,6 @@ def _handle_checkout_completed(db: Session, session: dict):
     _issue_account(db, order)
 
 
-def _handle_credit_purchase_completed(db: Session, session: dict):
-    """クレジット購入のcheckout.session.completedを処理し、残高に加算する（冪等）"""
-    session_id = session.get("id")
-
-    existing = db.query(CreditTransaction).filter(CreditTransaction.stripe_session_id == session_id).first()
-    if existing:
-        # Webhook再送対策
-        return
-
-    metadata = session.get("metadata") or {}
-    customer_id = metadata.get("customer_id")
-    credits = metadata.get("credits")
-    if not customer_id or not credits:
-        logger.warning(f"[Stripe] クレジット購入のmetadataが不正です: session_id={session_id}")
-        return
-
-    customer = db.query(Customer).filter(Customer.id == int(customer_id)).first()
-    if not customer:
-        logger.warning(f"[Stripe] クレジット購入対象の顧客が見つかりません: customer_id={customer_id}")
-        return
-
-    grant_credits(db, customer, int(credits), reason="purchase", stripe_session_id=session_id)
-
-    # 購入履歴（/purchases）への表示・領収書発行のため、Orderレコードも作成する
-    order = Order(
-        customer_name=customer.username,
-        status="delivered",
-        order_type="credit_purchase",
-        customer_id=customer.id,
-        email=customer.email,
-        stripe_session_id=session_id,
-        stripe_payment_status="paid",
-        stripe_payment_intent_id=session.get("payment_intent"),
-        amount_total=session.get("amount_total"),
-        currency=session.get("currency"),
-        stripe_invoice_id=session.get("invoice"),
-    )
-    if order.stripe_payment_intent_id:
-        try:
-            stripe = _get_stripe()
-            pi = stripe.PaymentIntent.retrieve(order.stripe_payment_intent_id, expand=["latest_charge"])
-            charge = pi.get("latest_charge")
-            if charge:
-                order.stripe_receipt_url = charge.get("receipt_url")
-        except Exception:
-            logger.exception("[Stripe] 領収書URLの取得に失敗しました")
-    db.add(order)
-
-    db.commit()
-    logger.info(f"[Stripe] クレジットを付与しました: customer_id={customer_id}, credits={credits}")
-
-
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     if not _stripe_configured() or not settings.STRIPE_WEBHOOK_SECRET:
@@ -342,10 +342,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        if (session.get("metadata") or {}).get("type") == "credit_purchase":
-            _handle_credit_purchase_completed(db, session)
-        else:
-            _handle_checkout_completed(db, session)
+        _handle_checkout_completed(db, session)
+    elif event["type"] == "payment_intent.succeeded":
+        _handle_course_payment_succeeded(db, event["data"]["object"])
+    elif event["type"] == "payment_intent.payment_failed":
+        _handle_course_payment_failed(db, event["data"]["object"])
 
     return {"received": True}
 
@@ -368,13 +369,10 @@ def get_payment_session(session_id: str, db: Session = Depends(get_db)):
     order.issued_password = None
     db.commit()
 
-    granted_credits = 20 if _get_preset_character(db, order) else 500
-
     return {
         "status": "issued",
         "username": order.issued_username,
         "temporary_password": password,
-        "granted_credits": granted_credits,
     }
 
 

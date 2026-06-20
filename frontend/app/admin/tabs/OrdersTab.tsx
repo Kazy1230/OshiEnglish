@@ -36,7 +36,7 @@ export function OrdersTab({ onCreateArticleFromRequest, onNavigateToRewards, onN
   function loadData() {
     setLoading(true);
     Promise.all([api.adminGetOrders(), api.adminGetCustomers()])
-      .then(([o, c]) => { setOrders(o); setCustomers(c.filter((cu: any) => !cu.is_admin)); })
+      .then(([o, c]) => { setOrders(o); setCustomers(c.filter((cu: any) => cu.role !== "admin")); })
       .finally(() => setLoading(false));
   }
 

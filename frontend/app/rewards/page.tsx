@@ -30,7 +30,7 @@ type RewardsData = {
   items: RewardItem[];
 };
 
-type Me = { username: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null; theme_config?: { wallpaper_url?: string } | null };
+type Me = { username: string; role: string; is_password_reset_required: boolean; character_id: number | null; theme_config?: { wallpaper_url?: string } | null };
 
 const CATEGORY_ORDER: RewardItem["category"][] = ["line", "title", "wallpaper"];
 const CATEGORY_ICON: Record<RewardItem["category"], string> = { line: "💬", title: "🏅", wallpaper: "🖼️" };
@@ -68,7 +68,7 @@ export default function RewardsPage() {
       try {
         const user = await api.me();
         if (user.is_password_reset_required) { router.replace("/change-password"); return; }
-        if (user.is_admin) { router.replace("/admin"); return; }
+        if (user.role === "admin") { router.replace("/admin"); return; }
         const rewards = await load();
         const newItem = rewards.items.find(i => i.unlocked && i.is_new);
         if (newItem) setCelebrating(newItem);

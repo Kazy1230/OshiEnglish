@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const token = typeof window !== "undefined" ? localStorage.getItem("yt_token") : null;
@@ -111,16 +111,13 @@ export const api = {
   },
   sendMyMessage: (data: { content?: string; grammar_topic?: string; credit_cost?: number }) =>
     apiFetch("/messages/me", { method: "POST", body: JSON.stringify(data) }),
+  // 注: credit_costは現在バックエンドで未使用（クレジット制決済は廃止済み）。記事リクエストの識別目的のみ残置。
   getMyRewardStatus: () => apiFetch("/messages/me/reward-status"),
   getMyUnreadCount: () => apiFetch("/messages/me/unread-count"),
   rateMessage: (messageId: number, rating: "good" | "bad") =>
     apiFetch(`/messages/${messageId}/feedback`, { method: "POST", body: JSON.stringify({ rating }) }),
   unrateMessage: (messageId: number) =>
     apiFetch(`/messages/${messageId}/feedback`, { method: "DELETE" }),
-
-  // 顧客：クレジット購入
-  purchaseCredits: (credits: number) =>
-    apiFetch("/payments/credits/checkout-session", { method: "POST", body: JSON.stringify({ credits }) }),
 
   // 顧客：添削リクエスト（お題のない自由提出のライティング/スピーキング）
   submitCorrectionText: (data: { correction_type: "writing" | "speaking"; text_content?: string; note?: string }) =>
@@ -269,8 +266,6 @@ export const api = {
     apiFetch(`/messages/admin/requests/${customerId}`),
   adminAdjustIntimacy: (customerId: number, delta: number, reason?: string) =>
     apiFetch(`/messages/admin/${customerId}/intimacy/adjust`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
-  adminAdjustCredits: (customerId: number, delta: number, reason?: string) =>
-    apiFetch(`/messages/admin/${customerId}/credits/adjust`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
   adminEditMessage: (messageId: number, content: string) =>
     apiFetch(`/messages/admin/message/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
   adminDeleteMessage: (messageId: number) =>
@@ -306,14 +301,64 @@ export const api = {
   adminGetIntimacySettings: () => apiFetch("/intimacy-settings/admin/"),
   adminUpdateIntimacySettings: (data: object) => apiFetch("/intimacy-settings/admin/", { method: "PATCH", body: JSON.stringify(data) }),
 
-  // 管理者：クレジット関連の料金設定（定期便の開封コストなど）
-  adminGetCreditSettings: () => apiFetch("/credit-settings/admin/"),
-  adminUpdateCreditSettings: (data: object) => apiFetch("/credit-settings/admin/", { method: "PATCH", body: JSON.stringify(data) }),
-
   // 公開：決済（Stripe）
   createCheckoutSession: (orderId: number) =>
     apiFetch("/payments/create-checkout-session", { method: "POST", body: JSON.stringify({ order_id: orderId }) }),
   getPaymentSession: (sessionId: string) => apiFetch(`/payments/session/${encodeURIComponent(sessionId)}`),
+
+  // マーケットプレイス：講師
+  listInstructors: () => apiFetch("/instructors/"),
+  getInstructor: (id: number) => apiFetch(`/instructors/${id}`),
+
+  // マーケットプレイス：お気に入り
+  addFavorite: (instructorId: number) => apiFetch(`/favorites/${instructorId}`, { method: "POST" }),
+  removeFavorite: (instructorId: number) => apiFetch(`/favorites/${instructorId}`, { method: "DELETE" }),
+  listFavorites: () => apiFetch("/favorites/"),
+
+  // マーケットプレイス：コース・レッスン
+  listCourses: (category?: string) => apiFetch(`/courses${category ? `?category=${encodeURIComponent(category)}` : ""}`),
+  listInstructorCourses: (instructorId: number) => apiFetch(`/instructors/${instructorId}/courses`),
+  getCourseDetail: (id: number) => apiFetch(`/courses/${id}`),
+  createCourse: (data: object) => apiFetch("/courses", { method: "POST", body: JSON.stringify(data) }),
+  updateCourse: (id: number, data: object) => apiFetch(`/courses/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  addCourseLesson: (courseId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/lessons`, { method: "POST", body: JSON.stringify(data) }),
+  updateLesson: (lessonId: number, data: object) =>
+    apiFetch(`/lessons/${lessonId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteLesson: (lessonId: number) => apiFetch(`/lessons/${lessonId}`, { method: "DELETE" }),
+  reorderLessons: (courseId: number, lessonIds: number[]) =>
+    apiFetch(`/courses/${courseId}/lessons/reorder`, { method: "PUT", body: JSON.stringify({ lesson_ids: lessonIds }) }),
+
+  // マーケットプレイス：コース購入（Stripe Payment Intent）
+  checkoutCourse: (courseId: number) =>
+    apiFetch("/payments/checkout", { method: "POST", body: JSON.stringify({ course_id: courseId }) }),
+
+  // 講師ダッシュボード：自分のキャラクター
+  listMyCharacters: () => apiFetch("/characters/"),
+  getCharacterDetail: (id: number) => apiFetch(`/characters/${id}`),
+  createCharacterFull: (data: object) => apiFetch("/characters/", { method: "POST", body: JSON.stringify(data) }),
+  updateCharacterFull: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  previewCharacterVoice: (id: number, sampleText: string) =>
+    apiFetch(`/characters/${id}/preview`, { method: "POST", body: JSON.stringify({ sample_text: sampleText }) }),
+
+  // AIコンテンツ生成スタジオ：Step0/Step1（非ストリーミング）・下書き管理
+  generateCharacterConcept: (characterConcept: string) =>
+    apiFetch("/studio/generate/character", { method: "POST", body: JSON.stringify({ character_concept: characterConcept }) }),
+  studioConsult: (theme: string) =>
+    apiFetch("/studio/consult", { method: "POST", body: JSON.stringify({ theme }) }),
+  listDrafts: () => apiFetch("/studio/drafts"),
+  getDraft: (id: number) => apiFetch(`/studio/drafts/${id}`),
+  deleteDraft: (id: number) => apiFetch(`/studio/drafts/${id}`, { method: "DELETE" }),
+
+  // リテンション機能：通知
+  listNotifications: () => apiFetch("/notifications/"),
+  markNotificationRead: (id: number) => apiFetch(`/notifications/${id}/read`, { method: "PUT" }),
+  markAllNotificationsRead: () => apiFetch("/notifications/read-all", { method: "PUT" }),
+
+  // リテンション機能：学習進捗
+  getMyPurchasedCourses: () => apiFetch("/courses/me/purchased"),
+  getCourseProgress: (courseId: number) => apiFetch(`/courses/${courseId}/progress`),
+  completeLesson: (lessonId: number) => apiFetch(`/lessons/${lessonId}/complete`, { method: "PUT" }),
 
   // 管理者：報酬コンテンツ管理
   adminListRewardItems: (characterId?: number) =>

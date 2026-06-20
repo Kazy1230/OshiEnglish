@@ -177,7 +177,8 @@ export function RewardsTab({ initialCharacterId, onConsumeInitialCharacterId }: 
   const articleItems = items.filter(i => i.trigger_type === "article_count").sort((a, b) => a.threshold - b.threshold);
   const currentCharacter = characters.find(c => c.id === characterId);
   const lineItemCount = items.filter(i => i.category === "line").length;
-  const lineItemLimit = currentCharacter?.is_preset ? 15 : 5;
+  // 旧is_presetフラグ廃止に伴い、バックエンド側も暫定的に上限15を全キャラに適用している（Step3で見直し）
+  const lineItemLimit = 15;
   const unsetIntimacyLevels = INTIMACY_LEVELS.filter(level => !intimacyItems.some(i => i.threshold === level));
   const nextArticleThreshold = (articleItems[articleItems.length - 1]?.threshold ?? 0) + 1;
 
@@ -270,8 +271,7 @@ export function RewardsTab({ initialCharacterId, onConsumeInitialCharacterId }: 
             placeholder="解放時にキャラクターから届く特別なセリフ" required />
           {!editingItem && (
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              現在 {lineItemCount} / {lineItemLimit} 件登録済み
-              {currentCharacter?.is_preset ? "（公式キャラは最大15件まで登録できます）" : "（オリジナルキャラは最大5件まで登録できます）"}
+              現在 {lineItemCount} / {lineItemLimit} 件登録済み（最大{lineItemLimit}件まで登録できます）
             </p>
           )}
         </div>

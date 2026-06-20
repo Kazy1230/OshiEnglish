@@ -17,7 +17,7 @@ type Order = {
   stripe_receipt_url: string | null;
 };
 
-type Me = { username: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null };
+type Me = { username: string; role: string; is_password_reset_required: boolean; character_id: number | null };
 
 export default function PurchasesPage() {
   const router = useRouter();
@@ -33,7 +33,7 @@ export default function PurchasesPage() {
       try {
         const user: Me = await api.me();
         if (user.is_password_reset_required) { router.replace("/change-password"); return; }
-        if (user.is_admin) { router.replace("/admin"); return; }
+        if (user.role === "admin") { router.replace("/admin"); return; }
         const [data, charTheme] = await Promise.all([
           api.getMyOrders(),
           user.character_id ? api.getCharacterTheme(user.character_id) : Promise.resolve(null),

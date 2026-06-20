@@ -41,8 +41,6 @@ const emptyArticleForm = {
   correction_request_id: "",
   // ウェルカムページ：対象キャラ（公式キャラ専用テンプレートの場合のみ指定／空欄は汎用テンプレート）
   template_character_id: "",
-  // 開封コスト（任意・未入力時はサーバー側のデフォルト計算に従う）
-  unlock_cost: "",
 };
 
 // 記事管理画面の15カテゴリ
@@ -75,7 +73,7 @@ function getArticleCategory(a: any, characters: any[]): string {
     case "welcome": {
       if (!a.template_character_id) return "welcome_official";
       const ch = characters.find(c => c.id === a.template_character_id);
-      return ch && ch.is_preset === false ? "welcome_original" : "welcome_official";
+      return ch && ch.instructor_id == null ? "welcome_original" : "welcome_official";
     }
     case "exercise": {
       if (a.exercise_subcategory) return `exercise_${a.exercise_subcategory}`;
@@ -397,7 +395,6 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       request_message_id: a.request_message_id ? String(a.request_message_id) : "",
       correction_request_id: a.correction_request_id ? String(a.correction_request_id) : "",
       template_character_id: a.template_character_id ? String(a.template_character_id) : "",
-      unlock_cost: a.unlock_cost != null ? String(a.unlock_cost) : "",
     });
     setSelectedCategory(getArticleCategory(a, characters));
     setCorrectionSubmission(null);
@@ -412,7 +409,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
   function formForCategory(cat: string) {
     const merged = { ...emptyArticleForm, ...categoryFormDefaults(cat) };
     if (cat === "welcome_original") {
-      const original = characters.find(c => c.is_preset === false);
+      const original = characters.find(c => c.instructor_id == null);
       if (original) merged.template_character_id = String(original.id);
     }
     return merged;
@@ -517,9 +514,6 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
       payload.customer_id = Number(form.customer_id);
       payload.grammar_master_id = Number(form.grammar_master_id);
       payload.request_message_id = form.request_message_id ? Number(form.request_message_id) : null;
-    }
-    if (form.unlock_cost !== "") {
-      payload.unlock_cost = Number(form.unlock_cost);
     }
     try {
       if (editingArticle) {
@@ -842,7 +836,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 : selectedCategory === "welcome_original"
                 ? "ウェルカムページ（オリキャラ）：キャラビルダーで作成したオリジナルキャラクターが割り当てられた顧客に届くウェルカムページです。「対象キャラ」でオリジナルキャラを選択してください。"
                 : selectedCategory === "template_pool"
-                ? "定期便プール：customer_idを指定せずに保管する「特別記事」のひな形です。3〜5日に1本のランダムな間隔で、各顧客の本棚に無料で自動配布されます（開封には50クレジット必要・unlock_costで変更可）。"
+                ? "定期便プール：customer_idを指定せずに保管する「特別記事」のひな形です。3〜5日に1本のランダムな間隔で、各顧客の本棚に無料で自動配布されます。"
                 : "依頼記事：特定の顧客からの依頼に応じて作成する、通常の文法解説記事です。"}
               {editingArticle && "（カテゴリは作成後に変更できません）"}
             </p>
@@ -864,7 +858,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     value={blogPromptCustomerId}
                     onChange={e => setBlogPromptCustomerId(e.target.value)}>
                     <option value="">指定なし（汎用プロンプト）</option>
-                    {customers.filter(c => !c.is_admin).map(c => (
+                    {customers.filter(c => c.role !== "admin").map(c => (
                       <option key={c.id} value={c.id}>
                         {c.username}{c.intimacy ? ` 💗Lv${c.intimacy.level}「${c.intimacy.stage_label}」` : ""}
                       </option>
@@ -906,7 +900,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>顧客（誰の本棚に届けるか）</label>
                   <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} required>
                     <option value="">選択してください</option>
-                    {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
+                    {customers.filter(c => c.role !== "admin").map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
                   </select>
                 </div>
                 {(selectedCategory === "exercise_speaking" || selectedCategory === "exercise_writing") && (
@@ -1080,7 +1074,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 </label>
                 <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} required>
                   <option value="">選択してください</option>
-                  {customers.filter(c => !c.is_admin).map(c => (
+                  {customers.filter(c => c.role !== "admin").map(c => (
                     <option key={c.id} value={c.id}>
                       {c.username}{c.intimacy ? ` 💗Lv${c.intimacy.level}「${c.intimacy.stage_label}」` : ""}
                     </option>
@@ -1217,7 +1211,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 </button>
               </div>
               {(() => {
-                const candidates = characters.filter(c => selectedCategory === "welcome_original" ? c.is_preset === false : c.is_preset !== false);
+                const candidates = characters.filter(c => selectedCategory === "welcome_original" ? c.instructor_id == null : c.instructor_id != null);
                 if (selectedCategory === "welcome_original" && candidates.length === 0) {
                   return (
                     <p className="text-xs" style={{ color: "#c0392b" }}>
@@ -1230,7 +1224,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                     disabled={!!form.customer_id} required={selectedCategory === "welcome_original"}>
                     {selectedCategory === "welcome_official" && <option value="">汎用テンプレート（対象キャラを指定しない）</option>}
                     {candidates.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}（{c.is_preset ? "公式" : "オリジナル"}）専用</option>
+                      <option key={c.id} value={c.id}>{c.name}（{c.instructor_id != null ? "公式" : "オリジナル"}）専用</option>
                     ))}
                   </select>
                 );
@@ -1248,7 +1242,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
               </label>
               <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}>
                 <option value="">指定なし（テンプレートとして登録）</option>
-                {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
+                {customers.filter(c => c.role !== "admin").map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
               </select>
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
                 顧客を選択すると、テンプレートではなくその顧客の本棚に直接届く個別ウェルカムページとして登録されます。
@@ -1290,7 +1284,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>顧客</label>
                   <select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} required>
                     <option value="">選択してください</option>
-                    {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
+                    {customers.filter(c => c.role !== "admin").map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1414,16 +1408,6 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
                 <option value="published">公開</option>
               </select>
             </div>
-            {(form.article_type === "request" || form.article_type === "exercise") && (
-              <div>
-                <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
-                  開封コスト（クレジット／任意）
-                </label>
-                <input type="number" min="0" value={form.unlock_cost}
-                  onChange={e => setForm({ ...form, unlock_cost: e.target.value })}
-                  placeholder="未入力でリクエスト額から自動算出" />
-              </div>
-            )}
           </div>
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タイトル</label>
@@ -1505,7 +1489,7 @@ export function ArticlesTab({ pendingCorrection, onConsumePendingCorrection, pen
           <select className="text-sm py-1.5 px-2 rounded-lg" style={{ border: "1px solid var(--border)", background: "white", width: "auto" }}
             value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)}>
             <option value="">全顧客</option>
-            {customers.filter(c => !c.is_admin).map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
+            {customers.filter(c => c.role !== "admin").map(c => <option key={c.id} value={c.id}>{c.username}</option>)}
           </select>
           {(filterText || filterStatus || filterCustomer) && (
             <button className="text-xs px-3 py-1.5 rounded-lg" style={{ color: "var(--accent)", border: "1px solid var(--border)" }}

@@ -10,7 +10,7 @@ export function LogsTab() {
   const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
-    api.adminGetCustomers().then(c => setCustomers(c.filter((cu: any) => !cu.is_admin))).finally(() => setLoading(false));
+    api.adminGetCustomers().then(c => setCustomers(c.filter((cu: any) => cu.role !== "admin"))).finally(() => setLoading(false));
   }, []);
 
   async function loadLogs(id: number) {

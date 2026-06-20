@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -27,8 +27,12 @@ class Character(Base):
     reward_progress_template = Column(String(300), nullable=True)  # DM画面のご褒美進捗メッセージ（{character}/{published}/{remaining}/{target} を置換）
     chat_footer_note = Column(String(300), nullable=True)  # DM画面の入力欄下の注意書き（世界観に合わせてキャラごとに変更可能）
     instagram_account = Column(String(100), nullable=True)  # 公式Instagramアカウント名（@なし、例: shirakawa_yukina._.a）
-    is_preset = Column(Boolean, default=False, nullable=False)  # 公式キャラクターかどうか
+    # このキャラクターを所有する講師。マーケットプレイス化により、キャラクターは運営固定ではなく
+    # instructor_profilesに属するようになった(旧is_presetフラグは廃止)。
+    instructor_id = Column(Integer, ForeignKey("instructor_profiles.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     customers = relationship("Customer", back_populates="character")
     articles = relationship("Article", back_populates="character", foreign_keys="Article.character_id")
+    instructor = relationship("InstructorProfile", back_populates="characters")
+    courses = relationship("Course", back_populates="character")

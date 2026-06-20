@@ -6,7 +6,6 @@ import { api } from "@/lib/api";
 import { setToken } from "@/lib/auth";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { toast } from "@/components/Toast";
 
 function LoginForm() {
   const router = useRouter();
@@ -30,16 +29,13 @@ function LoginForm() {
     }
   }, [searchParams]);
 
-  async function afterAuthenticated(data: { access_token: string; is_password_reset_required: boolean; login_bonus_credits?: number }) {
+  async function afterAuthenticated(data: { access_token: string; is_password_reset_required: boolean }) {
     setToken(data.access_token);
-    if (data.login_bonus_credits && data.login_bonus_credits > 0) {
-      toast(`🎁 ログインボーナスで${data.login_bonus_credits}クレジットを獲得しました！`, "success");
-    }
     if (data.is_password_reset_required) {
       router.push("/change-password");
     } else {
       const me = await api.me();
-      router.push(me.is_admin ? "/admin" : "/shelf");
+      router.push(me.role === "admin" ? "/admin" : "/shelf");
     }
   }
 

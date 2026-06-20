@@ -11,7 +11,6 @@ from app.core.character_voice import customer_display_name
 from app.core.security import verify_password, create_access_token, hash_password, get_current_user
 from app.core.intimacy import get_intimacy_settings
 from app.core.rewards import check_and_unlock_rewards
-from app.core.credits import grant_credits, DAILY_LOGIN_BONUS, DAILY_LOGIN_BONUS_CAP
 from app.core.email import send_email
 from app.core.rate_limit import enforce_rate_limit
 from app.models.customer import Customer
@@ -36,15 +35,11 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     is_password_reset_required: bool
-    # 今回のログインでクレジットの日次ログインボーナスを付与した場合、その金額（付与しなかった場合は0）
-    login_bonus_credits: int = 0
 
 class LoginResponse(BaseModel):
     access_token: str | None = None
     token_type: str | None = None
     is_password_reset_required: bool | None = None
-    # 今回のログインでクレジットの日次ログインボーナスを付与した場合、その金額（付与しなかった場合は0）
-    login_bonus_credits: int = 0
     # True の場合、別途 /auth/verify-2fa への認証コード送信が必要（管理者ログイン時）
     requires_2fa: bool = False
 
@@ -69,31 +64,18 @@ def _reset_login_security(user: Customer):
     user.locked_until = None
 
 
-def _apply_login_bonus(db: Session, user: Customer) -> int:
-    """ログインボーナス（親密度ポイント・クレジット）を1日1回付与する。
-
-    クレジットは、無課金の顧客でも記事リクエストや定期便の開封ができるように、
-    残高がDAILY_LOGIN_BONUS_CAPに達するまで毎日DAILY_LOGIN_BONUS分付与する
-    （例：残高39 -> 49、残高49 -> 50、残高50以上は付与しない）。
-
-    付与したクレジット額を返す（ボーナス対象外・付与額0の場合は0）。
-    """
-    if user.is_admin:
-        return 0
+def _apply_login_bonus(db: Session, user: Customer) -> None:
+    """ログインボーナス（親密度ポイント）を1日1回付与する。"""
+    if user.role == "admin":
+        return
     today = date.today()
     if user.last_login_bonus_date == today:
-        return 0
+        return
 
     settings_row = get_intimacy_settings(db)
     user.intimacy_points = (user.intimacy_points or 0) + settings_row.points_per_login
     user.last_login_bonus_date = today
     check_and_unlock_rewards(db, user)
-
-    balance = user.credit_balance or 0
-    bonus = min(DAILY_LOGIN_BONUS, max(0, DAILY_LOGIN_BONUS_CAP - balance))
-    if bonus > 0:
-        grant_credits(db, user, bonus, reason="daily_login_bonus")
-    return bonus
 
 
 def _notify_password_changed(user: Customer):
@@ -112,14 +94,13 @@ def _notify_password_changed(user: Customer):
 
 
 def _issue_token_response(db: Session, user: Customer) -> dict:
-    login_bonus_credits = _apply_login_bonus(db, user)
-    token = create_access_token({"sub": str(user.id), "is_admin": user.is_admin})
+    _apply_login_bonus(db, user)
+    token = create_access_token({"sub": str(user.id), "role": user.role})
     db.commit()
     return {
         "access_token": token,
         "token_type": "bearer",
         "is_password_reset_required": user.is_password_reset_required,
-        "login_bonus_credits": login_bonus_credits,
     }
 
 class PasswordChangeRequest(BaseModel):
@@ -185,7 +166,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
 
     _reset_login_security(user)
 
-    if user.is_admin and user.email:
+    if user.role == "admin" and user.email:
         code = f"{secrets.randbelow(1_000_000):06d}"
         user.two_factor_code = code
         user.two_factor_code_expires = datetime.utcnow() + timedelta(minutes=TWO_FACTOR_CODE_EXPIRE_MINUTES)
@@ -202,7 +183,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
         )
         return {"requires_2fa": True}
 
-    if user.is_admin and not user.email:
+    if user.role == "admin" and not user.email:
         logger.warning(f"[2FA] 管理者アカウント(username={user.username})にメールアドレスが未設定のため2FAをスキップしました")
 
     return _issue_token_response(db, user)
@@ -309,12 +290,11 @@ def get_me(current_user: Customer = Depends(get_current_user)):
         "id": current_user.id,
         "username": current_user.username,
         "display_name": customer_display_name(current_user),
-        "is_admin": current_user.is_admin,
+        "role": current_user.role,
         "is_password_reset_required": current_user.is_password_reset_required,
         "character_id": current_user.character_id,
         "theme_config": current_user.theme_config,
         "email": current_user.email,
         "free_content_claimed": current_user.free_content_claimed,
         "character_ready_announced": current_user.character_ready_announced,
-        "credit_balance": current_user.credit_balance,
     }

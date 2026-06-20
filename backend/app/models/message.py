@@ -24,9 +24,8 @@ class Message(Base):
     is_request = Column(Boolean, default=False)       # 記事リクエストかどうか
     grammar_topic = Column(String(300), nullable=True)  # リクエストされた文法トピック
     request_status = Column(String(20), nullable=True)  # pending / accepted / completed（リクエストのみ使用）
-    # 記事・問題リクエスト時に合意した総消費クレジット（200/400）。
-    # 依頼時には一部（ARTICLE_REQUEST_FEE）のみ消費し、残りは記事のunlock_costとして開封時に消費するため、
-    # 記事作成時にunlock_costを算出する基準値として保持する。
+    # 記事・問題リクエスト時に合意した総額（200/400）。クレジット制決済は廃止済みのため現在は未使用
+    # （Step3でコース/レッスン購入フローに統合予定）。
     credit_cost = Column(Integer, nullable=True)
 
     # キャラクター→顧客メッセージに付与するCTA（行動喚起）ボタン。

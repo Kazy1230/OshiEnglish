@@ -20,7 +20,6 @@ from app.core.character_voice import customer_display_name
 from app.core.welcome_articles import claim_welcome_article_for_customer, swap_welcome_article_if_character_ready
 from app.core.template_articles import distribute_template_article_if_due
 from app.core.rewards import check_and_unlock_rewards
-from app.core.credits import consume_credits, get_credit_settings, ARTICLE_REQUEST_FEE
 from pydantic import BaseModel, model_validator
 from typing import Optional
 
@@ -45,7 +44,6 @@ class ArticleOut(BaseModel):
     grammar_master_id: Optional[int] = None
     character_id: int
     customer_id: Optional[int] = None
-    unlock_cost: int = 0
     opened_at: Optional[str] = None
     locked: bool = False
     exercise_progress: Optional[dict] = None
@@ -139,10 +137,12 @@ def _get_exercise_progress(db: Session, article: Article, customer_id: int) -> O
 
 
 def _serialize_article_for_customer(article: Article, db: Optional[Session] = None, customer_id: Optional[int] = None) -> dict:
-    """顧客向けに記事をシリアライズする。未開封の有料記事（unlock_cost > 0 かつ未開封）は
-    本文等を省略し、locked=True として返す（本棚・詳細画面でロック表示するため）。
+    """顧客向けに記事をシリアライズする。
+
+    クレジットによる開封課金は廃止済み(Step3でコース/レッスン購入に置き換え予定)のため、
+    現在は常にlocked=Falseで全文を返す。
     """
-    locked = (article.unlock_cost or 0) > 0 and article.opened_at is None
+    locked = False
     data = {
         "id": article.id,
         "title": article.title,
@@ -153,7 +153,6 @@ def _serialize_article_for_customer(article: Article, db: Optional[Session] = No
         "grammar_master_id": article.grammar_master_id,
         "character_id": article.character_id,
         "customer_id": article.customer_id,
-        "unlock_cost": article.unlock_cost or 0,
         "opened_at": article.opened_at.isoformat() if article.opened_at else None,
         "locked": locked,
         "exercise_progress": None,
@@ -267,9 +266,7 @@ def unlock_article(
     current_user: Customer = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """未開封の記事を開封する。unlock_costが設定されている場合はクレジットを消費する
-    （残高不足の場合は402）。既に開封済みの場合はそのまま現在の記事データを返す（冪等）。
-    """
+    """未開封の記事を開封する。既に開封済みの場合はそのまま現在の記事データを返す（冪等）。"""
     article = db.query(Article).filter(
         Article.id == article_id,
         Article.customer_id == current_user.id,
@@ -278,8 +275,6 @@ def unlock_article(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="記事が見つかりません")
 
     if article.opened_at is None:
-        if (article.unlock_cost or 0) > 0:
-            consume_credits(db, current_user, article.unlock_cost, reason="article_unlock")
         article.opened_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(article)
@@ -403,7 +398,6 @@ def answer_exercise_question(
             time_taken=data.time_taken,
             customer_proficiency_snapshot={
                 "intimacy_points": current_user.intimacy_points,
-                "credit_balance": current_user.credit_balance,
             },
         )
         db.add(submission)
@@ -722,7 +716,6 @@ class ArticleCreate(BaseModel):
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
     is_welcome_template: bool = False  # ウェルカムページ用テンプレートかどうか
     template_character_id: Optional[int] = None  # 公式キャラ専用テンプレートの場合、対象キャラのID（汎用テンプレートはNULL）
-    unlock_cost: Optional[int] = None  # 開封に必要なクレジット（未指定時はrequest_message_id/article_typeから自動算出）
 
     @model_validator(mode="after")
     def _validate_by_type(self):
@@ -823,7 +816,6 @@ class ArticleUpdate(BaseModel):
     correction_request_id: Optional[int] = None  # 元になった添削リクエスト（公開時にステータス自動更新に使う）
     is_welcome_template: Optional[bool] = None
     template_character_id: Optional[int] = None
-    unlock_cost: Optional[int] = None  # 開封に必要なクレジット
     # template_character_id を NULL に戻したい場合、exclude_none=True では None が無視されるため
     # このフラグで明示的にクリアする
     clear_template_character_id: bool = False
@@ -889,7 +881,7 @@ def claim_welcome_article(
     """ウェルカムページ向け：「最初の1つ無料」キャンペーンとして、事前に用意したテンプレート記事を
     1件だけ本棚にコピーする（LLM呼び出しは行わない）。
 
-    公式キャラ（is_preset=True）の場合はそのキャラクター専用のテンプレート記事を、
+    講師(キャラクター)に専用テンプレートが登録されている場合はそのキャラクター専用のテンプレート記事を、
     それ以外（キャラクタービルダーで作成したカスタムキャラ）の場合は
     汎用テンプレート記事（template_character_id=NULL）をコピーする。
     """
@@ -939,20 +931,7 @@ def admin_create_article(
     admin=Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    article = Article(**data.model_dump(exclude={"unlock_cost"}))
-
-    # 開封コスト（unlock_cost）の決定：
-    # 1. 管理者が明示的に指定していればそれを使う
-    # 2. 記事リクエストに紐付く場合は、合意した総額（credit_cost）から依頼時の固定費を引いた残額
-    # 3. 定期便記事の場合は、デフォルトの開封コストを使う
-    if data.unlock_cost is not None:
-        article.unlock_cost = data.unlock_cost
-    elif data.request_message_id is not None:
-        req_msg = db.query(Message).filter(Message.id == data.request_message_id).first()
-        if req_msg and req_msg.credit_cost:
-            article.unlock_cost = max(0, req_msg.credit_cost - ARTICLE_REQUEST_FEE)
-    elif data.article_type == "template":
-        article.unlock_cost = get_credit_settings(db).template_unlock_cost
+    article = Article(**data.model_dump())
 
     db.add(article)
     # 「依頼記事」の作成は記事依頼回数カウントの対象になるため、報酬解放チェックを行う
@@ -995,13 +974,6 @@ def admin_update_article(
         setattr(article, key, val)
     if clear_template:
         article.template_character_id = None
-
-    # request_message_idが（このPATCHで）紐付けられ、unlock_costが明示指定されていない場合は、
-    # 作成時と同様に合意した総額（credit_cost）から依頼時の固定費を引いた残額を自動算出する。
-    if data.request_message_id is not None and data.unlock_cost is None:
-        req_msg = db.query(Message).filter(Message.id == data.request_message_id).first()
-        if req_msg and req_msg.credit_cost:
-            article.unlock_cost = max(0, req_msg.credit_cost - ARTICLE_REQUEST_FEE)
 
     # キャラクター専用のウェルカムテンプレートに更新された場合も、create時と同様に
     # 既にキャラが割り当て済みで汎用ウェルカム記事を受け取っている顧客の本棚を専用版に差し替える

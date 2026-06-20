@@ -30,7 +30,6 @@ type Article = {
     total?: number;
     character_comment?: string | null;
   } | null;
-  unlock_cost?: number;
   opened_at?: string | null;
   locked?: boolean;
 };
@@ -91,8 +90,6 @@ export default function ArticlePage() {
   const [mode, toggleMode] = useDarkMode();
   const [pageIndex, setPageIndex] = useState(0);
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
-  const [unlocking, setUnlocking] = useState(false);
-  const [insufficientCredits, setInsufficientCredits] = useState(false);
   const articleSectionRef = useRef<HTMLDivElement>(null);
 
   // ページ送り時は本文セクションの先頭へスクロールする。
@@ -159,24 +156,6 @@ export default function ArticlePage() {
   const isBlog = article?.article_type === "blog";
   const isExercise = article?.article_type === "exercise";
 
-  async function handleUnlock() {
-    if (!article) return;
-    setUnlocking(true);
-    setInsufficientCredits(false);
-    try {
-      const data: Article = await api.unlockArticle(article.id);
-      setArticle(data);
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes("402")) {
-        setInsufficientCredits(true);
-        toast("クレジットが不足しています", "error");
-      } else {
-        toast(err instanceof Error ? err.message : "開封に失敗しました", "error");
-      }
-    } finally {
-      setUnlocking(false);
-    }
-  }
 
   if (loading) return <ArticleSkeleton />;
 
@@ -297,34 +276,6 @@ export default function ArticlePage() {
             </p>
             <h2 className="text-xl font-black leading-snug" style={{ color: t.primary }}>{article.title}</h2>
           </div>
-
-          {/* ロック画面：未開封の有料記事はクレジットを消費して開封する */}
-          {article.locked && (
-            <div className="rounded-2xl px-4 sm:px-6 py-10 shadow-sm text-center" style={{ background: t.card, border: `1px solid ${t.border}` }}>
-              <p className="text-4xl mb-3">🔒</p>
-              <p className="font-bold mb-2" style={{ color: t.primary }}>
-                この{isExercise ? "問題" : "記事"}は{article.unlock_cost}クレジットで読めます
-              </p>
-              <p className="text-xs mb-4" style={{ color: t.accent }}>
-                開封すると{article.unlock_cost}クレジットを消費して、いつでも読めるようになります。
-              </p>
-              <button type="button" onClick={handleUnlock} disabled={unlocking}
-                className="px-6 py-2.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md disabled:opacity-50"
-                style={{ borderColor: t.primary, color: "white", background: t.primary }}>
-                {unlocking ? "開封中…" : `🔓 ${article.unlock_cost}クレジットを使って読む`}
-              </button>
-              {insufficientCredits && (
-                <div className="mt-4">
-                  <p className="text-xs font-bold mb-2" style={{ color: "#d9534f" }}>クレジットが不足しています</p>
-                  <button type="button" onClick={() => router.push("/credits")}
-                    className="px-4 py-2 rounded-full text-xs font-bold border-2 transition-all hover:shadow-md"
-                    style={{ borderColor: t.accent, color: t.accent, background: t.card }}>
-                    クレジットを購入する →
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* 演習問題：問題表示・解答UI（選択式は自動採点、記述式はキャラへの提出） */}
           {!article.locked && isExercise && (

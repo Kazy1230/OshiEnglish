@@ -15,7 +15,6 @@ from app.models.access_log import AccessLog
 from app.models.correction_request import CorrectionRequest
 from app.models.reward import CustomerReward
 from app.models.order import Order
-from app.models.credit_transaction import CreditTransaction
 from app.models.exercise_submission import ExerciseSubmission
 from app.models.message_feedback import MessageFeedback
 from app.models.preview_example import PreviewExample
@@ -37,13 +36,13 @@ class CustomerCreate(BaseModel):
     character_id: Optional[int] = None
     theme_config: Optional[dict] = None
     subscription_plan: str = "buy_once"  # buy_once / monthly
-    is_admin: bool = False
+    role: str = "learner"  # learner / instructor / admin
 
 class CustomerOut(BaseModel):
     id: int
     username: str
     email: Optional[str]
-    is_admin: bool
+    role: str
     is_active: bool
     is_password_reset_required: bool
     character_id: Optional[int]
@@ -107,7 +106,7 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
             "username": c.username,
             "display_name": customer_display_name(c),
             "email": c.email,
-            "is_admin": c.is_admin,
+            "role": c.role,
             "is_active": c.is_active,
             "is_password_reset_required": c.is_password_reset_required,
             "character_id": c.character_id,
@@ -117,7 +116,6 @@ def list_customers(admin=Depends(get_current_admin), db: Session = Depends(get_d
             "exercise_count": exercise_counts.get(c.id, 0),      # 演習問題（公開済み）
             "character_memory": c.character_memory,
             "intimacy": intimacy_info(c.intimacy_points),
-            "credit_balance": c.credit_balance or 0,
             "last_character_message_at": (
                 last_character_message_map[c.id].isoformat() if last_character_message_map.get(c.id) else None
             ),
@@ -132,6 +130,8 @@ def create_customer(data: CustomerCreate, admin=Depends(get_current_admin), db: 
         raise HTTPException(status_code=400, detail="このユーザー名はすでに使用されています")
     if data.subscription_plan not in ("buy_once", "monthly"):
         raise HTTPException(status_code=400, detail="subscription_plan は 'buy_once' または 'monthly' を指定してください")
+    if data.role not in ("learner", "instructor", "admin"):
+        raise HTTPException(status_code=400, detail="role は 'learner' / 'instructor' / 'admin' のいずれかを指定してください")
     customer = Customer(
         username=data.username,
         hashed_password=hash_password(data.password),
@@ -139,7 +139,7 @@ def create_customer(data: CustomerCreate, admin=Depends(get_current_admin), db: 
         character_id=data.character_id,
         theme_config=data.theme_config,
         subscription_plan=data.subscription_plan,
-        is_admin=data.is_admin,
+        role=data.role,
         is_password_reset_required=True,
     )
     db.add(customer)
@@ -205,7 +205,7 @@ def update_customer(customer_id: int, data: CustomerUpdate, admin=Depends(get_cu
         "id": customer.id,
         "username": customer.username,
         "email": customer.email,
-        "is_admin": customer.is_admin,
+        "role": customer.role,
         "is_active": customer.is_active,
         "is_password_reset_required": customer.is_password_reset_required,
         "character_id": customer.character_id,
@@ -302,13 +302,11 @@ def _delete_customer_and_related_data(db: Session, customer: Customer) -> None:
     """顧客本体および関連レコードをまとめて削除する（DBから完全に削除）。
 
     管理者による削除・顧客自身の退会のいずれでも、DM(messages)・記事(articles)・
-    アクセスログ(access_logs)・クレジット履歴(credit_transactions)等が残っていると
-    外部キー制約により削除に失敗するため、関連レコードを先にまとめて削除してから
-    顧客本体を削除する。呼び出し元でdb.commit()すること。
+    アクセスログ(access_logs)等が残っていると外部キー制約により削除に失敗するため、
+    関連レコードを先にまとめて削除してから顧客本体を削除する。呼び出し元でdb.commit()すること。
     """
     customer_id = customer.id
 
-    db.query(CreditTransaction).filter(CreditTransaction.customer_id == customer_id).delete(synchronize_session=False)
     db.query(ExerciseSubmission).filter(ExerciseSubmission.customer_id == customer_id).delete(synchronize_session=False)
     db.query(MessageFeedback).filter(MessageFeedback.customer_id == customer_id).delete(synchronize_session=False)
     db.query(PreviewExample).filter(PreviewExample.customer_id == customer_id).delete(synchronize_session=False)
@@ -334,15 +332,15 @@ def _delete_customer_and_related_data(db: Session, customer: Customer) -> None:
 
 @router.delete("/{customer_id}")
 def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
-    """顧客を削除する（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美・
-    クレジット履歴も合わせてDBから完全に削除される）。"""
+    """顧客を削除する（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美も合わせて
+    DBから完全に削除される）。"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="顧客が見つかりません")
 
     _delete_customer_and_related_data(db, customer)
     db.commit()
-    return {"message": "削除しました（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美・クレジット履歴も合わせて削除されました）"}
+    return {"message": "削除しました（関連するDM・記事・アクセスログ・添削リクエスト・解放済みご褒美も合わせて削除されました）"}
 
 
 @router.post("/me/ack-character-ready")
@@ -358,10 +356,10 @@ def withdraw(current_user: Customer = Depends(get_current_user), db: Session = D
     """顧客自身による退会処理。
 
     返金・解約ポリシー: Stripeのサブスクリプションが存在する場合は解約し、
-    アカウント・キャラとのチャット履歴・記事・クレジット履歴等をDBから完全に削除した上で
+    アカウント・キャラとのチャット履歴・記事等をDBから完全に削除した上で
     退会完了メールを送信する（管理者による削除と同じ完全削除処理）。
     """
-    if current_user.is_admin:
+    if current_user.role == "admin":
         raise HTTPException(status_code=403, detail="管理者アカウントは退会できません")
 
     if current_user.stripe_subscription_id and settings.STRIPE_SECRET_KEY:

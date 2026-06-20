@@ -19,7 +19,7 @@ const FONT_STYLE_OPTIONS = [
   { value: "monospace",   label: "monospace　— クール・ロボット" },
 ];
 
-const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", instagram_account: "", is_preset: false, linked_customer_id: "", gen_personality: "", gen_reference: "" };
+const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", instagram_account: "", instructor_id: "", linked_customer_id: "", gen_personality: "", gen_reference: "" };
 
 const GENERATION_BLOCKS: { key: string; label: string }[] = [
   { key: "DESCRIPTION", label: "説明文" },
@@ -58,7 +58,7 @@ export function CharactersTab() {
   }
 
   const reload = () => Promise.all([api.adminGetCharacters(), api.adminGetCustomers(), api.adminGetArticles()])
-    .then(([chars, custs, arts]) => { setCharacters(chars); setCustomers(custs.filter((c: any) => !c.is_admin)); setArticles(arts); });
+    .then(([chars, custs, arts]) => { setCharacters(chars); setCustomers(custs.filter((c: any) => c.role !== "admin")); setArticles(arts); });
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
 
   const welcomeArticles = articles.filter((a: any) => a.is_welcome_template);
@@ -182,7 +182,7 @@ export function CharactersTab() {
       reward_progress_template: c.reward_progress_template ?? "",
       chat_footer_note: c.chat_footer_note ?? "",
       instagram_account: c.instagram_account ?? "",
-      is_preset: !!c.is_preset,
+      instructor_id: c.instructor_id != null ? String(c.instructor_id) : "",
       linked_customer_id: "",
       gen_personality: "",
       gen_reference: "",
@@ -223,7 +223,7 @@ export function CharactersTab() {
       reward_progress_template: form.reward_progress_template.trim() || null,
       chat_footer_note: form.chat_footer_note.trim() || null,
       instagram_account: form.instagram_account.trim() || null,
-      is_preset: form.is_preset,
+      instructor_id: form.instructor_id ? Number(form.instructor_id) : null,
     };
     try {
       if (editingChar) {
@@ -231,7 +231,7 @@ export function CharactersTab() {
         toast(`「${form.name}」を更新しました`, "success");
       } else {
         const created = await api.adminCreateCharacter(payload);
-        if (!form.is_preset && form.linked_customer_id) {
+        if (!form.instructor_id && form.linked_customer_id) {
           await api.adminUpdateCustomer(Number(form.linked_customer_id), { character_id: created.id });
         }
         toast(`「${form.name}」を追加しました`, "success");
@@ -374,25 +374,24 @@ export function CharactersTab() {
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>公式Instagramアカウント（@なし）</label>
               <input value={form.instagram_account} onChange={e => setForm({ ...form, instagram_account: e.target.value })}
-                placeholder="例：shirakawa_yukina._.a" disabled={!form.is_preset} />
-              {!form.is_preset && (
-                <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>「公式キャラクターにする」にチェックすると入力できます</p>
+                placeholder="例：shirakawa_yukina._.a" disabled={!form.instructor_id} />
+              {!form.instructor_id && (
+                <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>講師プロフィールIDを入力すると入力できます</p>
               )}
             </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm font-medium pb-1" style={{ color: "var(--text)" }}>
-                <input type="checkbox" checked={form.is_preset}
-                  onChange={e => setForm({ ...form, is_preset: e.target.checked, instagram_account: e.target.checked ? form.instagram_account : "" })} />
-                公式キャラクターにする
-              </label>
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>講師プロフィールID（instructor_profiles.id）</label>
+              <input type="number" min="1" value={form.instructor_id}
+                onChange={e => setForm({ ...form, instructor_id: e.target.value, instagram_account: e.target.value ? form.instagram_account : "" })}
+                placeholder="例：1（未入力なら未割り当て）" />
             </div>
           </div>
-          {form.is_preset && (
+          {form.instructor_id && (
             <p className="text-xs -mt-2" style={{ color: "var(--muted)" }}>
-              公式キャラクターは、選択時にキャラ作成費無料・即日チャット開始・限定称号/壁紙・隠しセリフ多数（最大{15}件）などの特典が適用されます。
+              講師プロフィールに割り当てたキャラクターは、選択時にキャラ作成費無料・即日チャット開始・限定称号/壁紙・隠しセリフ多数（最大{15}件）などの特典が適用されます。
             </p>
           )}
-          {!form.is_preset && !editingChar && (
+          {!form.instructor_id && !editingChar && (
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>紐づけアカウント（オリジナルキャラを依頼した顧客） *</label>
               <select value={form.linked_customer_id} onChange={e => setForm({ ...form, linked_customer_id: e.target.value })} required>
@@ -539,7 +538,7 @@ export function CharactersTab() {
                       </div>
                     )}
                     <p className="font-bold" style={{ color: accentColor }}>{c.name}</p>
-                    {c.is_preset && (
+                    {c.instructor_id != null && (
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white" style={{ background: accentColor }}>
                         公式
                       </span>
@@ -613,7 +612,7 @@ export function CharactersTab() {
                   </div>
 
                   {/* ウェルカムページ設定（公式キャラのみ） */}
-                  {c.is_preset && (
+                  {c.instructor_id != null && (
                     <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
                       <p className="text-xs font-medium mb-1" style={{ color: "var(--accent)" }}>🏠 ウェルカムページ</p>
                       <select

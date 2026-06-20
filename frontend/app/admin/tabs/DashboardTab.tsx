@@ -16,7 +16,7 @@ export function DashboardTab({ onNavigate }: { onNavigate: (tab: Tab) => void })
       api.adminGetCustomers(),
       api.adminListAllServiceItems().catch(() => []),
     ]);
-    const nonAdmin = customers.filter((c: any) => !c.is_admin);
+    const nonAdmin = customers.filter((c: any) => c.role !== "admin");
     setStats({
       newOrders: orders.filter((o: any) => o.status === "new").length,
       inProgress: orders.filter((o: any) => o.status === "in_progress").length,

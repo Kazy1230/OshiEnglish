@@ -8,12 +8,18 @@ from app.models.message import Message
 from app.models.message_feedback import MessageFeedback
 from app.models.service_item import ServiceItem
 from app.models.intimacy_settings import IntimacySettings
-from app.models.credit_settings import CreditSettings
 from app.models.correction_request import CorrectionRequest
 from app.models.reward import RewardItem, CustomerReward
-from app.models.credit_transaction import CreditTransaction
 from app.models.preview_example import PreviewExample
 from app.models.article_template import ArticleTemplate
 from app.models.exercise_template import ExerciseTemplate
 from app.models.template_article_template import TemplateArticleTemplate
 from app.models.exercise_submission import ExerciseSubmission
+from app.models.instructor_profile import InstructorProfile
+from app.models.course import Course
+from app.models.lesson import Lesson
+from app.models.purchase import Purchase
+from app.models.lesson_progress import LessonProgress
+from app.models.favorite import Favorite
+from app.models.notification import Notification
+from app.models.content_draft import ContentDraft

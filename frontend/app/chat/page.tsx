@@ -66,7 +66,7 @@ type UnlockedRewardItem = {
 
 const REWARD_CATEGORY_ICON: Record<UnlockedRewardItem["category"], string> = { line: "💬", title: "🏅", wallpaper: "🖼️" };
 
-type Me = { username: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null; theme_config?: { wallpaper_url?: string } | null };
+type Me = { username: string; role: string; is_password_reset_required: boolean; character_id: number | null; theme_config?: { wallpaper_url?: string } | null };
 
 function formatTime(iso: string) {
   try {
@@ -94,7 +94,6 @@ function ChatPageInner() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [reward, setReward] = useState<RewardStatus | null>(null);
   const [intimacy, setIntimacy] = useState<Intimacy | null>(null);
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState("");
@@ -138,7 +137,6 @@ function ChatPageInner() {
     setHasMore(!!thread.has_more);
     setReward(thread.reward_status);
     setIntimacy(thread.intimacy ?? null);
-    setCreditBalance(thread.credit_balance ?? null);
 
     if (thread.intimacy) {
       if (prevLevelRef.current !== null && thread.intimacy.level > prevLevelRef.current) {
@@ -180,7 +178,7 @@ function ChatPageInner() {
       try {
         const user = await api.me();
         if (user.is_password_reset_required) { router.replace("/change-password"); return; }
-        if (user.is_admin) { router.replace("/admin"); return; }
+        if (user.role === "admin") { router.replace("/admin"); return; }
         setMe(user);
         if (!user.character_id) { return; }
         const charTheme = await api.getCharacterTheme(user.character_id);
@@ -295,13 +293,6 @@ function ChatPageInner() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {creditBalance !== null && (
-              <button onClick={() => router.push("/credits")} aria-label="クレジット残高"
-                className="text-[11px] font-bold px-2 py-1 rounded-full text-white transition-colors flex-shrink-0 whitespace-nowrap"
-                style={{ background: "rgba(255,255,255,0.15)" }}>
-                🔶 {creditBalance.toLocaleString()}
-              </button>
-            )}
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <button onClick={() => { clearToken(); router.push("/login"); }}
               className="text-xs text-white/50 hover:text-white transition-colors flex-shrink-0">ログアウト</button>

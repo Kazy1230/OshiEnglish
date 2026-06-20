@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, credit_settings, payments, rewards, corrections, preview, article_templates, exercise_templates, template_article_templates
+from app.routers import auth, articles, customers, orders, access_logs, characters, grammar_masters, messages, service_items, intimacy_settings, payments, rewards, corrections, preview, article_templates, exercise_templates, template_article_templates, courses, instructors, favorites, studio, notifications
 
 # テーブル自動作成（開発用。本番はAlembicマイグレーションを使用）
 Base.metadata.create_all(bind=engine)
@@ -23,14 +23,31 @@ def _ensure_column(table: str, column: str, ddl: str):
             conn.commit()
 
 # 使わなくなったカラムをDBからも削除するためのヘルパー
-def _drop_column(table: str, column: str):
+def _column_exists(table: str, column: str) -> bool:
     with engine.connect() as conn:
         result = conn.execute(text(
             "SELECT COUNT(*) FROM information_schema.columns "
             "WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column"
         ), {"table": table, "column": column})
-        if result.scalar() > 0:
+        return result.scalar() > 0
+
+
+def _drop_column(table: str, column: str):
+    if _column_exists(table, column):
+        with engine.connect() as conn:
             conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+            conn.commit()
+
+
+# 使わなくなったテーブルをDBからも削除するためのヘルパー
+def _drop_table(table: str):
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.tables "
+            "WHERE table_schema = DATABASE() AND table_name = :table"
+        ), {"table": table})
+        if result.scalar() > 0:
+            conn.execute(text(f"DROP TABLE {table}"))
             conn.commit()
 
 _ensure_column("characters", "greeting", "VARCHAR(300) NULL")
@@ -127,12 +144,7 @@ _ensure_column("customers", "free_content_claimed", "TINYINT(1) NOT NULL DEFAULT
 _ensure_column("customers", "character_ready_announced", "TINYINT(1) NOT NULL DEFAULT 1")
 
 # 簡易マイグレーション⑬: 公式キャラクター（プリセットキャラ）フラグ
-_ensure_column("characters", "is_preset", "TINYINT(1) NOT NULL DEFAULT 0")
-with engine.connect() as _conn:
-    _conn.execute(text(
-        "UPDATE characters SET is_preset = 1 WHERE name IN ('白河雪菜', '蒼井零') AND is_preset = 0"
-    ))
-    _conn.commit()
+# → ㉜でManaVillageマーケットプレイス化に伴いinstructor_idに置き換えられ廃止
 
 # 簡易マイグレーション⑭: 公式キャラクター限定の報酬フラグ
 _ensure_column("reward_items", "official_only", "TINYINT(1) NOT NULL DEFAULT 0")
@@ -187,17 +199,13 @@ _ensure_index("articles", "ix_articles_correction_request_id", "(correction_requ
 _ensure_column("messages", "suggested_action", "VARCHAR(50) NULL")
 
 # 簡易マイグレーション㉕: クレジット制決済システム
-# - customers.credit_balance: クレジット残高（1クレジット=1円）
-# - credit_transactionsテーブル自体はcreate_all()で自動作成される
-_ensure_column("customers", "credit_balance", "INT NOT NULL DEFAULT 0")
+# → ㉜でManaVillageマーケットプレイス化に伴いcourses/purchasesに置き換えられ廃止
 
 # 簡易マイグレーション㉖: 記事の開封課金・定期便の定期配布
-# - articles.unlock_cost: 開封に必要なクレジット（0=無料）
-# - articles.opened_at: 顧客が開封（課金）した日時。NULL=未開封
+# - articles.opened_at: 顧客が開封した日時。NULL=未開封
 # - articles.template_source_id: 定期便プールの元記事ID（重複配布防止）
-# - messages.credit_cost: 記事・問題リクエスト時に合意した総消費クレジット
+# - messages.credit_cost: 記事・問題リクエスト時に合意した総消費クレジット（現在は未使用、Step3で見直し）
 # - customers.last_template_article_at: 定期便の最終配布日時
-_ensure_column("articles", "unlock_cost", "INT NOT NULL DEFAULT 0")
 _ensure_column("articles", "opened_at", "DATETIME NULL")
 _ensure_column("articles", "template_source_id", "INT NULL")
 _ensure_index("articles", "ix_articles_template_source_id", "(template_source_id)")
@@ -303,6 +311,39 @@ def _backfill_exercise_subcategory():
 
 
 _backfill_exercise_subcategory()
+
+# 簡易マイグレーション㉜: ManaVillageマーケットプレイス化 - ロール管理・講師プロフィール導入
+# - customers.role: learner / instructor / admin（旧is_adminフラグを置き換える）
+# - customers.credit_balance / credit_transactions / articles.unlock_cost: クレジット制決済の廃止
+#   (courses/purchasesによるコース単位購入に置き換え予定。Step3で実装)
+# - characters.instructor_id: キャラクターの所有講師（旧is_presetフラグを置き換える）
+# - instructor_profiles / courses / lessons / purchases / lesson_progress / favorites / notifications:
+#   新設テーブル自体はcreate_all()で自動作成される
+_ensure_column("customers", "role", "VARCHAR(20) NOT NULL DEFAULT 'learner'")
+if _column_exists("customers", "is_admin"):
+    with engine.connect() as _conn:
+        _conn.execute(text("UPDATE customers SET role = 'admin' WHERE is_admin = 1"))
+        _conn.commit()
+_drop_column("customers", "is_admin")
+_drop_column("customers", "credit_balance")
+_ensure_column("characters", "instructor_id", "INT NULL")
+
+
+def _migrate_legacy_characters_to_instructor():
+    from app.core.instructor_migration import migrate_legacy_characters_to_instructor
+
+    db = SessionLocal()
+    try:
+        migrate_legacy_characters_to_instructor(db)
+        db.commit()
+    finally:
+        db.close()
+
+
+_drop_column("characters", "is_preset")
+_drop_column("articles", "unlock_cost")
+_drop_table("credit_transactions")
+_drop_table("credit_settings")
 
 # アクセスログのリテンション: 進捗比較（progress-stats）が見るのは直近14日間のみのため、
 # それより十分長い期間を超えた閲覧履歴は定期的に削除し、無制限な行数増加を防ぐ
@@ -579,9 +620,10 @@ _seed_welcome_articles()
 
 
 def _ensure_preset_characters():
-    """公式キャラクター（is_preset=True）が Characters テーブルに存在することを保証する。
+    """公式キャラクターが Characters テーブルに存在することを保証する。
     seed.py は手動実行のため、新しい公式キャラ追加時にここへ追記することで
-    本番起動時に自動で挿入・更新される。既存レコードの name/is_preset のみ保証する。
+    本番起動時に自動で挿入される。既存レコードの存在のみ保証する
+    （instructor_idへの割り当ては㉜の_migrate_legacy_characters_to_instructorで行う）。
     """
     from app.models.character import Character
     presets = [
@@ -595,15 +637,17 @@ def _ensure_preset_characters():
         for p in presets:
             char = db.query(Character).filter(Character.name == p["name"]).first()
             if char is None:
-                db.add(Character(name=p["name"], is_preset=True))
-            elif not char.is_preset:
-                char.is_preset = True
+                db.add(Character(name=p["name"]))
         db.commit()
     finally:
         db.close()
 
 
 _ensure_preset_characters()
+
+# ㉜のキャラクター→講師プロフィール移行は、公式キャラクターのレコード自体が
+# 上記_ensure_preset_characters()で初めて作られる場合があるため、その後に実行する
+_migrate_legacy_characters_to_instructor()
 
 app = FastAPI(
     title="推しEnglish API",
@@ -642,7 +686,6 @@ app.include_router(grammar_masters.router)
 app.include_router(messages.router)
 app.include_router(service_items.router)
 app.include_router(intimacy_settings.router)
-app.include_router(credit_settings.router)
 app.include_router(payments.router)
 app.include_router(rewards.router)
 app.include_router(corrections.router)
@@ -650,6 +693,11 @@ app.include_router(preview.router)
 app.include_router(article_templates.router)
 app.include_router(exercise_templates.router)
 app.include_router(template_article_templates.router)
+app.include_router(courses.router)
+app.include_router(instructors.router)
+app.include_router(favorites.router)
+app.include_router(studio.router)
+app.include_router(notifications.router)
 
 @app.get("/health")
 def health():

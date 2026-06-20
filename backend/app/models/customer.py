@@ -10,7 +10,8 @@ class Customer(Base):
     username = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True)
-    is_admin = Column(Boolean, default=False)
+    # learner(学習者) / instructor(講師) / admin(管理者)。旧is_adminフラグを置き換えるロール管理。
+    role = Column(String(20), nullable=False, default="learner")
     is_active = Column(Boolean, default=True)
     is_password_reset_required = Column(Boolean, default=True)
     # パスワード再発行（セルフサービス）用のトークンと有効期限
@@ -41,9 +42,6 @@ class Customer(Base):
     # 本棚で一度表示したらTrueに戻す（一人一回限りの演出）。
     character_ready_announced = Column(Boolean, default=True, nullable=False)
     subscription_plan = Column(String(50), default="buy_once")  # buy_once / monthly
-    # クレジット残高（1クレジット=1円）。DM送信や記事・問題リクエストの消費、
-    # Stripeでのクレジット購入・キャラ作成特典で増減する。
-    credit_balance = Column(Integer, nullable=False, default=0)
     # 定期便（無料配布・開封課金）の最終配布日時。一定間隔ごとに1本ずつ本棚に追加するための基準値。
     last_template_article_at = Column(DateTime(timezone=True), nullable=True)
     # サポート担当の割り当て（管理者・オペレーター複数人での分担運用のため）。
@@ -70,3 +68,8 @@ class Customer(Base):
     articles = relationship("Article", back_populates="customer")
     access_logs = relationship("AccessLog", back_populates="customer")
     messages = relationship("Message", back_populates="customer")
+    instructor_profile = relationship("InstructorProfile", back_populates="user", uselist=False)
+    purchases = relationship("Purchase", back_populates="user")
+    lesson_progress_records = relationship("LessonProgress", back_populates="user")
+    favorites = relationship("Favorite", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")

@@ -3,7 +3,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
-import { resolveTheme, pickGreeting, maskEmail, type CharacterTheme } from "@/lib/theme";
+import { resolveTheme, pickGreeting, maskEmail, isOfficialCharacter, type CharacterTheme } from "@/lib/theme";
 import { ShelfSkeleton } from "@/components/Skeleton";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
@@ -20,15 +20,13 @@ type Article = {
   exercise_format?: "multiple_choice" | "written_response" | null;
   exercise_category?: string | null;
   exercise_data?: any;
-  unlock_cost?: number;
   opened_at?: string | null;
   locked?: boolean;
 };
 type Me = {
-  username: string; display_name?: string; is_admin: boolean; is_password_reset_required: boolean; character_id: number | null;
+  username: string; display_name?: string; role: string; is_password_reset_required: boolean; character_id: number | null;
   theme_config?: { wallpaper_url?: string } | null;
   email?: string | null; free_content_claimed?: boolean; character_ready_announced?: boolean;
-  credit_balance?: number;
 };
 
 function ShelfContent() {
@@ -53,7 +51,7 @@ function ShelfContent() {
       try {
         const user = await api.me();
         if (user.is_password_reset_required) { router.replace("/change-password"); return; }
-        if (user.is_admin) { router.replace("/admin"); return; }
+        if (user.role === "admin") { router.replace("/admin"); return; }
         setMe(user);
         const [data, charTheme] = await Promise.all([
           api.getMyArticles(),
@@ -163,11 +161,6 @@ function ShelfContent() {
             )}
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
-            <button onClick={() => router.push("/credits")} aria-label="クレジット残高"
-              className="text-[11px] sm:text-sm font-bold px-2 sm:px-2.5 py-1 rounded-full text-white transition-colors whitespace-nowrap"
-              style={{ background: "rgba(255,255,255,0.15)" }}>
-              🔶 {(me?.credit_balance ?? 0).toLocaleString()}
-            </button>
             <button onClick={() => router.push("/rewards")} aria-label="ご褒美コレクション"
               className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors">🎁 ご褒美</button>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
@@ -185,10 +178,10 @@ function ShelfContent() {
         {/* ウェルカムカード：
             ・オリジナルキャラ（キャラ未割り当て）の間は中立的な案内を表示
             ・公式キャラは「最初の1つ無料」を受け取るまで表示 */}
-        {(!me?.character_id || (theme?.is_preset && !me?.free_content_claimed) || (!!me?.character_id && !theme?.is_preset && !me?.character_ready_announced)) && (
+        {(!me?.character_id || (isOfficialCharacter(theme) && !me?.free_content_claimed) || (!!me?.character_id && !isOfficialCharacter(theme) && !me?.character_ready_announced)) && (
           <WelcomeCard theme={t} email={me?.email} freeContentClaimed={!!me?.free_content_claimed}
             pending={!me?.character_id}
-            justCompleted={!!me?.character_id && !theme?.is_preset && !me?.character_ready_announced}
+            justCompleted={!!me?.character_id && !isOfficialCharacter(theme) && !me?.character_ready_announced}
             onClaimed={(article) => {
               setArticles(prev => [...prev, { id: article.id, title: article.title, character_id: 0, article_type: article.article_type }]);
               setMe(prev => prev ? { ...prev, free_content_claimed: true } : prev);
@@ -247,7 +240,7 @@ function ShelfContent() {
               </div>
             )}
             {/* 公式キャラクターのInstagramアカウント案内 */}
-            {theme.is_preset && theme.instagram_account && (
+            {isOfficialCharacter(theme) && theme.instagram_account && (
               <a href={`https://www.instagram.com/${theme.instagram_account}`} target="_blank" rel="noopener noreferrer"
                 className="px-4 sm:px-6 py-2.5 flex items-center gap-3 text-xs transition-colors"
                 style={{ background: t.example_bg, borderTop: `1px dashed ${t.border}`, color: t.text }}>
@@ -383,8 +376,9 @@ function BookCard({ article, index, theme: t, onClick }: {
   const isLocked = !!article.locked;
   const hue = isLocked ? 0 : isExercise ? 265 : isTemplate ? 140 : hues[index % hues.length];
   const isListening = isExercise && hasListeningAudio(article.exercise_data);
+  // クレジット制の開封課金は廃止済み(article.locked は常にfalseを返す)
   const actionLabel = isLocked
-    ? `🔒 ${article.unlock_cost}クレジットで読む`
+    ? "🔒 読む"
     : isExercise ? "解く →" : isBlog ? "読む →" : "読む →";
   const badgeIcon = isTemplate ? "🎁" : isExercise ? (isListening ? "🎧" : "🧩") : isBlog ? "📰" : null;
   const badgeText = isTemplate ? "特別記事" : isExercise ? (article.exercise_category || (isListening ? "リスニング" : "演習問題")) : isBlog ? "ブログ" : null;

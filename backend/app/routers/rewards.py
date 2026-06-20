@@ -112,7 +112,9 @@ def admin_create_reward_item(data: RewardItemCreate, admin=Depends(get_current_a
             RewardItem.character_id == data.character_id,
             RewardItem.category == "line",
         ).scalar() or 0
-        limit = _MAX_LINE_REWARDS_PRESET if character.is_preset else _MAX_LINE_REWARDS_CUSTOM
+        # 旧is_presetフラグ廃止に伴い、暫定的に上限が大きいPRESET側を常用する
+        # (講師ごとの上限差別化はStep3のマーケットプレイス権限設計で見直す)
+        limit = _MAX_LINE_REWARDS_PRESET
         if existing >= limit:
             raise HTTPException(
                 status_code=400,

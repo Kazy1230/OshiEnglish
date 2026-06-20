@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from app.core.intimacy import compute_intimacy_level
 from app.models.article import Article
-from app.models.character import Character
 from app.models.reward import RewardItem, CustomerReward
 
 
@@ -38,14 +37,9 @@ def check_and_unlock_rewards(db: Session, customer) -> list[RewardItem]:
     if not candidates:
         return []
 
-    # 公式キャラ限定の報酬は、公式キャラ（is_preset）を選んだ顧客のみ解放対象とする
-    if any(c.official_only for c in candidates):
-        character = db.query(Character).filter(Character.id == customer.character_id).first()
-        is_preset = bool(character and character.is_preset)
-        if not is_preset:
-            candidates = [c for c in candidates if not c.official_only]
-        if not candidates:
-            return []
+    # 公式キャラ限定の報酬は、official_onlyな項目を持つ場合のみ絞り込む。
+    # 旧is_presetフラグ廃止に伴い、暫定的に全キャラを対象とする
+    # (講師ごとの解放条件差別化はStep3のマーケットプレイス権限設計で見直す)
 
     unlocked_ids = {
         row[0] for row in db.query(CustomerReward.reward_item_id).filter(
