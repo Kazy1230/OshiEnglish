@@ -17,7 +17,7 @@ type ToneForm = {
 const EMPTY_TONE: ToneForm = { first_person: "", speech_style: "", personality: "", catchphrase: "", ng_expressions: "" };
 
 export default function NewCharacterPage() {
-  const { loading } = useRoleGuard(["instructor", "admin"]);
+  const { loading } = useRoleGuard(["creator", "admin"]);
   const router = useRouter();
   const [concept, setConcept] = useState("");
   const [generating, setGenerating] = useState(false);

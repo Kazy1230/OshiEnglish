@@ -11,7 +11,7 @@ type CharacterSummary = { id: number; name: string };
 type ConsultResult = { titles: string[]; structure: string[]; target_level: string; target_audience: string };
 
 export default function StudioPage() {
-  const { loading } = useRoleGuard(["instructor", "admin"]);
+  const { loading } = useRoleGuard(["creator", "admin"]);
   const router = useRouter();
   const [step, setStep] = useState(0);
 
@@ -94,7 +94,7 @@ export default function StudioPage() {
           is_preview: i === 0,
         });
       }
-      toast(`コースを作成しました(${lessonChunks.length}レッスン)。講師ダッシュボードから公開できます`, "success");
+      toast(`コースを作成しました(${lessonChunks.length}レッスン)。クリエイターダッシュボードから公開できます`, "success");
       router.push(`/courses/${course.id}`);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "コースの保存に失敗しました", "error");

@@ -1,16 +1,13 @@
 import asyncio
 import logging
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.character_voice import customer_display_name
 from app.core.security import verify_password, create_access_token, hash_password, get_current_user
-from app.core.intimacy import get_intimacy_settings
-from app.core.rewards import check_and_unlock_rewards
 from app.core.email import send_email
 from app.core.rate_limit import enforce_rate_limit
 from app.models.customer import Customer
@@ -64,27 +61,13 @@ def _reset_login_security(user: Customer):
     user.locked_until = None
 
 
-def _apply_login_bonus(db: Session, user: Customer) -> None:
-    """ログインボーナス（親密度ポイント）を1日1回付与する。"""
-    if user.role == "admin":
-        return
-    today = date.today()
-    if user.last_login_bonus_date == today:
-        return
-
-    settings_row = get_intimacy_settings(db)
-    user.intimacy_points = (user.intimacy_points or 0) + settings_row.points_per_login
-    user.last_login_bonus_date = today
-    check_and_unlock_rewards(db, user)
-
-
 def _notify_password_changed(user: Customer):
     """パスワード変更・再設定時に通知メールを送る（不正なアカウント変更の早期検知のため）。"""
     if not user.email:
         return
     send_email(
         to=user.email,
-        subject="【推しEnglish】パスワードが変更されました",
+        subject="【ManaVillage】パスワードが変更されました",
         html=(
             f"<p>{user.username} 様</p>"
             "<p>このアカウントのパスワードが変更されました。</p>"
@@ -94,7 +77,6 @@ def _notify_password_changed(user: Customer):
 
 
 def _issue_token_response(db: Session, user: Customer) -> dict:
-    _apply_login_bonus(db, user)
     token = create_access_token({"sub": str(user.id), "role": user.role})
     db.commit()
     return {
@@ -173,7 +155,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
         db.commit()
         send_email(
             to=user.email,
-            subject="【推しEnglish】管理者ログイン認証コード",
+            subject="【ManaVillage】管理者ログイン認証コード",
             html=(
                 f"<p>管理者ログインのための認証コードです。</p>"
                 f"<p style='font-size:24px;font-weight:bold;'>{code}</p>"
@@ -254,7 +236,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         send_email(
             to=user.email,
-            subject="【推しEnglish】パスワード再設定のご案内",
+            subject="【ManaVillage】パスワード再設定のご案内",
             html=(
                 f"<p>{user.username} 様</p>"
                 "<p>パスワード再設定のリクエストを受け付けました。以下のリンクから新しいパスワードを設定してください。</p>"
@@ -289,12 +271,7 @@ def get_me(current_user: Customer = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "username": current_user.username,
-        "display_name": customer_display_name(current_user),
         "role": current_user.role,
         "is_password_reset_required": current_user.is_password_reset_required,
-        "character_id": current_user.character_id,
-        "theme_config": current_user.theme_config,
         "email": current_user.email,
-        "free_content_claimed": current_user.free_content_claimed,
-        "character_ready_announced": current_user.character_ready_announced,
     }

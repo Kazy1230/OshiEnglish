@@ -103,7 +103,7 @@ export default function PricingPage() {
           <div className="flex items-center gap-3">
             <button onClick={() => router.push(loggedIn ? "/shelf" : "/login")} aria-label="戻る"
               className="text-white/70 hover:text-white text-sm">← 戻る</button>
-            <h1 className="text-lg sm:text-xl font-black text-white">推しEnglish</h1>
+            <h1 className="text-lg sm:text-xl font-black text-white">ManaVillage</h1>
           </div>
           <div className="flex items-center gap-2">
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />

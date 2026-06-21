@@ -12,7 +12,7 @@ type CharacterSummary = { id: number; name: string; description?: string | null;
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
 
 export default function DashboardPage() {
-  const { me, loading } = useRoleGuard(["instructor", "admin"]);
+  const { me, loading } = useRoleGuard(["creator", "admin"]);
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [loadingChars, setLoadingChars] = useState(true);
   const [purchasedCourses, setPurchasedCourses] = useState<PurchasedCourse[]>([]);
@@ -29,7 +29,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">講師ダッシュボード</h1>
+        <h1 className="text-white font-black text-lg">クリエイターダッシュボード</h1>
         <div className="flex items-center gap-3">
           <NotificationBell />
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
@@ -43,7 +43,13 @@ export default function DashboardPage() {
 
         <div className="flex flex-wrap gap-3">
           <Link href="/dashboard/characters/new" className="btn-primary">+ 新しいキャラクターを作る</Link>
+          <Link href="/creator/courses/new" className="btn-primary">📅 90日伴走コースを作る</Link>
           <Link href="/studio" className="btn-primary">🎬 AIコンテンツ生成スタジオへ</Link>
+          <Link href="/creator/interview" className="btn-ghost">🧠 AIインタビュー（人格プロファイル）</Link>
+          <Link href="/creator/profile" className="btn-ghost">👤 人格プロファイルを確認</Link>
+          <Link href="/creator/analytics" className="btn-ghost">📊 質問分析ダッシュボード</Link>
+          <Link href="/creator/inbox" className="btn-ghost">📨 未回答の質問（Tier B）</Link>
+          <Link href="/creator/revenue" className="btn-ghost">💰 収益ダッシュボード</Link>
         </div>
 
         <div>

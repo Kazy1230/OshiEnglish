@@ -17,9 +17,13 @@ type Lesson = {
 type CourseDetail = {
   id: number; title: string; description?: string | null; thumbnail_url?: string | null;
   category?: string | null; status: string; price: number; is_free: boolean;
+  tier_a_price?: number | null; tier_b_price?: number | null;
   character: { id: number; name: string; avatar_url?: string | null };
   lessons: Lesson[];
   is_purchased: boolean;
+  is_suspended?: boolean;
+  suspension_reason?: string | null;
+  my_subscription?: { id: number; tier: "A" | "B"; status: string } | null;
 };
 
 export default function CourseDetailPage() {
@@ -32,6 +36,7 @@ export default function CourseDetailPage() {
   const [activeLessonId, setActiveLessonId] = useState<number | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<number>>(new Set());
   const [completing, setCompleting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const [mode, toggleMode] = useDarkMode();
 
   function load() {
@@ -73,6 +78,45 @@ export default function CourseDetailPage() {
     }
   }
 
+  async function handleCancelSubscription(subscriptionId: number) {
+    if (!confirm("このサブスクリプションを解約しますか？解約後は即時利用できなくなります。")) return;
+    setCanceling(true);
+    try {
+      await api.cancelSubscription(subscriptionId);
+      toast("解約しました", "success");
+      await load();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "解約に失敗しました", "error");
+    } finally {
+      setCanceling(false);
+    }
+  }
+
+  async function handleSubscribe(tier: "A" | "B") {
+    if (!getToken()) { window.location.href = "/login"; return; }
+    setPurchasing(true);
+    try {
+      const res = await api.subscribeToCourse(courseId, tier);
+      setCheckout({ clientSecret: res.client_secret });
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");
+    } finally {
+      setPurchasing(false);
+    }
+  }
+
+  async function handleReport() {
+    if (!getToken()) { window.location.href = "/login"; return; }
+    const reason = prompt("通報理由を入力してください");
+    if (!reason) return;
+    try {
+      await api.submitReport({ target_type: "course", target_id: courseId, reason });
+      toast("通報を受け付けました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "通報に失敗しました", "error");
+    }
+  }
+
   if (loading) return <p className="p-8" style={{ color: "var(--muted)" }}>読み込み中…</p>;
   if (!course) return <p className="p-8" style={{ color: "var(--muted)" }}>コースが見つかりません</p>;
 
@@ -82,7 +126,7 @@ export default function CourseDetailPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href={`/instructors/${course.character.id}`} className="text-white/80 text-sm">← 講師ページ</Link>
+        <Link href={`/creators/${course.character.id}`} className="text-white/80 text-sm">← クリエイターページ</Link>
         <div className="flex items-center gap-3">
           <NotificationBell />
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
@@ -95,22 +139,79 @@ export default function CourseDetailPage() {
           <h1 className="text-2xl font-black mt-2" style={{ color: "var(--primary)" }}>{course.title}</h1>
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>{course.character.name}</p>
           {course.description && <p className="text-sm mt-3" style={{ color: "var(--text)" }}>{course.description}</p>}
+          <button onClick={handleReport} className="text-xs underline mt-2" style={{ color: "var(--muted)" }}>このコースを通報する</button>
         </div>
 
-        <div className="card flex items-center justify-between gap-4 sticky top-4 z-10">
-          <p className="font-black text-lg" style={{ color: "var(--accent)" }}>
-            {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
-          </p>
-          {unlocked ? (
-            <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
-          ) : course.is_free ? (
-            <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
-          ) : (
-            <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">
-              {purchasing ? "準備中…" : "購入する"}
-            </button>
-          )}
-        </div>
+        {(course.tier_a_price || course.tier_b_price) ? (
+          <div className="card flex flex-col gap-4 sticky top-4 z-10">
+            {unlocked ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
+                  ✅ {course.my_subscription ? `Tier ${course.my_subscription.tier} 契約中` : "購入済み"}
+                </span>
+                <div className="flex items-center gap-3">
+                  <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
+                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                  {course.my_subscription && (
+                    <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
+                      className="text-xs underline disabled:opacity-50" style={{ color: "var(--muted)" }}>
+                      解約する
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : course.my_subscription?.status === "incomplete" ? (
+              <p className="text-sm" style={{ color: "var(--muted)" }}>決済処理中です。少し時間をおいて再度ご確認ください。</p>
+            ) : (
+              <>
+                <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>月額プランを選択してください</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {course.tier_a_price && (
+                    <div className="border rounded-lg p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+                      <p className="text-xs font-bold" style={{ color: "var(--text)" }}>Tier A（AIのみ）</p>
+                      <p className="font-black" style={{ color: "var(--accent)" }}>¥{course.tier_a_price.toLocaleString()}/月</p>
+                      <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="btn-primary disabled:opacity-50">
+                        {purchasing ? "準備中…" : "Tier Aで始める"}
+                      </button>
+                    </div>
+                  )}
+                  {course.tier_b_price && (
+                    <div className="border rounded-lg p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
+                      <p className="text-xs font-bold" style={{ color: "var(--text)" }}>Tier B（AI＋クリエイター添削）</p>
+                      <p className="font-black" style={{ color: "var(--accent)" }}>¥{course.tier_b_price.toLocaleString()}/月</p>
+                      <button onClick={() => handleSubscribe("B")} disabled={purchasing} className="btn-primary disabled:opacity-50">
+                        {purchasing ? "準備中…" : "Tier Bで始める"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="card flex items-center justify-between gap-4 sticky top-4 z-10">
+            <p className="font-black text-lg" style={{ color: "var(--accent)" }}>
+              {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
+            </p>
+            {unlocked ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
+                <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
+                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+              </div>
+            ) : course.is_free ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
+                <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
+                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+              </div>
+            ) : (
+              <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">
+                {purchasing ? "準備中…" : "購入する"}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-1 flex flex-col gap-2">

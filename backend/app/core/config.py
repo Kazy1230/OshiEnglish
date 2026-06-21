@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     # DM返信の下書き生成（キャラクターになりきった文章生成）に使用するAnthropic API
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
+    # デイリー伴走チャットのデフォルトモデル（低コスト）。NEEDS_SONNETキーワードに該当する質問のみANTHROPIC_MODELへエスカレーション
+    ANTHROPIC_MODEL_HAIKU: str = "claude-haiku-4-5-20251001"
+
+    # クリエイター収益管理：プラットフォーム手数料率（要件定義書5.9節「ユーザー課金→手数料控除→クリエイター残高」）
+    PLATFORM_FEE_RATE: float = 0.2
 
     # ----- 決済（Stripe） -----
     # 未設定の場合、決済関連エンドポイントは503を返し、フォーム送信のみの従来フローにフォールバックする

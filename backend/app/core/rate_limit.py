@@ -44,3 +44,31 @@ def enforce_rate_limit(request: Request, key_prefix: str, limit: int, window_sec
             )
     except redis.RedisError:
         logger.exception("[RateLimit] Redis接続に失敗したため、レート制限をスキップしました")
+
+
+def enforce_daily_message_limit(user_id: int, course_id: int, limit: int = 10) -> int:
+    """学習者1人・1コースあたりの1日のチャット送信数を制限する（カードテスティング対策と同様にRedisで実装）。
+
+    Redis接続に失敗した場合は安全側に倒し、制限せず通過させる（チャット機能を止めないため）。
+    戻り値は今回の送信を含めた本日の累計送信数。
+    """
+    key = f"chatlimit:{user_id}:{course_id}:{_today_str()}"
+    try:
+        client = _get_redis()
+        count = client.incr(key)
+        if count == 1:
+            client.expire(key, 60 * 60 * 24)
+        if count > limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="本日のチャット回数の上限（10回）に達しました。明日またお話しましょう！",
+            )
+        return count
+    except redis.RedisError:
+        logger.exception("[RateLimit] Redis接続に失敗したため、チャット回数制限をスキップしました")
+        return 0
+
+
+def _today_str() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")

@@ -35,7 +35,7 @@ function LoginForm() {
       router.push("/change-password");
     } else {
       const me = await api.me();
-      router.push(me.role === "admin" ? "/admin" : "/shelf");
+      router.push(me.role === "admin" ? "/admin" : me.role === "creator" ? "/dashboard" : "/");
     }
   }
 
@@ -79,8 +79,8 @@ function LoginForm() {
       </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>推しEnglish</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>あなただけのキャラクター英文法解説</p>
+          <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>ManaVillage</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>90日間のAIメンターシップで学びを習慣に</p>
         </div>
 
         <div className="card shadow-sm">
@@ -149,11 +149,11 @@ function LoginForm() {
         </div>
 
         <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
-          ID・パスワードはお申し込み完了画面でお知らせします
+          ID・パスワードはご購入完了画面でお知らせします
         </p>
         <p className="text-center text-xs mt-2">
-          <Link href="/apply" className="font-medium transition-colors" style={{ color: "var(--accent)" }}>
-            まだ登録していない方はこちら（お申し込み）
+          <Link href="/" className="font-medium transition-colors" style={{ color: "var(--accent)" }}>
+            まだ登録していない方はこちら（コースを探す）
           </Link>
         </p>
       </div>

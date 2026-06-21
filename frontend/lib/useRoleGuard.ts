@@ -7,10 +7,10 @@ import { clearToken, getToken, hasRole, type Role } from "@/lib/auth";
 /**
  * ロールベースのルートガード。
  * - 未ログイン → /login にリダイレクト
- * - ログイン済みだが許可ロールでない → redirectTo（既定: /shelf）にリダイレクト
+ * - ログイン済みだが許可ロールでない → redirectTo（既定: /）にリダイレクト
  * - 許可ロールであれば me（/auth/me のレスポンス）を返す
  */
-export function useRoleGuard(allowed: Role[], redirectTo: string = "/shelf") {
+export function useRoleGuard(allowed: Role[], redirectTo: string = "/") {
   const router = useRouter();
   const [me, setMe] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);

@@ -48,7 +48,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)):
-    """未ログインの場合はNoneを返す（講師ページ・コース詳細など、公開ページでログイン状態により表示を変える用途）"""
+    """未ログインの場合はNoneを返す（クリエイターページ・コース詳細など、公開ページでログイン状態により表示を変える用途）"""
     if not token:
         return None
     from app.models.customer import Customer
@@ -66,8 +66,8 @@ def get_current_admin(current_user=Depends(get_current_user)):
     return current_user
 
 
-def get_current_instructor_or_admin(current_user=Depends(get_current_user)):
-    """講師ダッシュボード(/dashboard, /studio)向け: role='instructor'または'admin'のみ許可する"""
-    if current_user.role not in ("instructor", "admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="講師権限が必要です")
+def get_current_creator_or_admin(current_user=Depends(get_current_user)):
+    """クリエイターダッシュボード(/dashboard, /studio)向け: role='creator'または'admin'のみ許可する"""
+    if current_user.role not in ("creator", "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="クリエイター権限が必要です")
     return current_user

@@ -40,10 +40,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: yt_backend
+    env_file: .env
     environment:
-      - DATABASE_URL=mysql+pymysql://yt_user:yt_pass@db:3306/yourteacher
+      - DATABASE_URL=mysql+pymysql://yt_user:${MYSQL_PASSWORD}@db:3306/yourteacher
       - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=change-me-in-production
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=60
     volumes:
@@ -64,16 +64,12 @@ services:
   db:
     image: mysql:8
     container_name: yt_db
-    environment:
-      - MYSQL_ROOT_PASSWORD=root_pass
-      - MYSQL_DATABASE=yourteacher
-      - MYSQL_USER=yt_user
-      - MYSQL_PASSWORD=yt_pass
+    env_file: .env
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "yt_user", "-pyt_pass"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "yt_user", "-p${MYSQL_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5

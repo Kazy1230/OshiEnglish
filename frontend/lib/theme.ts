@@ -16,15 +16,12 @@ export type CharacterTheme = {
     tips_bg?: string;
   };
   font_style?: string; // rounded / serif / handwriting / monospace
-  reward_progress_template?: string; // チャット画面のご褒美進捗メッセージ（{character}/{published}/{remaining}/{target} を置換）
-  chat_footer_note?: string; // チャット画面の入力欄下の注意書き
-  instagram_account?: string; // 公式Instagramアカウント名（@なし）
-  instructor_id?: number | null; // 所属する講師プロフィールのID（旧is_presetを置き換え）
+  creator_id?: number | null; // 所属するクリエイタープロフィールのID（旧is_presetを置き換え）
 };
 
-/** 講師に割り当てられている（旧is_presetの「公式キャラクター」に相当）かどうかを判定する */
-export function isOfficialCharacter(theme?: { instructor_id?: number | null } | null): boolean {
-  return theme?.instructor_id != null;
+/** クリエイターに割り当てられている（旧is_presetの「公式キャラクター」に相当）かどうかを判定する */
+export function isOfficialCharacter(theme?: { creator_id?: number | null } | null): boolean {
+  return theme?.creator_id != null;
 }
 
 /** ご褒美進捗メッセージのデフォルトテンプレート（{character}/{published}/{remaining}/{target} を置換して使用） */

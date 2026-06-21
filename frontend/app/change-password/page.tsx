@@ -38,7 +38,7 @@ export default function ChangePasswordPage() {
       </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>推しEnglish</h1>
+          <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>ManaVillage</h1>
         </div>
 
         <div className="card shadow-sm">

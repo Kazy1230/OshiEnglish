@@ -14,7 +14,7 @@ class LLMError(Exception):
     """AI応答の生成に失敗した場合に送出する。"""
 
 
-def generate_text(system_prompt: str, messages: list[dict], max_tokens: int = 1024) -> str:
+def generate_text(system_prompt: str, messages: list[dict], max_tokens: int = 1024, model: str | None = None) -> str:
     if not settings.ANTHROPIC_API_KEY:
         raise LLMError("ANTHROPIC_API_KEYが設定されていません。管理者にお問い合わせください。")
 
@@ -27,7 +27,7 @@ def generate_text(system_prompt: str, messages: list[dict], max_tokens: int = 10
                 "content-type": "application/json",
             },
             json={
-                "model": settings.ANTHROPIC_MODEL,
+                "model": model or settings.ANTHROPIC_MODEL,
                 "max_tokens": max_tokens,
                 "system": system_prompt,
                 "messages": messages,

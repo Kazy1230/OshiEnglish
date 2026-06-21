@@ -16,7 +16,7 @@ type ToneProfile = {
 };
 
 export default function EditCharacterPage() {
-  const { loading } = useRoleGuard(["instructor", "admin"]);
+  const { loading } = useRoleGuard(["creator", "admin"]);
   const params = useParams();
   const characterId = Number(params.id);
 

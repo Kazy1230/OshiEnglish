@@ -9,7 +9,7 @@ class ContentDraft(Base):
     __tablename__ = "content_drafts"
 
     id = Column(Integer, primary_key=True, index=True)
-    instructor_id = Column(Integer, ForeignKey("instructor_profiles.id"), nullable=True, index=True)
+    creator_id = Column(Integer, ForeignKey("creator_profiles.id"), nullable=True, index=True)
     character_id = Column(Integer, ForeignKey("characters.id"), nullable=True, index=True)
     theme = Column(String(255), nullable=False)
     structure = Column(JSON, nullable=True)  # 構成案(セクション見出しのリスト)
@@ -20,5 +20,5 @@ class ContentDraft(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    instructor = relationship("InstructorProfile")
+    creator = relationship("CreatorProfile")
     character = relationship("Character")

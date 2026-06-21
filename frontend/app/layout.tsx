@@ -4,8 +4,8 @@ import { ToastProvider } from "@/components/Toast";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "推しEnglish",
-  description: "あなただけのキャラクター英文法解説サービス",
+  title: "ManaVillage",
+  description: "90日間のAIメンターシップ・サブスクリプション・マーケットプレイス",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

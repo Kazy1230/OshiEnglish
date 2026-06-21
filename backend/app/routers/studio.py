@@ -4,24 +4,24 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
-from app.core.security import get_current_instructor_or_admin
+from app.core.security import get_current_creator_or_admin
 from app.core.llm import generate_text, stream_text, extract_json, LLMError
 from app.core import studio_prompts as prompts
 from app.models.content_draft import ContentDraft
 from app.models.character import Character
-from app.models.instructor_profile import InstructorProfile
+from app.models.creator_profile import CreatorProfile
 
 router = APIRouter(prefix="/studio", tags=["AIコンテンツ生成スタジオ"])
 
 
-def _get_own_instructor_profile_id(db: Session, current_user) -> Optional[int]:
-    """現在の講師に紐づくinstructor_profiles.idを返す。adminでプロフィールが無い場合はNoneを返す。"""
-    profile = db.query(InstructorProfile).filter(InstructorProfile.user_id == current_user.id).first()
+def _get_own_creator_profile_id(db: Session, current_user) -> Optional[int]:
+    """現在のクリエイターに紐づくcreator_profiles.idを返す。adminでプロフィールが無い場合はNoneを返す。"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
     if profile:
         return profile.id
     if current_user.role == "admin":
         return None
-    raise HTTPException(status_code=400, detail="講師プロフィールが見つかりません")
+    raise HTTPException(status_code=400, detail="クリエイタープロフィールが見つかりません")
 
 
 def _get_owned_character(db: Session, character_id: int, current_user) -> Character:
@@ -29,8 +29,8 @@ def _get_owned_character(db: Session, character_id: int, current_user) -> Charac
     if not char:
         raise HTTPException(status_code=404, detail="キャラクターが見つかりません")
     if current_user.role != "admin":
-        profile = db.query(InstructorProfile).filter(InstructorProfile.user_id == current_user.id).first()
-        if not profile or char.instructor_id != profile.id:
+        profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+        if not profile or char.creator_id != profile.id:
             raise HTTPException(status_code=403, detail="このキャラクターを編集する権限がありません")
     return char
 
@@ -40,8 +40,8 @@ def _get_owned_draft(db: Session, draft_id: int, current_user) -> ContentDraft:
     if not draft:
         raise HTTPException(status_code=404, detail="下書きが見つかりません")
     if current_user.role != "admin":
-        profile = db.query(InstructorProfile).filter(InstructorProfile.user_id == current_user.id).first()
-        if not profile or draft.instructor_id != profile.id:
+        profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+        if not profile or draft.creator_id != profile.id:
             raise HTTPException(status_code=403, detail="この下書きを操作する権限がありません")
     return draft
 
@@ -55,7 +55,7 @@ class CharacterConceptRequest(BaseModel):
 @router.post("/generate/character")
 def generate_character_concept(
     data: CharacterConceptRequest,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
 ):
     try:
         text = generate_text(prompts.CHARACTER_CONCEPT_SYSTEM, prompts.build_character_concept_messages(data.character_concept))
@@ -73,7 +73,7 @@ class ConsultRequest(BaseModel):
 @router.post("/consult")
 def consult(
     data: ConsultRequest,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
 ):
     try:
         text = generate_text(prompts.CONSULT_SYSTEM, prompts.build_consult_messages(data.theme))
@@ -93,12 +93,12 @@ class GenerateRawRequest(BaseModel):
 @router.post("/generate/raw")
 def generate_raw(
     data: GenerateRawRequest,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
-    instructor_id = _get_own_instructor_profile_id(db, current_user)
+    creator_id = _get_own_creator_profile_id(db, current_user)
     draft = ContentDraft(
-        instructor_id=instructor_id,
+        creator_id=creator_id,
         theme=data.theme,
         structure=data.structure,
         target_level=data.target_level,
@@ -142,7 +142,7 @@ class GenerateVoicedRequest(BaseModel):
 @router.post("/generate/voiced")
 def generate_voiced(
     data: GenerateVoicedRequest,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
     draft = _get_owned_draft(db, data.draft_id, current_user)
@@ -187,7 +187,7 @@ class GenerateScriptRequest(BaseModel):
 @router.post("/generate/script")
 def generate_script(
     data: GenerateScriptRequest,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
     draft = _get_owned_draft(db, data.draft_id, current_user)
@@ -223,12 +223,12 @@ def generate_script(
 
 @router.get("/drafts")
 def list_drafts(
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
-    instructor_id = _get_own_instructor_profile_id(db, current_user)
+    creator_id = _get_own_creator_profile_id(db, current_user)
     query = db.query(ContentDraft)
-    query = query.filter(ContentDraft.instructor_id == instructor_id) if instructor_id is not None else query.filter(ContentDraft.instructor_id.is_(None))
+    query = query.filter(ContentDraft.creator_id == creator_id) if creator_id is not None else query.filter(ContentDraft.creator_id.is_(None))
     drafts = query.order_by(ContentDraft.updated_at.desc()).all()
     return [
         {
@@ -249,7 +249,7 @@ def list_drafts(
 @router.get("/drafts/{draft_id}")
 def get_draft(
     draft_id: int,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
     draft = _get_owned_draft(db, draft_id, current_user)
@@ -268,7 +268,7 @@ def get_draft(
 @router.delete("/drafts/{draft_id}")
 def delete_draft(
     draft_id: int,
-    current_user=Depends(get_current_instructor_or_admin),
+    current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
     draft = _get_owned_draft(db, draft_id, current_user)

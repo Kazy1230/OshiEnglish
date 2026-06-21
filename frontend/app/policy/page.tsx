@@ -37,7 +37,7 @@ export default function PolicyPage() {
           <div className="flex items-center gap-3">
             <button onClick={() => router.push(loggedIn ? "/shelf" : "/login")} aria-label="戻る"
               className="text-white/70 hover:text-white text-sm">← 戻る</button>
-            <h1 className="text-lg sm:text-xl font-black text-white">推しEnglish</h1>
+            <h1 className="text-lg sm:text-xl font-black text-white">ManaVillage</h1>
           </div>
           <div className="flex items-center gap-2">
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
@@ -49,7 +49,7 @@ export default function PolicyPage() {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <h2 className="text-2xl font-black mb-2" style={{ color: t.primary }}>📄 返金・解約ポリシー</h2>
         <p className="text-sm mb-6" style={{ color: "var(--muted)" }}>
-          推しEnglishをご利用いただく前に、解約および返金に関する以下のポリシーをご確認ください。
+          ManaVillageをご利用いただく前に、解約および返金に関する以下のポリシーをご確認ください。
         </p>
 
         <section className="mb-8 rounded-xl p-4" style={{ background: t.card, border: `1px solid ${t.border}` }}>

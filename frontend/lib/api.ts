@@ -74,102 +74,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token, new_password }),
     }),
-  getMyArticles: () => apiFetch("/articles/"),
-  getArticle: (id: number) => apiFetch(`/articles/${id}`),
-  submitMultipleChoiceExercise: (id: number, answers: (number | null)[]) =>
-    apiFetch(`/articles/${id}/submit-mc`, { method: "POST", body: JSON.stringify({ answers }) }),
-  checkExerciseAnswer: (id: number, questionIndex: number, chosenIndex: number | null) =>
-    apiFetch(`/articles/${id}/check-answer`, { method: "POST", body: JSON.stringify({ question_index: questionIndex, chosen_index: chosenIndex }) }),
-  answerExerciseQuestion: (id: number, questionIndex: number, chosenIndex: number | null, timeTaken?: number, attemptNumber?: number) =>
-    apiFetch(`/articles/${id}/answer-question`, {
-      method: "POST",
-      body: JSON.stringify({ question_index: questionIndex, chosen_index: chosenIndex, time_taken: timeTaken, attempt_number: attemptNumber }),
-    }),
-  submitWrittenExercise: (id: number, answer: string) =>
-    apiFetch(`/articles/${id}/submit-written`, { method: "POST", body: JSON.stringify({ answer }) }),
-  submitSpeakingExercise: (id: number, file: File | Blob, note?: string) => {
-    const fd = new FormData();
-    fd.append("file", file, (file as File).name || "submission");
-    if (note) fd.append("note", note);
-    return apiUpload(`/articles/${id}/submit-written/media`, fd);
-  },
-  unlockArticle: (id: number) => apiFetch(`/articles/${id}/unlock`, { method: "POST" }),
   getCharacterTheme: (id: number) => apiFetch(`/characters/theme/${id}`),
-  claimWelcomeArticle: () =>
-    apiFetch("/articles/me/claim-welcome", { method: "POST" }),
-  ackCharacterReady: () =>
-    apiFetch("/customers/me/ack-character-ready", { method: "POST" }),
-  getCharacterBlogPosts: (characterId: number) => apiFetch(`/articles/character/${characterId}/blog-posts`),
-
-  // 顧客：チャット（キャラクターとのメッセージ）
-  getMyThread: (params?: { beforeId?: number; limit?: number }) => {
-    const qs = new URLSearchParams();
-    if (params?.beforeId != null) qs.set("before_id", String(params.beforeId));
-    if (params?.limit != null) qs.set("limit", String(params.limit));
-    const q = qs.toString();
-    return apiFetch(`/messages/me${q ? `?${q}` : ""}`);
-  },
-  sendMyMessage: (data: { content?: string; grammar_topic?: string; credit_cost?: number }) =>
-    apiFetch("/messages/me", { method: "POST", body: JSON.stringify(data) }),
-  // 注: credit_costは現在バックエンドで未使用（クレジット制決済は廃止済み）。記事リクエストの識別目的のみ残置。
-  getMyRewardStatus: () => apiFetch("/messages/me/reward-status"),
-  getMyUnreadCount: () => apiFetch("/messages/me/unread-count"),
-  rateMessage: (messageId: number, rating: "good" | "bad") =>
-    apiFetch(`/messages/${messageId}/feedback`, { method: "POST", body: JSON.stringify({ rating }) }),
-  unrateMessage: (messageId: number) =>
-    apiFetch(`/messages/${messageId}/feedback`, { method: "DELETE" }),
-
-  // 顧客：添削リクエスト（お題のない自由提出のライティング/スピーキング）
-  submitCorrectionText: (data: { correction_type: "writing" | "speaking"; text_content?: string; note?: string }) =>
-    apiFetch("/corrections/me", { method: "POST", body: JSON.stringify(data) }),
-  submitCorrectionMedia: (params: { file: File | Blob; filename?: string; correction_type?: string; media_type_hint?: "audio" | "video"; note?: string }) => {
-    const fd = new FormData();
-    fd.append("file", params.file, params.filename || "submission");
-    if (params.correction_type) fd.append("correction_type", params.correction_type);
-    if (params.media_type_hint) fd.append("media_type_hint", params.media_type_hint);
-    if (params.note) fd.append("note", params.note);
-    return apiUpload("/corrections/me/media", fd);
-  },
-
-  // 管理者：記事
-  adminGetArticles: () => apiFetch("/articles/admin/all"),
-  adminCreateArticle: (data: object) => apiFetch("/articles/admin/", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateArticle: (id: number, data: object) => apiFetch(`/articles/admin/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteArticle: (id: number) => apiFetch(`/articles/admin/${id}`, { method: "DELETE" }),
-  adminUploadExerciseAudio: (file: File) => {
-    const fd = new FormData();
-    fd.append("file", file, file.name);
-    return apiUpload("/articles/admin/exercise-audio", fd);
-  },
-
-  // 管理者：教育記事ストック（①記事作成の2段階生成）
-  adminListArticleTemplates: (topic?: string) =>
-    apiFetch(`/article-templates/admin/${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
-  adminCreateArticleTemplate: (data: { topic: string; difficulty: string; content: string }) =>
-    apiFetch("/article-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
-  adminDeleteArticleTemplate: (id: number) =>
-    apiFetch(`/article-templates/admin/${id}`, { method: "DELETE" }),
-
-  // 管理者：問題本体ストック（②選択式演習の2段階生成）
-  adminListExerciseTemplates: (exerciseCategory?: string, exerciseSubcategory?: string) => {
-    const params = new URLSearchParams();
-    if (exerciseCategory) params.set("exercise_category", exerciseCategory);
-    if (exerciseSubcategory) params.set("exercise_subcategory", exerciseSubcategory);
-    const qs = params.toString();
-    return apiFetch(`/exercise-templates/admin/${qs ? `?${qs}` : ""}`);
-  },
-  adminCreateExerciseTemplate: (data: { exercise_category: string; exercise_subcategory?: string; difficulty: string; exercise_data: object }) =>
-    apiFetch("/exercise-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
-  adminDeleteExerciseTemplate: (id: number) =>
-    apiFetch(`/exercise-templates/admin/${id}`, { method: "DELETE" }),
-
-  // 管理者：定期便ストック（④定期便プールの2段階生成）
-  adminListTemplateArticleTemplates: (topic?: string) =>
-    apiFetch(`/template-article-templates/admin/${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
-  adminCreateTemplateArticleTemplate: (data: { topic?: string; difficulty: string; content: string; example_sentences?: string[]; tips?: string[] }) =>
-    apiFetch("/template-article-templates/admin/", { method: "POST", body: JSON.stringify(data) }),
-  adminDeleteTemplateArticleTemplate: (id: number) =>
-    apiFetch(`/template-article-templates/admin/${id}`, { method: "DELETE" }),
 
   // 管理者：顧客
   adminGetCustomers: () => apiFetch("/customers/"),
@@ -177,47 +82,9 @@ export const api = {
   adminUpdateCustomer: (id: number, data: object) => apiFetch(`/customers/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteCustomer: (id: number) => apiFetch(`/customers/${id}`, { method: "DELETE" }),
   adminReissuePassword: (id: number) => apiFetch(`/customers/${id}/reissue-password`, { method: "POST" }),
-  adminGetCustomerProgress: (id: number) => apiFetch(`/customers/${id}/progress-stats`),
-  adminRefundCustomer: (id: number) => apiFetch(`/payments/refund/${id}`, { method: "POST" }),
 
   // 退会
   withdraw: () => apiFetch("/customers/me/withdraw", { method: "POST" }),
-
-  // 購入履歴・領収書
-  getMyOrders: () => apiFetch("/orders/me"),
-  downloadReceipt: async (orderId: number) => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("yt_token") : null;
-    const res = await fetch(`${API_BASE}/orders/${orderId}/receipt`, {
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: "領収書の取得に失敗しました" }));
-      throw new Error(err.detail || "領収書の取得に失敗しました");
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `receipt_${orderId}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  },
-
-  // 管理者：受注
-  adminGetOrders: () => apiFetch("/orders/"),
-  adminCreateOrder: (data: object) => apiFetch("/orders/", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateOrder: (id: number, data: object) => apiFetch(`/orders/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteOrder: (id: number) => apiFetch(`/orders/${id}`, { method: "DELETE" }),
-  adminLinkOrderToCustomer: (orderId: number, customerId: number | null) =>
-    apiFetch(`/orders/${orderId}/link-customer`, { method: "POST", body: JSON.stringify({ customer_id: customerId }) }),
-
-  // 管理者：アクセスログ
-  adminGetAccessLogs: () => apiFetch("/access-logs/"),
-  adminGetCustomerLogs: (id: number) => apiFetch(`/access-logs/customer/${id}`),
-  adminCleanupAccessLogs: (olderThanDays: number) =>
-    apiFetch(`/access-logs/cleanup?older_than_days=${olderThanDays}`, { method: "DELETE" }),
 
   // 管理者：キャラクター
   adminGetCharacters: () => apiFetch("/characters/"),
@@ -225,99 +92,30 @@ export const api = {
   adminUpdateCharacter: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminDeleteCharacter: (id: number) => apiFetch(`/characters/${id}`, { method: "DELETE" }),
 
-  // 管理者：チャット（メッセージ）
-  adminListThreads: (params?: { assignedAdminId?: number | null; unassigned?: boolean; sort?: string }) => {
-    const qs = new URLSearchParams();
-    if (params?.unassigned) qs.set("unassigned", "true");
-    else if (params?.assignedAdminId != null) qs.set("assigned_admin_id", String(params.assignedAdminId));
-    if (params?.sort) qs.set("sort", params.sort);
-    const q = qs.toString();
-    return apiFetch(`/messages/admin/threads${q ? `?${q}` : ""}`);
-  },
-  adminListOperators: () => apiFetch("/messages/admin/operators"),
-  adminUpdateAssignment: (customerId: number, data: { assigned_admin_id?: number | null }) =>
-    apiFetch(`/messages/admin/${customerId}/assignment`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminGetThread: (customerId: number, params?: { beforeId?: number; limit?: number }) => {
-    const qs = new URLSearchParams();
-    if (params?.beforeId != null) qs.set("before_id", String(params.beforeId));
-    if (params?.limit != null) qs.set("limit", String(params.limit));
-    const q = qs.toString();
-    return apiFetch(`/messages/admin/${customerId}${q ? `?${q}` : ""}`);
-  },
-  adminReplyMessage: (customerId: number, content: string, suggestedAction?: string) =>
-    apiFetch(`/messages/admin/${customerId}/reply`, { method: "POST", body: JSON.stringify({ content, suggested_action: suggestedAction }) }),
-  adminDraftReply: (customerId: number) =>
-    apiFetch(`/messages/admin/${customerId}/draft-reply`, { method: "POST" }),
-  adminListExerciseSubmissions: () => apiFetch("/messages/admin/exercise-submissions"),
+  // マーケットプレイス：クリエイター
+  listCreators: () => apiFetch("/creators/"),
+  getCreator: (id: number) => apiFetch(`/creators/${id}`),
 
-  // 管理者：添削リクエスト（お題のない自由提出のライティング/スピーキング）
-  adminListCorrectionRequests: (status?: string) =>
-    apiFetch(`/corrections/admin/${status ? `?status=${encodeURIComponent(status)}` : ""}`),
-  adminGetCorrectionRequest: (id: number) => apiFetch(`/corrections/admin/${id}`),
-  adminUpdateCorrectionStatus: (id: number, status: string) =>
-    apiFetch(`/corrections/admin/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
-  adminUpdateCorrectionTranscript: (id: number, transcript: string) =>
-    apiFetch(`/corrections/admin/${id}/transcript`, { method: "PATCH", body: JSON.stringify({ transcript }) }),
-  adminUpdateMemo: (customerId: number, adminMemo: string) =>
-    apiFetch(`/messages/admin/${customerId}/memo`, { method: "PATCH", body: JSON.stringify({ admin_memo: adminMemo }) }),
-  adminUpdateRequestStatus: (messageId: number, status: string) =>
-    apiFetch(`/messages/admin/request/${messageId}?status=${encodeURIComponent(status)}`, { method: "PATCH" }),
-  adminGetCustomerRequests: (customerId: number) =>
-    apiFetch(`/messages/admin/requests/${customerId}`),
-  adminAdjustIntimacy: (customerId: number, delta: number, reason?: string) =>
-    apiFetch(`/messages/admin/${customerId}/intimacy/adjust`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
-  adminEditMessage: (messageId: number, content: string) =>
-    apiFetch(`/messages/admin/message/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
-  adminDeleteMessage: (messageId: number) =>
-    apiFetch(`/messages/admin/message/${messageId}`, { method: "DELETE" }),
+  // クリエイター申請・プロフィール
+  applyAsCreator: (data: object) => apiFetch("/creators/apply", { method: "POST", body: JSON.stringify(data) }),
+  getMyCreatorProfile: () => apiFetch("/creators/me"),
+  updateMyCreatorProfile: (data: object) => apiFetch("/creators/me", { method: "PUT", body: JSON.stringify(data) }),
 
-  // 管理者：修正サジェスト一覧（メッセージ評価）
-  adminListMessageFeedback: (params?: { characterId?: number; rating?: "good" | "bad" }) => {
-    const qs = new URLSearchParams();
-    if (params?.characterId != null) qs.set("character_id", String(params.characterId));
-    if (params?.rating) qs.set("rating", params.rating);
-    const q = qs.toString();
-    return apiFetch(`/messages/admin/feedback${q ? `?${q}` : ""}`);
-  },
-  adminApplyMessageFeedback: (feedbackId: number, category?: string) =>
-    apiFetch(`/messages/admin/feedback/${feedbackId}/apply`, { method: "POST", body: JSON.stringify({ category }) }),
-  adminIgnoreMessageFeedback: (feedbackId: number) =>
-    apiFetch(`/messages/admin/feedback/${feedbackId}/ignore`, { method: "POST" }),
-
-  // 管理者：文法マスター
-  adminGetGrammarMasters: () => apiFetch("/grammar-masters/"),
-  adminCreateGrammarMaster: (data: object) => apiFetch("/grammar-masters/", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateGrammarMaster: (id: number, data: object) => apiFetch(`/grammar-masters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteGrammarMaster: (id: number) => apiFetch(`/grammar-masters/${id}`, { method: "DELETE" }),
-
-  // 管理者：料金・サービスメニュー
-  // （顧客向けの公開一覧はあえて用意していない。キャラクターがチャットで自然に誘導する方針のため）
-  adminListAllServiceItems: () => apiFetch("/service-items/admin/all"),
-  adminCreateServiceItem: (data: object) => apiFetch("/service-items/admin/", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateServiceItem: (id: number, data: object) => apiFetch(`/service-items/admin/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteServiceItem: (id: number) => apiFetch(`/service-items/admin/${id}`, { method: "DELETE" }),
-
-  // 管理者：親密度ポイント自動加算設定
-  adminGetIntimacySettings: () => apiFetch("/intimacy-settings/admin/"),
-  adminUpdateIntimacySettings: (data: object) => apiFetch("/intimacy-settings/admin/", { method: "PATCH", body: JSON.stringify(data) }),
-
-  // 公開：決済（Stripe）
-  createCheckoutSession: (orderId: number) =>
-    apiFetch("/payments/create-checkout-session", { method: "POST", body: JSON.stringify({ order_id: orderId }) }),
-  getPaymentSession: (sessionId: string) => apiFetch(`/payments/session/${encodeURIComponent(sessionId)}`),
-
-  // マーケットプレイス：講師
-  listInstructors: () => apiFetch("/instructors/"),
-  getInstructor: (id: number) => apiFetch(`/instructors/${id}`),
+  // AIインタビュー（人格収集）
+  startInterview: () => apiFetch("/interview/start", { method: "POST" }),
+  submitInterviewAnswer: (answer: string) => apiFetch("/interview/answer", { method: "POST", body: JSON.stringify({ answer }) }),
+  generatePersonalityProfile: () => apiFetch("/interview/generate-profile", { method: "POST" }),
+  getPersonalityProfile: () => apiFetch("/interview/profile"),
+  updatePersonalityProfile: (profile: object) => apiFetch("/interview/profile", { method: "PUT", body: JSON.stringify({ profile }) }),
 
   // マーケットプレイス：お気に入り
-  addFavorite: (instructorId: number) => apiFetch(`/favorites/${instructorId}`, { method: "POST" }),
-  removeFavorite: (instructorId: number) => apiFetch(`/favorites/${instructorId}`, { method: "DELETE" }),
+  addFavorite: (creatorId: number) => apiFetch(`/favorites/${creatorId}`, { method: "POST" }),
+  removeFavorite: (creatorId: number) => apiFetch(`/favorites/${creatorId}`, { method: "DELETE" }),
   listFavorites: () => apiFetch("/favorites/"),
 
   // マーケットプレイス：コース・レッスン
   listCourses: (category?: string) => apiFetch(`/courses${category ? `?category=${encodeURIComponent(category)}` : ""}`),
-  listInstructorCourses: (instructorId: number) => apiFetch(`/instructors/${instructorId}/courses`),
+  listCreatorCourses: (creatorId: number) => apiFetch(`/creators/${creatorId}/courses`),
   getCourseDetail: (id: number) => apiFetch(`/courses/${id}`),
   createCourse: (data: object) => apiFetch("/courses", { method: "POST", body: JSON.stringify(data) }),
   updateCourse: (id: number, data: object) => apiFetch(`/courses/${id}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -329,9 +127,28 @@ export const api = {
   reorderLessons: (courseId: number, lessonIds: number[]) =>
     apiFetch(`/courses/${courseId}/lessons/reorder`, { method: "PUT", body: JSON.stringify({ lesson_ids: lessonIds }) }),
 
+  // 90日伴走コース：自動生成・日単位編集
+  generateCourseDays: (courseId: number) => apiFetch(`/courses/${courseId}/generate-days`, { method: "POST" }),
+  getCourseGenerationStatus: (courseId: number) => apiFetch(`/courses/${courseId}/generation-status`),
+  listCourseDays: (courseId: number) => apiFetch(`/courses/${courseId}/days`),
+  updateCourseDay: (courseId: number, dayNumber: number, data: object) =>
+    apiFetch(`/courses/${courseId}/days/${dayNumber}`, { method: "PUT", body: JSON.stringify(data) }),
+
+  // 90日伴走コース：参考資料
+  listCourseMaterials: (courseId: number) => apiFetch(`/courses/${courseId}/materials`),
+  addCourseMaterial: (courseId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/materials`, { method: "POST", body: JSON.stringify(data) }),
+  deleteCourseMaterial: (materialId: number) => apiFetch(`/materials/${materialId}`, { method: "DELETE" }),
+
   // マーケットプレイス：コース購入（Stripe Payment Intent）
   checkoutCourse: (courseId: number) =>
     apiFetch("/payments/checkout", { method: "POST", body: JSON.stringify({ course_id: courseId }) }),
+
+  // 90日伴走コース：月額サブスクリプション（Tier A / Tier B）
+  subscribeToCourse: (courseId: number, tier: "A" | "B") =>
+    apiFetch("/payments/subscribe", { method: "POST", body: JSON.stringify({ course_id: courseId, tier }) }),
+  cancelSubscription: (subscriptionId: number) =>
+    apiFetch(`/payments/subscriptions/${subscriptionId}/cancel`, { method: "POST" }),
 
   // 講師ダッシュボード：自分のキャラクター
   listMyCharacters: () => apiFetch("/characters/"),
@@ -360,32 +177,55 @@ export const api = {
   getCourseProgress: (courseId: number) => apiFetch(`/courses/${courseId}/progress`),
   completeLesson: (lessonId: number) => apiFetch(`/lessons/${lessonId}/complete`, { method: "PUT" }),
 
-  // 管理者：報酬コンテンツ管理
-  adminListRewardItems: (characterId?: number) =>
-    apiFetch(`/rewards/admin/items${characterId != null ? `?character_id=${characterId}` : ""}`),
-  adminCreateRewardItem: (data: object) => apiFetch("/rewards/admin/items", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateRewardItem: (id: number, data: object) => apiFetch(`/rewards/admin/items/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteRewardItem: (id: number) => apiFetch(`/rewards/admin/items/${id}`, { method: "DELETE" }),
-  adminUploadRewardImage: (id: number, file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    return apiUpload(`/rewards/admin/items/${id}/image`, fd);
-  },
+  // Day1初回診断・ロードマップ生成
+  getDiagnosisQuestions: (courseId: number) => apiFetch(`/diagnosis/${courseId}/questions`),
+  getWelcomeMessage: (courseId: number) => apiFetch(`/diagnosis/${courseId}/welcome`, { method: "POST" }),
+  submitDiagnosis: (courseId: number, data: object) =>
+    apiFetch(`/diagnosis/${courseId}/submit`, { method: "POST", body: JSON.stringify(data) }),
+  getRoadmap: (courseId: number) => apiFetch(`/diagnosis/${courseId}/roadmap`),
+  getNotificationSettings: (courseId: number) => apiFetch(`/diagnosis/${courseId}/notification-settings`),
+  updateNotificationSettings: (courseId: number, data: object) =>
+    apiFetch(`/diagnosis/${courseId}/notification-settings`, { method: "PUT", body: JSON.stringify(data) }),
 
-  // 顧客：報酬・ご褒美
-  getMyRewards: () => apiFetch("/rewards/me"),
-  ackRewardUnlock: (id: number) => apiFetch(`/rewards/me/${id}/ack`, { method: "POST" }),
-  applyWallpaper: (id: number) => apiFetch(`/rewards/me/wallpaper/${id}/apply`, { method: "POST" }),
-  clearWallpaper: () => apiFetch("/rewards/me/wallpaper", { method: "DELETE" }),
+  // 90日伴走コース：日次学習ログ
+  listDayLogs: (courseId: number) => apiFetch(`/courses/${courseId}/day-logs`),
+  completeDayLog: (courseId: number, dayNumber: number, memo?: string) =>
+    apiFetch(`/courses/${courseId}/day-logs/${dayNumber}/complete`, { method: "PUT", body: JSON.stringify({ memo: memo ?? null }) }),
 
-  // 管理者：キャラクター作成後プレビュー（例文評価）
-  adminGetPreviewExamples: (customerId: number) => apiFetch(`/preview/admin/${customerId}`),
-  adminSavePreviewExamples: (customerId: number, examples: { example_number: number; user_message: string; character_response: string }[]) =>
-    apiFetch(`/preview/admin/${customerId}`, { method: "PUT", body: JSON.stringify({ examples }) }),
-  adminListPreviewCorrectionRequests: () => apiFetch("/preview/admin/requests/list"),
+  // デイリー伴走チャット
+  askChatQuestion: (courseId: number, body: string) =>
+    apiFetch(`/chat/${courseId}/ask`, { method: "POST", body: JSON.stringify({ body }) }),
+  getChatHistory: (courseId: number) => apiFetch(`/chat/${courseId}/history`),
 
-  // 顧客：キャラクター作成後プレビュー（例文評価）
-  getMyPreview: () => apiFetch("/preview/me"),
-  submitMyPreview: (ratings: { id: number; rating: "good" | "unsure"; feedback_text?: string }[]) =>
-    apiFetch("/preview/me/submit", { method: "POST", body: JSON.stringify({ ratings }) }),
+  // クリエイター向け：Tier B未回答質問の承認
+  listPendingQuestions: () => apiFetch("/chat/creator/pending"),
+  respondToQuestion: (questionId: number, body?: string) =>
+    apiFetch(`/chat/creator/questions/${questionId}/respond`, { method: "POST", body: JSON.stringify({ body: body ?? null }) }),
+
+  // クリエイター向け：質問分析ダッシュボード
+  getQuestionAnalytics: () => apiFetch("/chat/creator/analytics"),
+  getCategoryQuestions: (categoryId: number) => apiFetch(`/chat/creator/categories/${categoryId}/questions`),
+  addCategoryContent: (categoryId: number, data: object) =>
+    apiFetch(`/chat/creator/categories/${categoryId}/contents`, { method: "POST", body: JSON.stringify(data) }),
+  deleteCategoryContent: (contentId: number) => apiFetch(`/chat/creator/contents/${contentId}`, { method: "DELETE" }),
+
+  // クリエイター向け：収益ダッシュボード
+  getMyRevenue: () => apiFetch("/creators/me/revenue"),
+
+  // 通報（学習者向け）
+  submitReport: (data: object) => apiFetch("/admin/reports", { method: "POST", body: JSON.stringify(data) }),
+
+  // 管理者機能
+  adminListCreatorApplications: () => apiFetch("/admin/creator-applications"),
+  adminApproveCreatorApplication: (profileId: number) => apiFetch(`/admin/creator-applications/${profileId}/approve`, { method: "PUT" }),
+  adminRejectCreatorApplication: (profileId: number, reason?: string) =>
+    apiFetch(`/admin/creator-applications/${profileId}/reject`, { method: "PUT", body: JSON.stringify({ reason: reason ?? null }) }),
+  adminListAllCourses: () => apiFetch("/admin/courses"),
+  adminSuspendCourse: (courseId: number, reason: string) =>
+    apiFetch(`/admin/courses/${courseId}/suspend`, { method: "PUT", body: JSON.stringify({ reason }) }),
+  adminUnsuspendCourse: (courseId: number) => apiFetch(`/admin/courses/${courseId}/unsuspend`, { method: "PUT" }),
+  adminListReports: () => apiFetch("/admin/reports"),
+  adminResolveReport: (reportId: number) => apiFetch(`/admin/reports/${reportId}/resolve`, { method: "PUT" }),
+  adminListTierBOverdue: () => apiFetch("/admin/tier-b-overdue"),
+
 };

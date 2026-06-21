@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { PromptPreviewModal } from "@/components/PromptPreviewModal";
-import { DEFAULT_REWARD_PROGRESS_TEMPLATE, DEFAULT_CHAT_FOOTER_NOTE } from "@/lib/theme";
 import {
   buildLLMPrompt,
   buildCharacterGenerationPrompt,
@@ -19,24 +18,19 @@ const FONT_STYLE_OPTIONS = [
   { value: "monospace",   label: "monospace　— クール・ロボット" },
 ];
 
-const emptyCharForm = { name: "", description: "", greetings: "", tone_profile: "", color_scheme: "", font_style: "default", reward_progress_template: "", chat_footer_note: "", instagram_account: "", instructor_id: "", linked_customer_id: "", gen_personality: "", gen_reference: "" };
+const emptyCharForm = { name: "", description: "", tone_profile: "", color_scheme: "", font_style: "default", creator_id: "", linked_customer_id: "", gen_personality: "", gen_reference: "" };
 
 const GENERATION_BLOCKS: { key: string; label: string }[] = [
   { key: "DESCRIPTION", label: "説明文" },
-  { key: "GREETINGS", label: "一言（8個）" },
   { key: "TONE_PROFILE", label: "TONE_PROFILE" },
   { key: "COLOR_SCHEME", label: "配色" },
   { key: "FONT_STYLE", label: "フォント" },
-  { key: "REWARD_PROGRESS_TEMPLATE", label: "ご褒美の進捗メッセージ" },
-  { key: "CHAT_FOOTER_NOTE", label: "入力欄下の注意書き" },
-  { key: "ARTICLE_SAMPLE", label: "サンプル記事" },
 ];
 const FONT_STYLE_VALUES = new Set(["default", "rounded", "serif", "handwriting", "monospace"]);
 
 export function CharactersTab() {
   const [characters, setCharacters] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [articles, setArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingChar, setEditingChar] = useState<any | null>(null);
@@ -45,7 +39,7 @@ export function CharactersTab() {
   const [toneProfileError, setToneProfileError] = useState(false);
   const [colorSchemeError, setColorSchemeError] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
-  // 新規キャラクター設定のLLM自動生成用（受注リストでコピーしたプロンプトをLLMに貼り付け、出力をここに貼り付ける方式）
+  // 新規キャラクター設定のLLM自動生成用（LLMに貼り付けるプロンプトをコピーし、出力をここに貼り付ける方式）
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [genPasteText, setGenPasteText] = useState("");
   // LLMプロンプト生成時に対象生徒を指定するためのステート（キャラクターIDをキーとする）
@@ -57,27 +51,9 @@ export function CharactersTab() {
     setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
   }
 
-  const reload = () => Promise.all([api.adminGetCharacters(), api.adminGetCustomers(), api.adminGetArticles()])
-    .then(([chars, custs, arts]) => { setCharacters(chars); setCustomers(custs.filter((c: any) => c.role !== "admin")); setArticles(arts); });
+  const reload = () => Promise.all([api.adminGetCharacters(), api.adminGetCustomers()])
+    .then(([chars, custs]) => { setCharacters(chars); setCustomers(custs.filter((c: any) => c.role !== "admin")); });
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
-
-  const welcomeArticles = articles.filter((a: any) => a.is_welcome_template);
-
-  async function handleWelcomeTemplateChange(charId: number, newArticleId: string) {
-    const current = welcomeArticles.find((a: any) => a.template_character_id === charId);
-    try {
-      if (current && String(current.id) !== newArticleId) {
-        await api.adminUpdateArticle(current.id, { clear_template_character_id: true });
-      }
-      if (newArticleId) {
-        await api.adminUpdateArticle(Number(newArticleId), { template_character_id: charId });
-      }
-      await reload();
-      toast("ウェルカムページの設定を更新しました", "success");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "更新に失敗しました", "error");
-    }
-  }
 
   function handleColorSchemeChange(val: string) {
     setForm(f => ({ ...f, color_scheme: val }));
@@ -94,9 +70,6 @@ export function CharactersTab() {
   /** LLM生成結果（パース済み）を各入力欄に反映する。自動保存はしない。 */
   function applyGeneratedResult(result: any) {
     if (result.description) setForm(f => ({ ...f, description: result.description }));
-    if (Array.isArray(result.greetings) && result.greetings.length) {
-      setForm(f => ({ ...f, greetings: result.greetings.join("\n") }));
-    }
     if (result.tone_profile) {
       const tp = result.article_sample
         ? { ...result.tone_profile, article_sample: result.article_sample }
@@ -115,19 +88,12 @@ export function CharactersTab() {
     if (result.font_style && FONT_STYLE_VALUES.has(result.font_style)) {
       setForm(f => ({ ...f, font_style: result.font_style }));
     }
-    if (result.reward_progress_template) {
-      setForm(f => ({ ...f, reward_progress_template: result.reward_progress_template }));
-    }
-    if (result.chat_footer_note) {
-      setForm(f => ({ ...f, chat_footer_note: result.chat_footer_note }));
-    }
   }
 
   /** 指定したブロックのみ再生成するプロンプトをコピーする（他の欄の内容は一貫性参考としてプロンプトに含める）。 */
   function copyGenPrompt(blocks: string[]) {
     const existing: any = {};
     if (!blocks.includes("DESCRIPTION") && form.description) existing.description = form.description;
-    if (!blocks.includes("GREETINGS") && form.greetings) existing.greetings = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
     if (!blocks.includes("TONE_PROFILE") && form.tone_profile) {
       try { existing.tone_profile = parseExerciseJsonInput(form.tone_profile); } catch { /* ignore */ }
     }
@@ -135,8 +101,6 @@ export function CharactersTab() {
       try { existing.color_scheme = parseExerciseJsonInput(form.color_scheme); } catch { /* ignore */ }
     }
     if (!blocks.includes("FONT_STYLE") && form.font_style) existing.font_style = form.font_style;
-    if (!blocks.includes("REWARD_PROGRESS_TEMPLATE") && form.reward_progress_template) existing.reward_progress_template = form.reward_progress_template;
-    if (!blocks.includes("CHAT_FOOTER_NOTE") && form.chat_footer_note) existing.chat_footer_note = form.chat_footer_note;
 
     const prompt = buildCharacterGenerationPrompt({
       character_name: form.name,
@@ -150,7 +114,7 @@ export function CharactersTab() {
     setPromptPreview({ title: `キャラクター生成プロンプト（${blockLabels}）`, text: prompt });
   }
 
-  /** 「反映」ボタン：貼り付けられたLLMの出力（7ブロック形式）をパースして各入力欄に反映する */
+  /** 「反映」ボタン：貼り付けられたLLMの出力をパースして各入力欄に反映する */
   function applyGenPasteText() {
     if (!genPasteText.trim()) { toast("LLMの出力を貼り付けてください", "error"); return; }
     const result = parseCharacterGenerationOutput(genPasteText);
@@ -175,14 +139,10 @@ export function CharactersTab() {
     setForm({
       name: c.name ?? "",
       description: c.description ?? "",
-      greetings: (c.greetings && c.greetings.length > 0) ? c.greetings.join("\n") : (c.greeting ?? ""),
       tone_profile: c.tone_profile ? JSON.stringify(c.tone_profile, null, 2) : "",
       color_scheme: c.color_scheme ? JSON.stringify(c.color_scheme) : "",
       font_style: c.font_style ?? "default",
-      reward_progress_template: c.reward_progress_template ?? "",
-      chat_footer_note: c.chat_footer_note ?? "",
-      instagram_account: c.instagram_account ?? "",
-      instructor_id: c.instructor_id != null ? String(c.instructor_id) : "",
+      creator_id: c.creator_id != null ? String(c.creator_id) : "",
       linked_customer_id: "",
       gen_personality: "",
       gen_reference: "",
@@ -213,17 +173,11 @@ export function CharactersTab() {
     catch { toast("tone_profileはJSON形式で入力してください", "error"); return; }
     try { color_scheme = form.color_scheme ? parseExerciseJsonInput(form.color_scheme) : null; }
     catch { toast("color_schemeはJSON形式で入力してください", "error"); return; }
-    const greetingsList = form.greetings.split("\n").map(s => s.trim()).filter(Boolean);
     const payload = {
       name: form.name,
       description: form.description,
-      greeting: greetingsList[0] || null,       // 後方互換用に先頭を単一フィールドにも保存
-      greetings: greetingsList.length > 0 ? greetingsList : null,
       tone_profile, color_scheme, font_style: form.font_style,
-      reward_progress_template: form.reward_progress_template.trim() || null,
-      chat_footer_note: form.chat_footer_note.trim() || null,
-      instagram_account: form.instagram_account.trim() || null,
-      instructor_id: form.instructor_id ? Number(form.instructor_id) : null,
+      creator_id: form.creator_id ? Number(form.creator_id) : null,
     };
     try {
       if (editingChar) {
@@ -231,7 +185,7 @@ export function CharactersTab() {
         toast(`「${form.name}」を更新しました`, "success");
       } else {
         const created = await api.adminCreateCharacter(payload);
-        if (!form.instructor_id && form.linked_customer_id) {
+        if (!form.creator_id && form.linked_customer_id) {
           await api.adminUpdateCustomer(Number(form.linked_customer_id), { character_id: created.id });
         }
         toast(`「${form.name}」を追加しました`, "success");
@@ -363,35 +317,20 @@ export function CharactersTab() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>説明（顧客のバナーに表示）</label>
+              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>説明（クリエイターページに表示）</label>
               <RegenButton block="DESCRIPTION" label="説明文" />
             </div>
             <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="例：ため息をつきながら教えてくれる、少しサディスティックなお姉さん先輩。" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>公式Instagramアカウント（@なし）</label>
-              <input value={form.instagram_account} onChange={e => setForm({ ...form, instagram_account: e.target.value })}
-                placeholder="例：shirakawa_yukina._.a" disabled={!form.instructor_id} />
-              {!form.instructor_id && (
-                <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>講師プロフィールIDを入力すると入力できます</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>講師プロフィールID（instructor_profiles.id）</label>
-              <input type="number" min="1" value={form.instructor_id}
-                onChange={e => setForm({ ...form, instructor_id: e.target.value, instagram_account: e.target.value ? form.instagram_account : "" })}
-                placeholder="例：1（未入力なら未割り当て）" />
-            </div>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>クリエイタープロフィールID（creator_profiles.id）</label>
+            <input type="number" min="1" value={form.creator_id}
+              onChange={e => setForm({ ...form, creator_id: e.target.value })}
+              placeholder="例：1（未入力なら未割り当て）" />
           </div>
-          {form.instructor_id && (
-            <p className="text-xs -mt-2" style={{ color: "var(--muted)" }}>
-              講師プロフィールに割り当てたキャラクターは、選択時にキャラ作成費無料・即日チャット開始・限定称号/壁紙・隠しセリフ多数（最大{15}件）などの特典が適用されます。
-            </p>
-          )}
-          {!form.instructor_id && !editingChar && (
+          {!form.creator_id && !editingChar && (
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>紐づけアカウント（オリジナルキャラを依頼した顧客） *</label>
               <select value={form.linked_customer_id} onChange={e => setForm({ ...form, linked_customer_id: e.target.value })} required>
@@ -403,60 +342,10 @@ export function CharactersTab() {
                 ))}
               </select>
               <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-                作成したキャラクターをこの顧客に割り当て、完成案内メールを送信します。
+                作成したキャラクターをこの顧客に割り当てます。
               </p>
             </div>
           )}
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-                本棚に表示する「キャラクターからの一言」（1行に1パターン・複数登録推奨）
-              </label>
-              <RegenButton block="GREETINGS" label="一言" />
-            </div>
-            <textarea rows={5} value={form.greetings} onChange={e => setForm({ ...form, greetings: e.target.value })}
-              placeholder={"例（1行ずつ別パターンとして登録される）：\nしょうがないなあ。今日もぼくと一緒に頑張ろう！\nさあ、また勉強の時間だよ。一緒に頑張ろうね。\nのび太くんも、こうやって続けていれば必ず力がつくよ！\n大丈夫、わからないところは何度でも聞いていいんだからね。"} />
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              顧客が本棚を開くたびに、ここに登録した中からランダムに1つ選んで
-              「{form.name || "キャラクター名"}より：「（ここに表示）」」という形で表示します。
-              語尾・言い回し・記号（！？…など）にバリエーションをつけて<strong>5〜10個程度</strong>登録すると、
-              長期間同じ一言が連続表示されにくくなります。tone_profileと違い顧客にそのまま見えるメッセージです。
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-                チャット画面：ご褒美の進捗メッセージ（キャラごとに変更可・空欄なら共通デフォルト）
-              </label>
-              <RegenButton block="REWARD_PROGRESS_TEMPLATE" label="ご褒美の進捗メッセージ" />
-            </div>
-            <input value={form.reward_progress_template}
-              onChange={e => setForm({ ...form, reward_progress_template: e.target.value })}
-              placeholder={DEFAULT_REWARD_PROGRESS_TEMPLATE} />
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              使えるプレースホルダー：<code>{"{character}"}</code>＝キャラ名、<code>{"{published}"}</code>＝公開記事数、
-              <code>{"{remaining}"}</code>＝次のご褒美まであと何冊、<code>{"{target}"}</code>＝次のご褒美の目標冊数。
-              例：「{DEFAULT_REWARD_PROGRESS_TEMPLATE}」
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-                チャット画面：入力欄の下に表示する注意書き（キャラごとに変更可・空欄なら共通デフォルト）
-              </label>
-              <RegenButton block="CHAT_FOOTER_NOTE" label="入力欄下の注意書き" />
-            </div>
-            <input value={form.chat_footer_note}
-              onChange={e => setForm({ ...form, chat_footer_note: e.target.value })}
-              placeholder={DEFAULT_CHAT_FOOTER_NOTE} />
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              世界観に合わせて語尾や言い回しを変えると、より「{form.name || "キャラクター"}」らしさが出ます。
-              例：「{DEFAULT_CHAT_FOOTER_NOTE}」
-            </p>
-          </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -538,7 +427,7 @@ export function CharactersTab() {
                       </div>
                     )}
                     <p className="font-bold" style={{ color: accentColor }}>{c.name}</p>
-                    {c.instructor_id != null && (
+                    {c.creator_id != null && (
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white" style={{ background: accentColor }}>
                         公式
                       </span>
@@ -577,10 +466,6 @@ export function CharactersTab() {
                             setPromptPreview({ title: `「${c.name}」LLMプロンプト`, text: prompt });
                           }}>
                           📋 LLMプロンプトをコピー
-                          {promptCustomerIdByChar[c.id] && (() => {
-                            const cu = customers.find(cs => String(cs.id) === promptCustomerIdByChar[c.id]);
-                            return cu?.intimacy ? ` — 💗 Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : "";
-                          })()}
                         </button>
                       </div>
                       {/* 対象生徒（省略可）セレクター */}
@@ -593,9 +478,7 @@ export function CharactersTab() {
                           onChange={e => setPromptCustomerIdByChar(prev => ({ ...prev, [c.id]: e.target.value }))}>
                           <option value="">指定なし（汎用）</option>
                           {customers.map(cu => (
-                            <option key={cu.id} value={cu.id}>
-                              {cu.username}{cu.intimacy ? ` 💗Lv${cu.intimacy.level}「${cu.intimacy.stage_label}」` : ""}
-                            </option>
+                            <option key={cu.id} value={cu.id}>{cu.username}</option>
                           ))}
                         </select>
                       </div>
@@ -610,26 +493,6 @@ export function CharactersTab() {
                       </p>
                     )}
                   </div>
-
-                  {/* ウェルカムページ設定（公式キャラのみ） */}
-                  {c.instructor_id != null && (
-                    <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-                      <p className="text-xs font-medium mb-1" style={{ color: "var(--accent)" }}>🏠 ウェルカムページ</p>
-                      <select
-                        value={String(welcomeArticles.find((a: any) => a.template_character_id === c.id)?.id ?? "")}
-                        onChange={e => handleWelcomeTemplateChange(c.id, e.target.value)}>
-                        <option value="">未設定（汎用ウェルカムページを使用）</option>
-                        {welcomeArticles.map((a: any) => (
-                          <option key={a.id} value={a.id}>{a.title}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-                        この公式キャラを選んで申し込んだ顧客の本棚に最初に届くウェルカムページです。
-                        記事管理画面で記事タイプ「🏠 ウェルカムページ」を作成し、対象キャラに「{c.name}」を指定すると、ここに選択肢として表示されます。
-                        未設定のままだと、対象キャラ未指定（汎用）のウェルカムページが使われます。
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

@@ -1,0 +1,189 @@
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+from app.core.database import get_db
+from app.core.security import get_current_user, get_current_user_optional, get_current_creator_or_admin
+from app.models.creator_profile import CreatorProfile
+from app.models.course import Course
+from app.models.favorite import Favorite
+from app.core.character_voice import customer_display_name
+from app.core.config import settings
+from app.models.purchase import Purchase
+from app.models.course_subscription import CourseSubscription
+
+router = APIRouter(prefix="/creators", tags=["クリエイター"])
+
+
+def _serialize_creator_card(profile: CreatorProfile) -> dict:
+    return {
+        "id": profile.id,
+        "display_name": customer_display_name(profile.user),
+        "bio": profile.bio,
+        "characters": [
+            {"id": c.id, "name": c.name, "avatar_url": c.image_url} for c in profile.characters
+        ],
+    }
+
+
+def _serialize_own_profile(profile: CreatorProfile) -> dict:
+    return {
+        "id": profile.id,
+        "bio": profile.bio,
+        "speciality": profile.speciality,
+        "experience": profile.experience,
+        "sns_youtube": profile.sns_youtube,
+        "sns_instagram": profile.sns_instagram,
+        "sns_twitter": profile.sns_twitter,
+        "status": profile.status,
+    }
+
+
+class CreatorApplyRequest(BaseModel):
+    speciality: Optional[str] = None
+    experience: Optional[str] = None
+    sns_youtube: Optional[str] = None
+    sns_instagram: Optional[str] = None
+    sns_twitter: Optional[str] = None
+
+
+@router.post("/apply", status_code=201)
+def apply_as_creator(data: CreatorApplyRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """クリエイター申請（学習者本人）。承認制のため status='pending' で作成し、運営審査後にactiveへ変更される。"""
+    if current_user.role == "admin":
+        raise HTTPException(status_code=400, detail="管理者アカウントはクリエイター申請できません")
+
+    existing = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="すでにクリエイター申請済みです")
+
+    profile = CreatorProfile(
+        user_id=current_user.id,
+        speciality=data.speciality,
+        experience=data.experience,
+        sns_youtube=data.sns_youtube,
+        sns_instagram=data.sns_instagram,
+        sns_twitter=data.sns_twitter,
+        status="pending",
+    )
+    db.add(profile)
+    current_user.role = "creator"
+    db.commit()
+    db.refresh(profile)
+    return _serialize_own_profile(profile)
+
+
+class CreatorProfileUpdate(BaseModel):
+    bio: Optional[str] = None
+    speciality: Optional[str] = None
+    experience: Optional[str] = None
+    sns_youtube: Optional[str] = None
+    sns_instagram: Optional[str] = None
+    sns_twitter: Optional[str] = None
+
+
+@router.get("/me")
+def get_my_profile(current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
+    return _serialize_own_profile(profile)
+
+
+@router.put("/me")
+def update_my_profile(data: CreatorProfileUpdate, current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
+    for key, val in data.model_dump(exclude_none=True).items():
+        setattr(profile, key, val)
+    db.commit()
+    db.refresh(profile)
+    return _serialize_own_profile(profile)
+
+
+@router.get("/me/revenue")
+def get_my_revenue(current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    """クリエイターの収益ダッシュボード（要件定義書5.9節：ユーザー課金→手数料控除→クリエイター残高）。要(本人)"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
+
+    character_ids = [c.id for c in profile.characters]
+    course_ids = [c.id for c in db.query(Course).filter(Course.character_id.in_(character_ids)).all()] if character_ids else []
+    if not course_ids:
+        return {"gross_revenue": 0, "platform_fee": 0, "net_balance": 0, "active_subscriptions": 0, "fee_rate": settings.PLATFORM_FEE_RATE}
+
+    one_time_total = sum(
+        p.amount for p in db.query(Purchase).filter(
+            Purchase.course_id.in_(course_ids), Purchase.status == "succeeded"
+        ).all()
+    )
+    active_subs = db.query(CourseSubscription).filter(
+        CourseSubscription.course_id.in_(course_ids), CourseSubscription.status == "active"
+    ).all()
+    subscription_mrr = 0
+    for sub in active_subs:
+        course = db.query(Course).filter(Course.id == sub.course_id).first()
+        if not course:
+            continue
+        subscription_mrr += (course.tier_a_price if sub.tier == "A" else course.tier_b_price) or 0
+
+    gross_revenue = one_time_total + subscription_mrr
+    platform_fee = round(gross_revenue * settings.PLATFORM_FEE_RATE)
+    net_balance = gross_revenue - platform_fee
+
+    return {
+        "gross_revenue": gross_revenue,
+        "platform_fee": platform_fee,
+        "net_balance": net_balance,
+        "active_subscriptions": len(active_subs),
+        "fee_rate": settings.PLATFORM_FEE_RATE,
+    }
+
+
+@router.get("/")
+def list_creators(db: Session = Depends(get_db)):
+    """クリエイター一覧取得(公開中のプロフィールのみ)"""
+    profiles = db.query(CreatorProfile).filter(CreatorProfile.status == "active").all()
+    return [_serialize_creator_card(p) for p in profiles]
+
+
+@router.get("/{creator_id}")
+def get_creator(creator_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user_optional)):
+    """クリエイターページ情報取得"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.id == creator_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイターが見つかりません")
+
+    character_ids = [c.id for c in profile.characters]
+    courses = []
+    if character_ids:
+        courses = db.query(Course).filter(
+            Course.character_id.in_(character_ids),
+            Course.status == "published",
+            Course.is_suspended == False,  # noqa: E712
+        ).order_by(Course.created_at.desc()).all()
+
+    is_favorited = False
+    if current_user:
+        is_favorited = db.query(Favorite).filter(
+            Favorite.user_id == current_user.id,
+            Favorite.creator_id == profile.id,
+        ).first() is not None
+
+    data = _serialize_creator_card(profile)
+    data["sns_youtube"] = profile.sns_youtube
+    data["sns_instagram"] = profile.sns_instagram
+    data["sns_twitter"] = profile.sns_twitter
+    data["courses"] = [
+        {
+            "id": c.id, "title": c.title, "description": c.description,
+            "thumbnail_url": c.thumbnail_url, "category": c.category,
+            "price": c.price, "is_free": c.is_free,
+        }
+        for c in courses
+    ]
+    data["is_favorited"] = is_favorited
+    return data
