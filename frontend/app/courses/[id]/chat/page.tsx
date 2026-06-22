@@ -16,6 +16,8 @@ type ChatQuestion = {
   answer: { body: string; answered_by: string; linked_content_url: string | null; is_draft: boolean } | null;
   frustration_signal?: { topic: string; count: number } | null;
 };
+type Character = { id: number; name: string; avatar_url?: string | null };
+type TodayDay = { day: number; theme?: string | null; tasks?: string[] | null; is_rest_day: boolean };
 
 export default function CourseChatPage() {
   const params = useParams();
@@ -27,6 +29,11 @@ export default function CourseChatPage() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [upgradeCta, setUpgradeCta] = useState<{ topic: string } | null>(null);
+  const [character, setCharacter] = useState<Character | null>(null);
+  const [completedDays, setCompletedDays] = useState(0);
+  const [today, setToday] = useState<TodayDay | null>(null);
+  const [reportedToday, setReportedToday] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   function load() {
@@ -42,7 +49,18 @@ export default function CourseChatPage() {
           router.replace(`/courses/${courseId}`);
           return;
         }
+        setCharacter(detail.character ?? null);
         await load();
+
+        const logs = await api.listDayLogs(courseId).catch(() => [] as { day_number: number; is_completed: boolean }[]);
+        const completed = logs.filter((l: { is_completed: boolean }) => l.is_completed).length;
+        const currentDay = Math.min(completed + 1, 90);
+        setCompletedDays(completed);
+        setReportedToday(logs.some((l: { day_number: number; is_completed: boolean }) => l.day_number === currentDay && l.is_completed));
+
+        const days = await api.listCourseDays(courseId).catch(() => [] as TodayDay[]);
+        const todayDay = days.find((d: TodayDay) => d.day === currentDay) ?? null;
+        setToday(todayDay);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
       } finally {
@@ -51,6 +69,21 @@ export default function CourseChatPage() {
     }
     init();
   }, [courseId, router]);
+
+  async function handleReportToday() {
+    if (!today || reporting || reportedToday) return;
+    setReporting(true);
+    try {
+      await api.completeDayLog(courseId, today.day);
+      setReportedToday(true);
+      setCompletedDays(prev => prev + 1);
+      toast("今日の学習を報告しました！", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "報告に失敗しました", "error");
+    } finally {
+      setReporting(false);
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -80,10 +113,46 @@ export default function CourseChatPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+      <header className="flex flex-col gap-3 px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
+        <div className="flex items-center justify-between">
+          <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
+          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+        </div>
+        <div className="flex items-center gap-3">
+          {character?.avatar_url ? (
+            <img src={character.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+          ) : (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg" style={{ background: "rgba(255,255,255,0.18)" }}>🎭</div>
+          )}
+          <div className="flex-1">
+            <p className="text-white font-bold text-sm">{character?.name ?? "メンター"}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.25)" }}>
+                <div className="h-1.5 rounded-full" style={{ background: "white", width: `${Math.round((completedDays / 90) * 100)}%` }} />
+              </div>
+              <span className="text-white/80 text-xs whitespace-nowrap">{completedDays}/90日</span>
+            </div>
+          </div>
+        </div>
       </header>
+
+      {today && !today.is_rest_day && (
+        <div className="mx-4 sm:mx-6 mt-4 card flex flex-col gap-2">
+          <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>Day {today.day} の今日のタスク{today.theme ? `：${today.theme}` : ""}</p>
+          {today.tasks && today.tasks.length > 0 && (
+            <ul className="text-sm list-disc pl-5" style={{ color: "var(--text)" }}>
+              {today.tasks.map((t, i) => <li key={i}>{t}</li>)}
+            </ul>
+          )}
+          <button
+            onClick={handleReportToday}
+            disabled={reporting || reportedToday}
+            className="btn-primary self-start disabled:opacity-50"
+          >
+            {reportedToday ? "✅ 今日の学習を報告済み" : reporting ? "報告中…" : "今日の学習を報告する"}
+          </button>
+        </div>
+      )}
 
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4 overflow-y-auto">
         {questions.length === 0 && (

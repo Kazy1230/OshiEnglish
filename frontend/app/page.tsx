@@ -78,7 +78,10 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
           {loggedIn ? (
-            <Link href="/creators" className="text-white text-sm font-medium underline">クリエイターを探す</Link>
+            <>
+              <Link href="/mypage" className="text-white text-sm font-medium underline">マイページ</Link>
+              <Link href="/creators" className="text-white text-sm font-medium underline">クリエイターを探す</Link>
+            </>
           ) : (
             <Link href="/login" className="text-white text-sm font-bold px-3 py-1.5 rounded-lg" style={{ background: "rgba(255,255,255,0.18)" }}>
               ログイン
