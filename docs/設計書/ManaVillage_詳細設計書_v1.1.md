@@ -1,4 +1,4 @@
-# ManaVillage 詳細設計書 v1.1
+﻿# ManaVillage 詳細設計書 v1.1
 
 > ステータス: ドラフト v1.1
 > 関連ドキュメント: ManaVillage 基本設計書 v1.1 / 要件定義書 v1.1
@@ -142,7 +142,7 @@ system:
 【クリエイターの人格プロファイル】
 {personality_profile}
 
-【既存の90日コース構造(週単位テーマ)】
+【クリエイターが設定した90日コース構造(週単位テーマ)】
 {course_week_themes}
 ```
 
@@ -477,7 +477,7 @@ system:
 【質問】
 {question_body}
 
-【このカテゴリに紐付けられた既存コンテンツ】
+【このカテゴリに紐付けられたコンテンツ】
 {linked_contents}  ← 存在する場合は回答に含める
 
 下書きの末尾に「※ この下書きを編集して送信してください」と添える。
@@ -515,12 +515,13 @@ system:
 
 ### 4.1 メール配信インフラ
 
-**採用: SendGrid**
+**採用: Resend**
 
 理由:
-- 日本語テンプレートの管理が容易
-- 配信スケジューリングAPIがある(通知時刻の個別設定に対応)
-- 無料枠(100通/日)でMVP検証が可能
+- シンプルなAPIで実装コストが低い
+- Next.js / React Emailとの親和性が高い
+- 無料枠(3,000通/月)でMVP検証が可能
+- 配信スケジューリングはCronジョブ側で制御する
 
 ### 4.2 メール種別と送信タイミング
 
@@ -552,7 +553,7 @@ def send_morning_notifications():
             course_id=setting.course_id,
             day_number=day_number
         ).first()
-        # SendGrid APIでメール送信(プリ生成済みメッセージをそのまま使用)
+        # Resend APIでメール送信(プリ生成済みメッセージをそのまま使用)
         send_morning_email(setting.user_id, course_day.ai_message_morning)
 ```
 
@@ -651,5 +652,5 @@ export const StreamingMessage = ({
 | 週次・月次レビューの送信曜日・時刻 | 学習者が設定するか固定にするか |
 | 学習開始30日目の自動再診断フロー | Day1フロー詳細仕様 Section 12に記載 |
 | Stripe ConnectによるクリエイターへのPayoutフロー | MVP後に実装 |
-| SendGridのテンプレートID管理方法 | 環境変数 vs DBで管理するか |
+| ResendのテンプレートID管理方法 | 環境変数 vs DBで管理するか |
 | モデル判別キーワードリストの継続最適化 | `NEEDS_SONNET`のキーワードリストはMVP後にチャットログを分析して随時更新する。「どう暗記すればいい？」「コツある？」など、キーワード未登録のまま意図せずHaikuで処理されているケースを定期的にサンプリングして追加・修正を行う |

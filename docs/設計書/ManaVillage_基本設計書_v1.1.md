@@ -1,4 +1,4 @@
-# ManaVillage 基本設計書 v1.1
+﻿# ManaVillage 基本設計書 v1.1
 
 > ステータス: ドラフト v1.1
 > 関連ドキュメント: ManaVillage 要件定義書 v1.1
@@ -533,13 +533,13 @@
 
 | レイヤー | 技術 | 備考 |
 |---|---|---|
-| フロントエンド | Next.js(App Router) | 既存継続 |
-| バックエンド | FastAPI(Python) | 既存継続 |
-| DB | MySQL | 既存継続 |
-| キャッシュ/セッション | Redis | 既存継続 |
+| フロントエンド | Next.js(App Router) | |
+| バックエンド | FastAPI(Python) | |
+| DB | MySQL | |
+| キャッシュ/セッション | Redis | セッション管理・Cronジョブ用カウンター |
 | 決済 | Stripe(サブスク) | Stripe Connectで講師分配 |
-| AI | Anthropic API(Claude) | 既存継続 |
-| インフラ | Sakura VPS + Docker | 既存継続 |
-| メール配信 | 未定(SendGrid / AWS SES) | Push通知に必須。要選定 |
-| ドメイン | manavillage.online | 設定済み |
+| AI | Anthropic API(Claude) | Sonnet 4.6 / Haiku 4.5 を用途別に使い分け |
+| インフラ | Sakura VPS + Docker | |
+| メール配信 | Resend | Push通知・週次レビュー・決済通知 |
+| ドメイン | manavillage.online | |
 EOF
