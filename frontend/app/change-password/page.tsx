@@ -23,7 +23,7 @@ export default function ChangePasswordPage() {
     try {
       await api.changePassword(current, next);
       const me = await api.me();
-      router.push(me.role === "admin" ? "/admin" : "/shelf");
+      router.push(me.role === "admin" ? "/admin" : me.role === "creator" ? "/dashboard" : "/creators");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "変更に失敗しました");
     } finally {

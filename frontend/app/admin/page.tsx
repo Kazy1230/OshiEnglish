@@ -21,7 +21,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
     api.me().then(u => {
-      if (u.role !== "admin") { router.replace("/shelf"); return; }
+      if (u.role !== "admin") { router.replace(u.role === "creator" ? "/dashboard" : "/creators"); return; }
       setLoading(false);
     }).catch(() => { clearToken(); router.replace("/login"); });
   }, [router]);
