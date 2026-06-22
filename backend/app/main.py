@@ -148,6 +148,9 @@ _ensure_column("courses", "tier_b_price", "INT NULL")
 _ensure_column("courses", "is_suspended", "BOOLEAN NOT NULL DEFAULT FALSE")
 _ensure_column("courses", "suspension_reason", "TEXT NULL")
 
+# --- 質問カテゴリの承認制（既存カテゴリは導入前から使われていたものとして自動承認扱いにする） ---
+_ensure_column("question_categories", "status", "VARCHAR(20) NOT NULL DEFAULT 'approved'")
+
 
 def _migrate_legacy_characters_to_creator():
     from app.core.creator_migration import migrate_legacy_characters_to_creator
@@ -199,11 +202,27 @@ async def _daily_notification_loop():
         await asyncio.sleep(60)
 
 
+
+# --- 週次・月次レビュー（要件定義書5.5）---
+# 日次通知よりチェック頻度が低くても十分なため、AI呼び出しコストを抑えて30分間隔でチェックする
+async def _review_generation_loop():
+    from app.core.review_generation import generate_due_reviews
+
+    while True:
+        try:
+            await asyncio.to_thread(generate_due_reviews)
+        except Exception:
+            logger.exception("[ReviewGeneration] 定期チェックに失敗しました")
+        await asyncio.sleep(1800)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    task = asyncio.create_task(_daily_notification_loop())
+    notification_task = asyncio.create_task(_daily_notification_loop())
+    review_task = asyncio.create_task(_review_generation_loop())
     yield
-    task.cancel()
+    notification_task.cancel()
+    review_task.cancel()
 
 
 app = FastAPI(

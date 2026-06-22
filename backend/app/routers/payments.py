@@ -203,6 +203,73 @@ def cancel_subscription(
     return {"message": "解約処理が完了しました"}
 
 
+class TierChangeRequest(BaseModel):
+    tier: str  # "A" / "B"
+
+
+@router.post("/subscriptions/{subscription_id}/change-tier")
+def change_subscription_tier(
+    subscription_id: int,
+    data: TierChangeRequest,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """契約中のTierをアップグレード/ダウングレードする（解約→再契約せず、既存サブスクリプションを更新する）。"""
+    if data.tier not in ("A", "B"):
+        raise HTTPException(status_code=400, detail="tier は 'A' または 'B' を指定してください")
+
+    sub = db.query(CourseSubscription).filter(
+        CourseSubscription.id == subscription_id, CourseSubscription.user_id == current_user.id
+    ).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="サブスクリプションが見つかりません")
+    if sub.status != "active":
+        raise HTTPException(status_code=400, detail="アクティブな契約のみTierを変更できます")
+    if sub.tier == data.tier:
+        raise HTTPException(status_code=400, detail="既に指定されたTierで契約中です")
+
+    course = db.query(Course).filter(Course.id == sub.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+    new_price = course.tier_a_price if data.tier == "A" else course.tier_b_price
+    if not new_price:
+        raise HTTPException(status_code=400, detail="このコースは指定されたTierに対応していません")
+
+    if not _stripe_key_configured():
+        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
+    if not sub.stripe_subscription_id:
+        raise HTTPException(status_code=400, detail="このサブスクリプションは決済情報と紐付いていません")
+
+    stripe = _get_stripe()
+    try:
+        stripe_sub = stripe.Subscription.retrieve(sub.stripe_subscription_id)
+        item_id = stripe_sub["items"]["data"][0]["id"]
+        stripe_product = stripe.Product.create(
+            name=f"{course.title}（Tier {data.tier}）",
+            idempotency_key=f"product_{course.id}_{data.tier}",
+        )
+        stripe.Subscription.modify(
+            sub.stripe_subscription_id,
+            items=[{
+                "id": item_id,
+                "price_data": {
+                    "currency": "jpy",
+                    "product": stripe_product.id,
+                    "unit_amount": new_price,
+                    "recurring": {"interval": "month"},
+                },
+            }],
+            proration_behavior="create_prorations",
+        )
+    except Exception as e:
+        logger.exception("[Stripe] サブスクリプションのTier変更に失敗しました")
+        raise HTTPException(status_code=502, detail="Tier変更処理に失敗しました") from e
+
+    sub.tier = data.tier
+    db.commit()
+    return {"message": f"Tier {data.tier}に変更しました", "tier": data.tier}
+
+
 def _handle_course_payment_succeeded(db: Session, payment_intent: dict):
     """payment_intent.succeeded を処理し、コース購入を完了させる（冪等）"""
     purchase = db.query(Purchase).filter(

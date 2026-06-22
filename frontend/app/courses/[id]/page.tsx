@@ -37,6 +37,7 @@ export default function CourseDetailPage() {
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<number>>(new Set());
   const [completing, setCompleting] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [changingTier, setChangingTier] = useState(false);
   const [mode, toggleMode] = useDarkMode();
 
   function load() {
@@ -89,6 +90,20 @@ export default function CourseDetailPage() {
       toast(err instanceof Error ? err.message : "解約に失敗しました", "error");
     } finally {
       setCanceling(false);
+    }
+  }
+
+  async function handleChangeTier(subscriptionId: number, tier: "A" | "B") {
+    if (!confirm(`Tier ${tier}に変更しますか？次回請求から新しい料金が適用されます。`)) return;
+    setChangingTier(true);
+    try {
+      await api.changeSubscriptionTier(subscriptionId, tier);
+      toast(`Tier ${tier}に変更しました`, "success");
+      await load();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Tier変更に失敗しました", "error");
+    } finally {
+      setChangingTier(false);
     }
   }
 
@@ -152,6 +167,17 @@ export default function CourseDetailPage() {
                 <div className="flex items-center gap-3">
                   <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
                   <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                  <Link href={`/courses/${courseId}/reviews`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>週次・月次レビュー</Link>
+                  {course.my_subscription && (() => {
+                    const otherTier = course.my_subscription.tier === "A" ? "B" : "A";
+                    const otherTierPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
+                    return otherTierPrice ? (
+                      <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
+                        className="text-xs underline disabled:opacity-50" style={{ color: "var(--accent)" }}>
+                        Tier {otherTier}に変更する
+                      </button>
+                    ) : null;
+                  })()}
                   {course.my_subscription && (
                     <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
                       className="text-xs underline disabled:opacity-50" style={{ color: "var(--muted)" }}>

@@ -54,6 +54,9 @@ def _get_personality_profile(db: Session, course: Course) -> Optional[dict]:
 
 
 def _resolve_category(db: Session, creator_id: Optional[int], category_name: str) -> Optional[QuestionCategory]:
+    """質問のカテゴリを解決する。AIが既存にない新しいカテゴリ名を提案した場合は
+    status='pending'の候補として作成し、クリエイターが承認するまでコンテンツ紐付け・
+    フラストレーション検知の対象にはしない（承認制、コミュニケーション設計詳細仕様 セクション8-9）。"""
     if not creator_id or not category_name:
         return None
     existing = db.query(QuestionCategory).filter(
@@ -61,7 +64,7 @@ def _resolve_category(db: Session, creator_id: Optional[int], category_name: str
     ).first()
     if existing:
         return existing
-    category = QuestionCategory(creator_id=creator_id, name=category_name, keywords=[])
+    category = QuestionCategory(creator_id=creator_id, name=category_name, keywords=[], status="pending")
     db.add(category)
     db.flush()
     return category
@@ -81,8 +84,9 @@ def _today_questions_used_by_tier_b(db: Session, user_id: int, course_id: int) -
 
 
 def _detect_frustration(db: Session, user_id: int, course_id: int, category: Optional[QuestionCategory]) -> Optional[dict]:
-    """直近7日間で同一カテゴリへの質問がFRUSTRATION_THRESHOLD回以上続いていれば検知する（事業検証ポイント①）。"""
-    if not category:
+    """直近7日間で同一カテゴリへの質問がFRUSTRATION_THRESHOLD回以上続いていれば検知する（事業検証ポイント①）。
+    承認待ち（pending）・却下済み（rejected）のカテゴリはクリエイターが内容を把握していないため対象外とする。"""
+    if not category or category.status != "approved":
         return None
     from datetime import datetime, timezone, timedelta
     since = datetime.now(timezone.utc) - timedelta(days=7)
@@ -188,7 +192,7 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     if route_to_instructor:
         # Tier B: AIが下書きを生成し、講師の承認を待つ（承認UIはPhase6で実装）。
         # 講師の代理回答のため品質を優先し、常にSonnetで生成する（設計書2.5節）
-        linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category else None
+        linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
         try:
             draft_body = generate_text(
                 prompts.build_answer_system(personality, message_type),
@@ -206,7 +210,7 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
 
     # Tier A（またはTier Bの2回目以降）：AIが自動回答。
     # 学習内容・感情系の相談はSonnet、状況報告等の定型応答はHaiku（設計書2.5節のモデル使い分け方針）
-    linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category else None
+    linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
     answer_model = prompts.select_answer_model(message_type, data.body, settings.ANTHROPIC_MODEL_HAIKU, settings.ANTHROPIC_MODEL)
     try:
         answer_body = generate_text(
@@ -269,7 +273,25 @@ def list_pending_questions(current_user=Depends(get_current_user), db: Session =
             "is_overdue": (now - created_at) >= timedelta(hours=24),
             "ai_draft": draft.body if draft else None,
         })
+    # 24時間超過のものをログイン直後に最優先で目に入るよう先頭に並べる（G-04: Tier B回答状況監視）
+    result.sort(key=lambda r: (not r["is_overdue"], r["created_at"]))
     return result
+
+
+@router.get("/creator/pending/overdue-count")
+def get_pending_overdue_count(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """24時間以上未対応のTier B質問数。ダッシュボードでのログイン直後の優先通知バッジに使う。要(クリエイター本人)"""
+    from datetime import datetime, timezone, timedelta
+    profile = _get_own_creator_profile(db, current_user)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    count = db.query(Question).join(Course, Question.course_id == Course.id).join(
+        Character, Course.character_id == Character.id
+    ).filter(
+        Question.status == "pending_instructor",
+        Character.creator_id == profile.id,
+        Question.created_at <= cutoff,
+    ).count()
+    return {"overdue_count": count}
 
 
 class RespondRequest(BaseModel):
@@ -312,9 +334,11 @@ def respond_to_question(question_id: int, data: RespondRequest, current_user=Dep
 
 @router.get("/creator/analytics")
 def get_question_analytics(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """質問分析ダッシュボード：カテゴリ別ランキングと紐付けコンテンツの状況。要(クリエイター本人)"""
+    """質問分析ダッシュボード：カテゴリ別ランキングと紐付けコンテンツの状況。承認済みカテゴリのみ対象。要(クリエイター本人)"""
     profile = _get_own_creator_profile(db, current_user)
-    categories = db.query(QuestionCategory).filter(QuestionCategory.creator_id == profile.id).all()
+    categories = db.query(QuestionCategory).filter(
+        QuestionCategory.creator_id == profile.id, QuestionCategory.status == "approved"
+    ).all()
     result = []
     for c in categories:
         result.append({
@@ -325,6 +349,47 @@ def get_question_analytics(current_user=Depends(get_current_user), db: Session =
         })
     result.sort(key=lambda x: x["question_count"], reverse=True)
     return result
+
+
+@router.get("/creator/categories/pending")
+def list_pending_categories(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """AIが提案した新規カテゴリ候補の一覧（未承認）。要(クリエイター本人)"""
+    profile = _get_own_creator_profile(db, current_user)
+    categories = db.query(QuestionCategory).filter(
+        QuestionCategory.creator_id == profile.id, QuestionCategory.status == "pending"
+    ).order_by(QuestionCategory.created_at.desc()).all()
+    return [
+        {"id": c.id, "name": c.name, "question_count": len(c.questions), "created_at": c.created_at}
+        for c in categories
+    ]
+
+
+@router.put("/creator/categories/{category_id}/approve")
+def approve_category(category_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """新規カテゴリ候補を承認する。承認後はコンテンツ紐付け・フラストレーション検知の対象になる。要(クリエイター本人)"""
+    profile = _get_own_creator_profile(db, current_user)
+    category = db.query(QuestionCategory).filter(
+        QuestionCategory.id == category_id, QuestionCategory.creator_id == profile.id
+    ).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="カテゴリが見つかりません")
+    category.status = "approved"
+    db.commit()
+    return {"id": category.id, "name": category.name, "status": category.status}
+
+
+@router.put("/creator/categories/{category_id}/reject")
+def reject_category(category_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """新規カテゴリ候補を却下する。既存の質問への紐付けは残るが、コンテンツ紐付け・分析対象からは外れる。要(クリエイター本人)"""
+    profile = _get_own_creator_profile(db, current_user)
+    category = db.query(QuestionCategory).filter(
+        QuestionCategory.id == category_id, QuestionCategory.creator_id == profile.id
+    ).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="カテゴリが見つかりません")
+    category.status = "rejected"
+    db.commit()
+    return {"id": category.id, "name": category.name, "status": category.status}
 
 
 @router.get("/creator/categories/{category_id}/questions")

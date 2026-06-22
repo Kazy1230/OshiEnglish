@@ -16,12 +16,14 @@ export default function DashboardPage() {
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [loadingChars, setLoadingChars] = useState(true);
   const [purchasedCourses, setPurchasedCourses] = useState<PurchasedCourse[]>([]);
+  const [overdueCount, setOverdueCount] = useState(0);
   const [mode, toggleMode] = useDarkMode();
 
   useEffect(() => {
     if (loading) return;
     api.listMyCharacters().then(setCharacters).catch(() => {}).finally(() => setLoadingChars(false));
     api.getMyPurchasedCourses().then(setPurchasedCourses).catch(() => {});
+    api.getPendingOverdueCount().then(r => setOverdueCount(r.overdue_count)).catch(() => {});
   }, [loading]);
 
   if (loading) return <Skeleton />;
@@ -41,6 +43,15 @@ export default function DashboardPage() {
           {me?.display_name || me?.username} さん、ようこそ。
         </p>
 
+        {overdueCount > 0 && (
+          <Link href="/creator/inbox" className="card flex items-center gap-3" style={{ borderColor: "#e53e3e" }}>
+            <span className="text-xl">⚠</span>
+            <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>
+              24時間以上未対応のTier B質問が{overdueCount}件あります。今すぐ確認しましょう。
+            </p>
+          </Link>
+        )}
+
         <div className="flex flex-wrap gap-3">
           <Link href="/dashboard/characters/new" className="btn-primary">+ 新しいキャラクターを作る</Link>
           <Link href="/creator/courses/new" className="btn-primary">📅 90日伴走コースを作る</Link>
@@ -48,7 +59,15 @@ export default function DashboardPage() {
           <Link href="/creator/interview" className="btn-ghost">🧠 AIインタビュー（人格プロファイル）</Link>
           <Link href="/creator/profile" className="btn-ghost">👤 人格プロファイルを確認</Link>
           <Link href="/creator/analytics" className="btn-ghost">📊 質問分析ダッシュボード</Link>
-          <Link href="/creator/inbox" className="btn-ghost">📨 未回答の質問（Tier B）</Link>
+          <Link href="/creator/inbox" className="btn-ghost relative">
+            📨 未回答の質問（Tier B）
+            {overdueCount > 0 && (
+              <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white"
+                style={{ background: "#e53e3e" }}>
+                {overdueCount}
+              </span>
+            )}
+          </Link>
           <Link href="/creator/revenue" className="btn-ghost">💰 収益ダッシュボード</Link>
         </div>
 

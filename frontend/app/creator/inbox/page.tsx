@@ -45,12 +45,21 @@ export default function CreatorInboxPage() {
 
   if (loading || loadingData) return <Skeleton />;
 
+  const overdueCount = questions.filter(q => q.is_overdue).length;
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <h1 className="text-white font-black text-lg">未回答の質問（Tier B）</h1>
       </header>
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
+        {overdueCount > 0 && (
+          <div className="card" style={{ borderColor: "#e53e3e" }}>
+            <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>
+              ⚠ {overdueCount}件が24時間以上未対応です。優先的にご対応ください（下のリストの先頭に表示されています）。
+            </p>
+          </div>
+        )}
         {questions.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--muted)" }}>未回答の質問はありません。</p>
         ) : (

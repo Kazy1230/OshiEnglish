@@ -76,21 +76,8 @@ export const api = {
     }),
   getCharacterTheme: (id: number) => apiFetch(`/characters/theme/${id}`),
 
-  // 管理者：顧客
-  adminGetCustomers: () => apiFetch("/customers/"),
-  adminCreateCustomer: (data: object) => apiFetch("/customers/", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateCustomer: (id: number, data: object) => apiFetch(`/customers/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteCustomer: (id: number) => apiFetch(`/customers/${id}`, { method: "DELETE" }),
-  adminReissuePassword: (id: number) => apiFetch(`/customers/${id}/reissue-password`, { method: "POST" }),
-
   // 退会
   withdraw: () => apiFetch("/customers/me/withdraw", { method: "POST" }),
-
-  // 管理者：キャラクター
-  adminGetCharacters: () => apiFetch("/characters/"),
-  adminCreateCharacter: (data: object) => apiFetch("/characters/", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateCharacter: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeleteCharacter: (id: number) => apiFetch(`/characters/${id}`, { method: "DELETE" }),
 
   // マーケットプレイス：クリエイター
   listCreators: () => apiFetch("/creators/"),
@@ -149,6 +136,8 @@ export const api = {
     apiFetch("/payments/subscribe", { method: "POST", body: JSON.stringify({ course_id: courseId, tier }) }),
   cancelSubscription: (subscriptionId: number) =>
     apiFetch(`/payments/subscriptions/${subscriptionId}/cancel`, { method: "POST" }),
+  changeSubscriptionTier: (subscriptionId: number, tier: "A" | "B") =>
+    apiFetch(`/payments/subscriptions/${subscriptionId}/change-tier`, { method: "POST", body: JSON.stringify({ tier }) }),
 
   // 講師ダッシュボード：自分のキャラクター
   listMyCharacters: () => apiFetch("/characters/"),
@@ -186,6 +175,7 @@ export const api = {
   getNotificationSettings: (courseId: number) => apiFetch(`/diagnosis/${courseId}/notification-settings`),
   updateNotificationSettings: (courseId: number, data: object) =>
     apiFetch(`/diagnosis/${courseId}/notification-settings`, { method: "PUT", body: JSON.stringify(data) }),
+  getReviews: (courseId: number) => apiFetch(`/diagnosis/${courseId}/reviews`),
 
   // 90日伴走コース：日次学習ログ
   listDayLogs: (courseId: number) => apiFetch(`/courses/${courseId}/day-logs`),
@@ -201,6 +191,7 @@ export const api = {
   listPendingQuestions: () => apiFetch("/chat/creator/pending"),
   respondToQuestion: (questionId: number, body?: string) =>
     apiFetch(`/chat/creator/questions/${questionId}/respond`, { method: "POST", body: JSON.stringify({ body: body ?? null }) }),
+  getPendingOverdueCount: () => apiFetch("/chat/creator/pending/overdue-count"),
 
   // クリエイター向け：質問分析ダッシュボード
   getQuestionAnalytics: () => apiFetch("/chat/creator/analytics"),
@@ -208,6 +199,9 @@ export const api = {
   addCategoryContent: (categoryId: number, data: object) =>
     apiFetch(`/chat/creator/categories/${categoryId}/contents`, { method: "POST", body: JSON.stringify(data) }),
   deleteCategoryContent: (contentId: number) => apiFetch(`/chat/creator/contents/${contentId}`, { method: "DELETE" }),
+  getPendingCategories: () => apiFetch("/chat/creator/categories/pending"),
+  approveCategory: (categoryId: number) => apiFetch(`/chat/creator/categories/${categoryId}/approve`, { method: "PUT" }),
+  rejectCategory: (categoryId: number) => apiFetch(`/chat/creator/categories/${categoryId}/reject`, { method: "PUT" }),
 
   // クリエイター向け：収益ダッシュボード
   getMyRevenue: () => apiFetch("/creators/me/revenue"),

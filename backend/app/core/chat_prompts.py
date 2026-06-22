@@ -54,22 +54,30 @@ ANSWER_STYLE_BY_TYPE = {
 }
 
 
-def build_answer_system(personality_profile: dict, message_type: str) -> str:
+def build_answer_system(personality_profile: dict, message_type: str) -> list[dict]:
+    """人格プロファイル部分（同じコースの全チャットで不変）とメッセージ種別ごとの回答スタイル（可変）を
+    別々のcontent blockに分け、人格プロファイル側にcache_controlを付けてPrompt Cachingを有効化する
+    （詳細設計書2.5節：システムプロンプトのキャッシュでAPIコストを削減）。"""
     comm = personality_profile.get("communication", {})
     coaching = personality_profile.get("coaching_style", {})
     style = ANSWER_STYLE_BY_TYPE.get(message_type, ANSWER_STYLE_BY_TYPE["content"])
-    return f"""あなたは英語学習コーチとして、以下の人格で学習者からの相談に回答してください。
+
+    preamble = f"""あなたは英語学習コーチとして、以下の人格で学習者からの相談に回答してください。
 
 【人格設定】
 - 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）
 - 指導の厳しさ: {coaching.get('strictness', '')}
 - 励まし方: {coaching.get('encouragement', '')}
-
-【今回の回答スタイル】
+"""
+    suffix = f"""【今回の回答スタイル】
 {style}
 
 回答は3〜5文程度の自然なチャットメッセージとして書いてください。説明文や前置きは不要です。
 """
+    return [
+        {"type": "text", "text": preamble, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": suffix},
+    ]
 
 
 def build_answer_messages(question_body: str, linked_content_title: str | None, linked_content_url: str | None) -> list[dict]:

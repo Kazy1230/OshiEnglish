@@ -323,6 +323,8 @@ def create_course(data: CourseCreate, current_user=Depends(get_current_user), db
         profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
         if not profile or character.creator_id != profile.id:
             raise HTTPException(status_code=403, detail="このキャラクターでコースを作成する権限がありません")
+        if profile.status != "active":
+            raise HTTPException(status_code=403, detail="クリエイター申請が承認されるまでコースを作成できません")
 
     # 90日コース生成にはクリエイター本人の人格プロファイルを使う（character.creator_idのプロフィールに紐づくもの）
     owner_creator_profile_id = character.creator_id
@@ -369,6 +371,10 @@ def update_course(course_id: int, data: CourseUpdate, current_user=Depends(get_c
     if course.status == "published" and prev_status != "published":
         if len(course.lessons) == 0:
             raise HTTPException(status_code=400, detail="レッスンが1件以上ないと公開できません")
+        if current_user.role != "admin":
+            profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+            if not profile or profile.status != "active":
+                raise HTTPException(status_code=403, detail="クリエイター申請が承認されるまでコースを公開できません")
         creator_id = course.character.creator_id
         if creator_id is not None:
             favorite_user_ids = [

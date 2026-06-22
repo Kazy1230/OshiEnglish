@@ -14,7 +14,12 @@ class LLMError(Exception):
     """AI応答の生成に失敗した場合に送出する。"""
 
 
-def generate_text(system_prompt: str, messages: list[dict], max_tokens: int = 1024, model: str | None = None) -> str:
+def generate_text(system_prompt: str | list[dict], messages: list[dict], max_tokens: int = 1024, model: str | None = None) -> str:
+    """system_promptは文字列、またはAnthropic Prompt Caching用のcontent blockリストを渡せる。
+    例: [{"type": "text", "text": "...", "cache_control": {"type": "ephemeral"}}, {"type": "text", "text": "..."}]
+    人格プロファイルなど複数回の呼び出しで再利用される固定プレフィックスにcache_controlを付けることで、
+    入力トークンのキャッシュ書き込み/読み込み料金が通常より安くなる（詳細設計書2.5節）。
+    """
     if not settings.ANTHROPIC_API_KEY:
         raise LLMError("ANTHROPIC_API_KEYが設定されていません。管理者にお問い合わせください。")
 

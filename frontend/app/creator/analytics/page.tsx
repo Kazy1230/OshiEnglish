@@ -7,10 +7,12 @@ import { toast } from "@/components/Toast";
 
 type Content = { id: number; content_type: string; title: string; url: string };
 type Category = { id: number; name: string; question_count: number; contents: Content[] };
+type PendingCategory = { id: number; name: string; question_count: number; created_at: string };
 
 export default function CreatorAnalyticsPage() {
   const { loading } = useRoleGuard(["creator", "admin"]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [pending, setPending] = useState<PendingCategory[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [questions, setQuestions] = useState<{ id: number; body: string; created_at: string }[]>([]);
@@ -18,13 +20,37 @@ export default function CreatorAnalyticsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   function load() {
-    return api.getQuestionAnalytics().then(setCategories);
+    return Promise.all([api.getQuestionAnalytics(), api.getPendingCategories()]).then(([c, p]) => {
+      setCategories(c);
+      setPending(p);
+    });
   }
 
   useEffect(() => {
     if (loading) return;
     load().finally(() => setLoadingData(false));
   }, [loading]);
+
+  async function handleApproveCategory(categoryId: number) {
+    try {
+      await api.approveCategory(categoryId);
+      await load();
+      toast("カテゴリを承認しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "承認に失敗しました", "error");
+    }
+  }
+
+  async function handleRejectCategory(categoryId: number) {
+    if (!confirm("このカテゴリ候補を却下しますか？")) return;
+    try {
+      await api.rejectCategory(categoryId);
+      await load();
+      toast("却下しました", "info");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "却下に失敗しました", "error");
+    }
+  }
 
   async function toggleExpand(categoryId: number) {
     if (expanded === categoryId) { setExpanded(null); return; }
@@ -78,6 +104,21 @@ export default function CreatorAnalyticsPage() {
         <h1 className="text-white font-black text-lg">質問分析ダッシュボード</h1>
       </header>
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
+        {pending.length > 0 && (
+          <div className="card flex flex-col gap-3" style={{ borderColor: "var(--accent)" }}>
+            <p className="font-bold" style={{ color: "var(--primary)" }}>🆕 AIが提案した新規カテゴリ候補（承認待ち）</p>
+            {pending.map(p => (
+              <div key={p.id} className="flex items-center justify-between gap-3">
+                <span className="text-sm" style={{ color: "var(--text)" }}>{p.name}（{p.question_count}件）</span>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => handleApproveCategory(p.id)} className="btn-primary text-xs py-1 px-3">承認する</button>
+                  <button onClick={() => handleRejectCategory(p.id)} className="text-xs underline" style={{ color: "var(--muted)" }}>却下</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {categories.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--muted)" }}>まだ質問が蓄積されていません。</p>
         ) : (

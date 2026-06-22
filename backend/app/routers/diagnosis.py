@@ -13,6 +13,7 @@ from app.models.personality_profile import PersonalityProfile
 from app.models.learner_profile import LearnerProfile
 from app.models.learner_roadmap import LearnerRoadmap
 from app.models.notification_setting import NotificationSetting
+from app.models.learner_review import LearnerReview
 from app.routers.courses import _is_accessible
 
 router = APIRouter(prefix="/diagnosis", tags=["Day1初回診断・ロードマップ"])
@@ -198,3 +199,22 @@ def update_notification_settings(course_id: int, data: NotificationSettingReques
     setting.is_enabled = data.is_enabled
     db.commit()
     return {"morning_time": setting.morning_time, "evening_time": setting.evening_time, "is_enabled": setting.is_enabled}
+
+
+@router.get("/{course_id}/reviews")
+def list_reviews(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """週次・月次レビュー一覧を取得する（要件定義書5.5）。新しい順。要(購入済み学習者)"""
+    _get_purchased_course(db, course_id, current_user)
+    reviews = db.query(LearnerReview).filter(
+        LearnerReview.user_id == current_user.id, LearnerReview.course_id == course_id
+    ).order_by(LearnerReview.review_type, LearnerReview.period_number.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "review_type": r.review_type,
+            "period_number": r.period_number,
+            "content": r.content,
+            "created_at": r.created_at,
+        }
+        for r in reviews
+    ]
