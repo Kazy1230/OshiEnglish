@@ -31,47 +31,104 @@ body {
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+a.card:hover, button.card:hover, .card.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.14);
 }
 
 .btn-primary {
   background: var(--primary);
   color: white;
-  padding: 0.6rem 1.4rem;
-  border-radius: 8px;
-  font-weight: 600;
+  padding: 0.65rem 1.6rem;
+  border-radius: 999px;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.2s;
   display: inline-block;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
-.btn-primary:hover { opacity: 0.85; }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .btn-accent {
   background: var(--accent);
   color: white;
-  padding: 0.6rem 1.4rem;
-  border-radius: 8px;
-  font-weight: 600;
+  padding: 0.65rem 1.6rem;
+  border-radius: 999px;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.2s;
   display: inline-block;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
-.btn-accent:hover { opacity: 0.85; }
-.btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-accent:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18); }
+.btn-accent:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .btn-ghost {
   border: 1px solid var(--border);
-  padding: 0.5rem 1.2rem;
-  border-radius: 8px;
+  padding: 0.55rem 1.4rem;
+  border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.2s ease;
   display: inline-block;
 }
-.btn-ghost:hover { background: var(--bg); }
-.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost:hover { background: var(--bg); transform: translateY(-1px); }
+.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* ページ共通ヘッダー（var(--primary)背景のheader要素）を上部固定＋シャドウに統一 */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ===== 装飾ユーティリティ（ヒーロー・カード演出など） ===== */
+.gradient-hero {
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 55%, var(--accent)) 100%);
+}
+
+.shadow-soft {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.hover-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.14);
+}
+
+.btn-cta {
+  background: var(--accent);
+  color: white;
+  padding: 0.85rem 2rem;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-block;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.btn-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-block;
+}
 
 input, textarea {
   border: 1px solid var(--border);
