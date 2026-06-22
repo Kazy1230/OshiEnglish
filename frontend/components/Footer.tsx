@@ -1,7 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
 import { toast } from "@/components/Toast";
@@ -26,8 +24,6 @@ export function Footer() {
 
   return (
     <footer className="py-6 text-center text-xs flex items-center justify-center gap-4" style={{ color: "var(--muted)" }}>
-      <Link href="/pricing" className="hover:underline">料金プラン</Link>
-      <Link href="/policy" className="hover:underline">返金・解約ポリシー</Link>
       <button onClick={handleWithdraw} className="hover:underline">退会する</button>
     </footer>
   );
