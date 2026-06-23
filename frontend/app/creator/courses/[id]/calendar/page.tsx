@@ -35,6 +35,9 @@ export default function CourseCalendarPage() {
   const [materialTitle, setMaterialTitle] = useState("");
   const [materialUrl, setMaterialUrl] = useState("");
 
+  const [courseStatus, setCourseStatus] = useState<string>("draft");
+  const [submitting, setSubmitting] = useState(false);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function reloadDays() {
@@ -43,11 +46,27 @@ export default function CourseCalendarPage() {
 
   useEffect(() => {
     if (loading) return;
-    Promise.all([reloadDays(), api.listCourseMaterials(courseId).then(setMaterials).catch(() => {})])
-      .finally(() => setFetching(false));
+    Promise.all([
+      reloadDays(),
+      api.listCourseMaterials(courseId).then(setMaterials).catch(() => {}),
+      api.getCourseDetail(courseId).then(c => setCourseStatus(c.status)).catch(() => {}),
+    ]).finally(() => setFetching(false));
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
+
+  async function handleSubmitForReview() {
+    setSubmitting(true);
+    try {
+      await api.submitCourseForReview(courseId);
+      setCourseStatus("review");
+      toast("公開申請しました。運営の承認後に公開されます。", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "公開申請に失敗しました", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleGenerate() {
     setGenerating(true);
@@ -126,6 +145,28 @@ export default function CourseCalendarPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+        <div className="card flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold" style={{ color: "var(--muted)" }}>公開状態：</span>
+            <span className="text-sm font-bold px-3 py-1 rounded-full" style={{
+              background: courseStatus === "published" ? "var(--accent)" : courseStatus === "review" ? "#f5a623" : "var(--example-bg, #eee)",
+              color: courseStatus === "published" || courseStatus === "review" ? "white" : "var(--muted)",
+            }}>
+              {courseStatus === "draft" && "下書き"}
+              {courseStatus === "review" && "運営確認中"}
+              {courseStatus === "published" && "公開中"}
+              {courseStatus === "unpublished" && "非公開"}
+            </span>
+          </div>
+          {courseStatus === "draft" && (
+            <button className="btn-primary" disabled={submitting || days.length === 0} onClick={handleSubmitForReview}>
+              {submitting ? "申請中…" : "公開申請する"}
+            </button>
+          )}
+          {courseStatus === "review" && (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>運営の承認をお待ちください。承認後に公開されます。</p>
+          )}
+        </div>
         {days.length === 0 ? (
           <div className="card flex flex-col gap-3 items-start">
             <p className="text-sm" style={{ color: "var(--text)" }}>

@@ -184,8 +184,10 @@ class CourseUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_status(self):
-        if self.status is not None and self.status not in ("draft", "published", "unpublished"):
-            raise ValueError("status は 'draft' / 'published' / 'unpublished' のいずれかを指定してください")
+        # 'review'(公開審査中)・'published'(公開)への変更は専用エンドポイント
+        # (/courses/{id}/submit-for-review, /admin/courses/{id}/approve)経由のみ許可する
+        if self.status is not None and self.status not in ("draft", "unpublished"):
+            raise ValueError("status は 'draft' / 'unpublished' のいずれかを指定してください（公開には運営の承認が必要です）")
         if self.tier_a_price is not None and not (980 <= self.tier_a_price <= 1980):
             raise ValueError("Tier Aの価格は980〜1980円/月で指定してください")
         if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 5000):
@@ -360,9 +362,9 @@ def create_course(data: CourseCreate, current_user=Depends(get_current_user), db
 
 @router.put("/courses/{course_id}")
 def update_course(course_id: int, data: CourseUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """コース更新。要(本人)。status='published'への変更時はお気に入り登録者へ通知を生成する"""
+    """コース更新。要(本人)。公開状態(published)への変更はこのエンドポイントでは行えない
+    （/courses/{id}/submit-for-review → 運営の/admin/courses/{id}/approve を経由する）"""
     course = _get_owned_course(db, course_id, current_user)
-    prev_status = course.status
 
     updates = data.model_dump(exclude_none=True)
     for key, val in updates.items():
@@ -372,25 +374,24 @@ def update_course(course_id: int, data: CourseUpdate, current_user=Depends(get_c
     elif course.price < 100:
         raise HTTPException(status_code=400, detail="有料コースの価格は100円以上を指定してください")
 
-    if course.status == "published" and prev_status != "published":
-        if len(course.lessons) == 0:
-            raise HTTPException(status_code=400, detail="レッスンが1件以上ないと公開できません")
-        if current_user.role != "admin":
-            profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
-            if not profile or profile.status != "active":
-                raise HTTPException(status_code=403, detail="クリエイター申請が承認されるまでコースを公開できません")
-        creator_id = course.character.creator_id
-        if creator_id is not None:
-            favorite_user_ids = [
-                f.user_id for f in db.query(Favorite).filter(Favorite.creator_id == creator_id).all()
-            ]
-            for user_id in favorite_user_ids:
-                db.add(Notification(
-                    user_id=user_id,
-                    type="new_course",
-                    payload={"course_id": course.id, "title": course.title},
-                ))
+    db.commit()
+    db.refresh(course)
+    return _serialize_course_detail(db, course, current_user)
 
+
+@router.post("/courses/{course_id}/submit-for-review")
+def submit_course_for_review(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """コースの公開申請を行う(draft→review)。運営の承認後に公開される。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    if course.status != "draft":
+        raise HTTPException(status_code=400, detail="公開申請できるのはdraft状態のコースのみです")
+    if len(course.lessons) == 0 and len(course.days) == 0:
+        raise HTTPException(status_code=400, detail="レッスンまたは90日分のコンテンツが1件以上ないと公開申請できません")
+    if current_user.role != "admin":
+        profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+        if not profile or profile.status != "active":
+            raise HTTPException(status_code=403, detail="クリエイター申請が承認されるまでコースを公開申請できません")
+    course.status = "review"
     db.commit()
     db.refresh(course)
     return _serialize_course_detail(db, course, current_user)

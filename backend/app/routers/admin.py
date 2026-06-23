@@ -13,6 +13,8 @@ from app.models.course import Course
 from app.models.character import Character
 from app.models.question import Question
 from app.models.report import Report
+from app.models.favorite import Favorite
+from app.models.notification import Notification
 
 router = APIRouter(prefix="/admin", tags=["管理者機能"])
 
@@ -110,6 +112,62 @@ def unsuspend_course(course_id: int, admin=Depends(get_current_admin), db: Sessi
     course.suspension_reason = None
     db.commit()
     return {"message": "停止を解除しました"}
+
+
+# ----- コース公開審査（運営承認）-----
+
+@router.put("/courses/{course_id}/approve")
+def approve_course(course_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """公開申請中(review)のコースを承認し、公開(published)にする。お気に入り登録者へ通知する。要(管理者)"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+    if course.status != "review":
+        raise HTTPException(status_code=400, detail="公開申請中のコースのみ承認できます")
+
+    course.status = "published"
+
+    creator_id = course.character.creator_id if course.character else None
+    if creator_id is not None:
+        favorite_user_ids = [
+            f.user_id for f in db.query(Favorite).filter(Favorite.creator_id == creator_id).all()
+        ]
+        for user_id in favorite_user_ids:
+            db.add(Notification(
+                user_id=user_id,
+                type="new_course",
+                payload={"course_id": course.id, "title": course.title},
+            ))
+
+    db.commit()
+    return {"message": "コースを承認し公開しました"}
+
+
+@router.put("/courses/{course_id}/reject")
+def reject_course(course_id: int, data: RejectRequest, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """公開申請中(review)のコースを却下し、draftに戻す。クリエイターにメールで理由を通知する。要(管理者)"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+    if course.status != "review":
+        raise HTTPException(status_code=400, detail="公開申請中のコースのみ却下できます")
+
+    course.status = "draft"
+    db.commit()
+
+    creator_profile = (
+        db.query(CreatorProfile).filter(CreatorProfile.id == course.character.creator_id).first()
+        if course.character and course.character.creator_id else None
+    )
+    creator_user = db.query(Customer).filter(Customer.id == creator_profile.user_id).first() if creator_profile else None
+    if creator_user and creator_user.email:
+        reason_text = f"<p>理由: {data.reason}</p>" if data.reason else ""
+        send_email(
+            creator_user.email,
+            "【ManaVillage】コースの公開申請について",
+            f"<p>「{course.title}」の公開申請は今回見送りとなりました。内容を見直して再度申請してください。</p>{reason_text}",
+        )
+    return {"message": "コースを却下しました"}
 
 
 # ----- G-03: ユーザーからの通報管理 -----

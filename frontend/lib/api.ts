@@ -106,6 +106,7 @@ export const api = {
   getCourseDetail: (id: number) => apiFetch(`/courses/${id}`),
   createCourse: (data: object) => apiFetch("/courses", { method: "POST", body: JSON.stringify(data) }),
   updateCourse: (id: number, data: object) => apiFetch(`/courses/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  submitCourseForReview: (id: number) => apiFetch(`/courses/${id}/submit-for-review`, { method: "POST" }),
   addCourseLesson: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/lessons`, { method: "POST", body: JSON.stringify(data) }),
   updateLesson: (lessonId: number, data: object) =>
@@ -218,6 +219,9 @@ export const api = {
   adminSuspendCourse: (courseId: number, reason: string) =>
     apiFetch(`/admin/courses/${courseId}/suspend`, { method: "PUT", body: JSON.stringify({ reason }) }),
   adminUnsuspendCourse: (courseId: number) => apiFetch(`/admin/courses/${courseId}/unsuspend`, { method: "PUT" }),
+  adminApproveCourse: (courseId: number) => apiFetch(`/admin/courses/${courseId}/approve`, { method: "PUT" }),
+  adminRejectCourse: (courseId: number, reason?: string) =>
+    apiFetch(`/admin/courses/${courseId}/reject`, { method: "PUT", body: JSON.stringify({ reason: reason ?? null }) }),
   adminListReports: () => apiFetch("/admin/reports"),
   adminResolveReport: (reportId: number) => apiFetch(`/admin/reports/${reportId}/resolve`, { method: "PUT" }),
   adminListTierBOverdue: () => apiFetch("/admin/tier-b-overdue"),
