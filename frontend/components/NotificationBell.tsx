@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 import { toast } from "@/components/Toast";
 
 type NotificationItem = {
@@ -19,19 +20,24 @@ function describe(n: NotificationItem): string {
 
 export function NotificationBell() {
   const router = useRouter();
+  const [loggedIn, setLoggedIn] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   function load() {
+    if (!getToken()) return;
     api.listNotifications().then(res => {
       setItems(res.notifications || []);
       setUnreadCount(res.unread_count || 0);
     }).catch(() => {});
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    setLoggedIn(!!getToken());
+    load();
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -62,6 +68,8 @@ export function NotificationBell() {
       toast(err instanceof Error ? err.message : "操作に失敗しました", "error");
     }
   }
+
+  if (!loggedIn) return null;
 
   return (
     <div ref={ref} className="relative">

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
@@ -80,7 +81,7 @@ export default function CourseCalendarPage() {
           clearInterval(pollRef.current!);
           setGenerating(false);
           await reloadDays();
-          toast("90日分のコンテンツを生成しました", "success");
+          toast("90日分のコンテンツを生成しました。各日を編集するか、このままで良ければ上部の「公開申請する」から運営の審査に進めます。", "success");
         } else if (status.status === "failed") {
           clearInterval(pollRef.current!);
           setGenerating(false);
@@ -141,8 +142,11 @@ export default function CourseCalendarPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">90日カレンダー編集</h1>
+      <header className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3" style={{ background: "var(--primary)" }}>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="text-white/80 text-sm hover:text-white">← ダッシュボード</Link>
+          <h1 className="text-white font-black text-lg">90日カレンダー編集</h1>
+        </div>
         <LogoutButton variant="onColor" />
       </header>
 
