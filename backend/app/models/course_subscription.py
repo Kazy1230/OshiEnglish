@@ -1,13 +1,16 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
 
 class CourseSubscription(Base):
-    """90日伴走コースの月額サブスクリプション（Tier A / Tier B）。"""
+    """90日伴走コースの月額サブスクリプション（Tier A / Tier B）。
+
+    解約後の再契約で履歴として複数行が残るため、(user_id, course_id)へのUNIQUE制約は持たない。
+    同時に有効な契約が1件だけであることはアプリケーション側（subscribe_to_courseの存在チェック）で保証する。
+    """
     __tablename__ = "course_subscriptions"
-    __table_args__ = (UniqueConstraint("user_id", "course_id", name="uq_course_subscriptions_user_course"),)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)

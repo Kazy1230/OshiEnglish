@@ -102,6 +102,13 @@ def _ensure_unique_index(table: str, column: str, index_name: str):
             conn.commit()
 
 
+def _drop_unique_index(table: str, index_name: str):
+    if _table_exists(table) and _unique_index_exists(table, index_name):
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER TABLE {table} DROP INDEX {index_name}"))
+            conn.commit()
+
+
 # テーブルリネームは create_all() より前に行う必要がある
 # （create_all()は存在しないテーブルを新規作成するため、先にcreate_all()すると
 #   リネーム先の名前で空テーブルが作られてしまい、リネームが「既に存在する」扱いでスキップされる）
@@ -215,6 +222,9 @@ _migrate_legacy_characters_to_creator()
 # 1クリエイター=1人格(キャラクター)の制約を追加する前に、既存の重複データを統合しておく
 _dedupe_characters_per_creator()
 _ensure_unique_index("characters", "creator_id", "uq_characters_creator_id")
+
+# 解約後の再契約で履歴として複数行を残せるよう、course_subscriptionsのUNIQUE制約を撤廃する
+_drop_unique_index("course_subscriptions", "uq_course_subscriptions_user_course")
 
 
 # --- Phase 8: リテンション・通知（デイリー伴走チャットの朝・夜の声かけ） ---
