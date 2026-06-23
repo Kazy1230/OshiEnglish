@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { LogoutButton } from "@/components/LogoutButton";
 import { toast } from "@/components/Toast";
 
 type Question = {
@@ -157,7 +158,10 @@ export default function DiagnosisPage() {
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+        <div className="flex items-center gap-3">
+          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+          <LogoutButton variant="onColor" />
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">

@@ -6,6 +6,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { LogoutButton } from "@/components/LogoutButton";
 
 type ToneProfile = {
   first_person?: string;
@@ -107,6 +108,7 @@ export default function EditCharacterPage() {
       <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <Link href="/dashboard" className="text-white/80 text-sm">← ダッシュボード</Link>
         <h1 className="text-white font-black text-lg">キャラクター編集</h1>
+        <LogoutButton variant="onColor" />
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">

@@ -44,6 +44,17 @@ class Verify2FARequest(BaseModel):
     username: str
     code: str
 
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("パスワードは8文字以上にしてください")
+        return v
+
 
 def _is_locked(user: Customer) -> bool:
     return bool(user.locked_until and user.locked_until > datetime.utcnow())
@@ -167,6 +178,30 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
 
     if user.role == "admin" and not user.email:
         logger.warning(f"[2FA] 管理者アカウント(username={user.username})にメールアドレスが未設定のため2FAをスキップしました")
+
+    return _issue_token_response(db, user)
+
+
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def signup(req: SignupRequest, request: Request, db: Session = Depends(get_db)):
+    """学習者の新規登録（セルフサービス）。メールアドレスをログインIDとして使用する。"""
+    enforce_rate_limit(request, "signup", limit=10, window_seconds=3600)
+
+    if db.query(Customer).filter(
+        (Customer.email == req.email) | (Customer.username == req.email)
+    ).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="このメールアドレスは既に登録されています")
+
+    user = Customer(
+        username=req.email,
+        email=req.email,
+        hashed_password=hash_password(req.password),
+        role="learner",
+        is_password_reset_required=False,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
     return _issue_token_response(db, user)
 

@@ -5,6 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { LogoutButton } from "@/components/LogoutButton";
 
 type Day = {
   id: number;
@@ -140,8 +141,9 @@ export default function CourseCalendarPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
+      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
         <h1 className="text-white font-black text-lg">90日カレンダー編集</h1>
+        <LogoutButton variant="onColor" />
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">

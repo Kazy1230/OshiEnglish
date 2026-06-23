@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { NotificationBell } from "@/components/NotificationBell";
+import { LogoutButton } from "@/components/LogoutButton";
 
 type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
@@ -35,6 +36,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <NotificationBell />
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+          <LogoutButton variant="onColor" />
         </div>
       </header>
 

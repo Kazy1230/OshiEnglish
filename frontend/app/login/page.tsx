@@ -31,8 +31,11 @@ function LoginForm() {
 
   async function afterAuthenticated(data: { access_token: string; is_password_reset_required: boolean }) {
     setToken(data.access_token);
+    const returnTo = searchParams.get("returnTo");
     if (data.is_password_reset_required) {
       router.push("/change-password");
+    } else if (returnTo) {
+      router.push(returnTo);
     } else {
       const me = await api.me();
       router.push(me.role === "admin" ? "/admin" : me.role === "creator" ? "/dashboard" : "/");
@@ -80,7 +83,7 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>ManaVillage</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>90日間のAIメンターシップで学びを習慣に</p>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>90日間、好きなクリエイターと目標達成へ</p>
         </div>
 
         <div className="card shadow-sm">
@@ -148,12 +151,15 @@ function LoginForm() {
           )}
         </div>
 
-        <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
-          ID・パスワードはご購入完了画面でお知らせします
+        <p className="text-center text-xs mt-6">
+          <Link href={searchParams.get("returnTo") ? `/signup?returnTo=${encodeURIComponent(searchParams.get("returnTo")!)}` : "/signup"}
+            className="font-bold transition-colors" style={{ color: "var(--accent)" }}>
+            アカウントをお持ちでない方はこちら（新規登録）
+          </Link>
         </p>
         <p className="text-center text-xs mt-2">
-          <Link href="/" className="font-medium transition-colors" style={{ color: "var(--accent)" }}>
-            まだ登録していない方はこちら（コースを探す）
+          <Link href="/" className="font-medium transition-colors" style={{ color: "var(--muted)" }}>
+            コースを探す
           </Link>
         </p>
       </div>

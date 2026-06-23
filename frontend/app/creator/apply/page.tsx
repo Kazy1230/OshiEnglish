@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { toast } from "@/components/Toast";
+import { LogoutButton } from "@/components/LogoutButton";
 
 export default function CreatorApplyPage() {
   const router = useRouter();
@@ -14,9 +15,13 @@ export default function CreatorApplyPage() {
   const [snsTwitter, setSnsTwitter] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!getToken()) router.push("/login?returnTo=/creator/apply");
+  }, [router]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!getToken()) { router.push("/login"); return; }
+    if (!getToken()) { router.push("/login?returnTo=/creator/apply"); return; }
     setSubmitting(true);
     try {
       await api.applyAsCreator({
@@ -37,8 +42,9 @@ export default function CreatorApplyPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
+      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <h1 className="text-white font-black text-lg">クリエイター申請</h1>
+        <LogoutButton variant="onColor" />
       </header>
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <form onSubmit={handleSubmit} className="card flex flex-col gap-4">

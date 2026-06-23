@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>ManaVillage</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>90日間のAIメンターシップで学びを習慣に</p>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>90日間、好きなクリエイターと目標達成へ</p>
         </div>
 
         <div className="card shadow-sm">

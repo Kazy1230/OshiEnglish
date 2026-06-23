@@ -5,6 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { LogoutButton } from "@/components/LogoutButton";
 
 type ChatItem = { role: "ai" | "creator"; text: string };
 
@@ -73,7 +74,10 @@ export default function CreatorInterviewPage() {
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
         <h1 className="text-white font-black text-lg">AIインタビュー（人格収集）</h1>
-        {progress && <span className="text-white/80 text-sm">{progress.current}/{progress.total}問目</span>}
+        <div className="flex items-center gap-3">
+          {progress && <span className="text-white/80 text-sm">{progress.current}/{progress.total}問目</span>}
+          <LogoutButton variant="onColor" />
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">

@@ -58,6 +58,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, code }),
     }),
+  signup: (email: string, password: string) =>
+    apiFetch("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => apiFetch("/auth/me"),
   changePassword: (current_password: string, new_password: string) =>
     apiFetch("/auth/change-password", {

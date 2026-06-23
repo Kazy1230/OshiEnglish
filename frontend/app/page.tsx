@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { LogoutButton } from "@/components/LogoutButton";
 
 type CourseCard = {
   id: number;
@@ -104,11 +105,15 @@ export default function Home() {
             <>
               <Link href="/mypage" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">マイページ</Link>
               <Link href="/creators" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">クリエイターを探す</Link>
+              <LogoutButton variant="onColor" />
             </>
           ) : (
-            <Link href="/login" className="text-white text-sm font-bold px-4 py-2 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "rgba(255,255,255,0.18)" }}>
-              ログイン
-            </Link>
+            <>
+              <Link href="/signup" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">新規登録</Link>
+              <Link href="/login" className="text-white text-sm font-bold px-4 py-2 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "rgba(255,255,255,0.18)" }}>
+                ログイン
+              </Link>
+            </>
           )}
         </div>
       </header>
@@ -129,9 +134,12 @@ export default function Home() {
             自分に合ったクリエイターを選んで、その人のメソッドで90日間、目標達成まで伴走してもらいましょう。
           </p>
           {!loggedIn ? (
-            <div className="flex items-center justify-center gap-3">
-              <Link href="/login" className="btn-cta">
-                ログインしてはじめる →
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <Link href="/signup" className="btn-cta">
+                新規登録してはじめる →
+              </Link>
+              <Link href="/login" className="text-white text-sm font-bold px-5 py-3 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "rgba(255,255,255,0.18)" }}>
+                ログイン
               </Link>
             </div>
           ) : (
@@ -317,7 +325,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <Link href={loggedIn ? "/creator/apply" : "/login"} className="btn-cta whitespace-nowrap text-center flex-shrink-0">
+          <Link href={loggedIn ? "/creator/apply" : "/login?returnTo=/creator/apply"} className="btn-cta whitespace-nowrap text-center flex-shrink-0">
             クリエイター申請へ →
           </Link>
         </div>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
+import { LogoutButton } from "@/components/LogoutButton";
 
 type Revenue = { gross_revenue: number; platform_fee: number; net_balance: number; active_subscriptions: number; fee_rate: number };
 
@@ -20,8 +21,9 @@ export default function CreatorRevenuePage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
+      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
         <h1 className="text-white font-black text-lg">収益ダッシュボード</h1>
+        <LogoutButton variant="onColor" />
       </header>
       <main className="max-w-xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         <div className="card flex flex-col gap-3">

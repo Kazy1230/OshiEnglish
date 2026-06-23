@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { LogoutButton } from "@/components/LogoutButton";
 import { toast } from "@/components/Toast";
 
 type ChatQuestion = {
@@ -119,7 +120,10 @@ export default function CourseChatPage() {
       <header className="flex flex-col gap-3 px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <div className="flex items-center justify-between">
           <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+          <div className="flex items-center gap-3">
+            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+            <LogoutButton variant="onColor" />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {character?.avatar_url ? (
