@@ -31,6 +31,11 @@ export default function EditCharacterPage() {
   const [previewResult, setPreviewResult] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
+  const [concept, setConcept] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [sampleLines, setSampleLines] = useState<string[]>([]);
+
   useEffect(() => {
     if (loading) return;
     api.getCharacterDetail(characterId).then(c => {
@@ -43,6 +48,30 @@ export default function EditCharacterPage() {
   }, [loading, characterId]);
 
   if (loading || loadingChar) return <Skeleton />;
+
+  async function handleGenerate() {
+    if (!concept.trim()) { toast("キャラクターのイメージを入力してください", "error"); return; }
+    setGenerating(true);
+    try {
+      const result = await api.generateCharacterConcept(concept);
+      setNameSuggestions(result.name_suggestions || []);
+      setSampleLines(result.sample_lines || []);
+      if ((result.name_suggestions || [])[0]) setName(result.name_suggestions[0]);
+      setDescription(concept);
+      setTone({
+        first_person: result.first_person || "",
+        speech_style: [result.tone, result.sentence_ending].filter(Boolean).join("。語尾の特徴: "),
+        personality: result.personality || "",
+        catchphrase: result.catchphrase || "",
+      });
+      setNgText((result.ng_words || []).join("、"));
+      toast("AIがキャラクター設定を提案しました。内容を確認・編集して保存してください", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "生成に失敗しました。もう一度試してください", "error");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -81,6 +110,43 @@ export default function EditCharacterPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+        <div className="card flex flex-col gap-3">
+          <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>AIにキャラクター設定を提案してもらう（任意）</label>
+          <textarea
+            value={concept}
+            onChange={e => setConcept(e.target.value)}
+            placeholder="例: ツンデレな女性先輩キャラ。英語が得意で少し上から目線だが根は優しい"
+            rows={3}
+            className="w-full text-sm p-3 rounded-lg"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }}
+          />
+          <button onClick={handleGenerate} disabled={generating} className="btn-primary self-start disabled:opacity-50">
+            {generating ? "生成中…" : "🤖 AIで提案する"}
+          </button>
+          {nameSuggestions.length > 0 && (
+            <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>名前案</p>
+              <div className="flex flex-wrap gap-2">
+                {nameSuggestions.map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setName(n)}
+                    className="px-3 py-1 rounded-full text-xs font-bold border-2"
+                    style={{ borderColor: "var(--accent)", color: name === n ? "white" : "var(--accent)", background: name === n ? "var(--accent)" : "transparent" }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              {sampleLines.length > 0 && (
+                <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--muted)" }}>
+                  {sampleLines.map((l, i) => <li key={i}>「{l}」</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="card flex flex-col gap-3">
           <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>TONE_PROFILE</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="名前" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />

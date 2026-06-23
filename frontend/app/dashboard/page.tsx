@@ -13,7 +13,7 @@ type PurchasedCourse = { course_id: number; title: string; total_lessons: number
 
 export default function DashboardPage() {
   const { me, loading } = useRoleGuard(["creator", "admin"]);
-  const [characters, setCharacters] = useState<CharacterSummary[]>([]);
+  const [character, setCharacter] = useState<CharacterSummary | null>(null);
   const [loadingChars, setLoadingChars] = useState(true);
   const [purchasedCourses, setPurchasedCourses] = useState<PurchasedCourse[]>([]);
   const [overdueCount, setOverdueCount] = useState(0);
@@ -21,7 +21,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (loading) return;
-    api.listMyCharacters().then(setCharacters).catch(() => {}).finally(() => setLoadingChars(false));
+    api.listMyCharacters().then(list => setCharacter(list[0] ?? null)).catch(() => {}).finally(() => setLoadingChars(false));
     api.getMyPurchasedCourses().then(setPurchasedCourses).catch(() => {});
     api.getPendingOverdueCount().then(r => setOverdueCount(r.overdue_count)).catch(() => {});
   }, [loading]);
@@ -53,7 +53,6 @@ export default function DashboardPage() {
         )}
 
         <div className="flex flex-wrap gap-3">
-          <Link href="/dashboard/characters/new" className="btn-primary">+ 新しいキャラクターを作る</Link>
           <Link href="/creator/courses/new" className="btn-primary">📅 90日伴走コースを作る</Link>
           <Link href="/studio" className="btn-primary">🎬 AIコンテンツ生成スタジオへ</Link>
           <Link href="/creator/interview" className="btn-ghost">🧠 AIインタビュー（人格プロファイル）</Link>
@@ -72,27 +71,29 @@ export default function DashboardPage() {
         </div>
 
         <div>
-          <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>キャラクター一覧</h2>
+          <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>あなたのキャラクター（人格）</h2>
           {loadingChars ? (
             <p style={{ color: "var(--muted)" }}>読み込み中…</p>
-          ) : characters.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--muted)" }}>まだキャラクターがいません。「新しいキャラクターを作る」から始めましょう。</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {characters.map(c => (
-                <Link key={c.id} href={`/dashboard/characters/${c.id}`} className="card flex flex-col gap-2 hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-3">
-                    {c.image_url ? (
-                      <img src={c.image_url} alt="" className="w-12 h-12 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
-                    )}
-                    <p className="font-bold" style={{ color: "var(--primary)" }}>{c.name}</p>
-                  </div>
-                  {c.description && <p className="text-xs line-clamp-2" style={{ color: "var(--muted)" }}>{c.description}</p>}
-                </Link>
-              ))}
+          ) : !character ? (
+            <div className="card flex flex-col gap-2">
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                まだキャラクター(人格)が作成されていません。AIインタビューを完了すると自動的に作成されます。
+              </p>
+              <Link href="/creator/interview" className="btn-primary self-start">🧠 AIインタビューを始める</Link>
             </div>
+          ) : (
+            <Link href={`/dashboard/characters/${character.id}`} className="card flex items-center gap-3 hover:shadow-md transition-shadow max-w-sm">
+              {character.image_url ? (
+                <img src={character.image_url} alt="" className="w-12 h-12 rounded-full object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
+              )}
+              <div>
+                <p className="font-bold" style={{ color: "var(--primary)" }}>{character.name}</p>
+                {character.description && <p className="text-xs line-clamp-2" style={{ color: "var(--muted)" }}>{character.description}</p>}
+                <p className="text-xs mt-1" style={{ color: "var(--accent)" }}>編集する →</p>
+              </div>
+            </Link>
           )}
         </div>
 

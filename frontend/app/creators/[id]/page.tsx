@@ -15,7 +15,7 @@ type CreatorDetail = {
   sns_youtube?: string | null;
   sns_instagram?: string | null;
   sns_twitter?: string | null;
-  characters: { id: number; name: string; avatar_url?: string | null }[];
+  character: { id: number; name: string; avatar_url?: string | null } | null;
   courses: { id: number; title: string; description?: string | null; thumbnail_url?: string | null; category?: string | null; price: number; is_free: boolean }[];
   is_favorited: boolean;
 };
@@ -67,15 +67,15 @@ export default function CreatorPage() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <div className="card flex flex-col sm:flex-row gap-4 sm:items-center">
           <div className="flex items-center gap-3">
-            {data.characters[0]?.avatar_url ? (
-              <img src={data.characters[0].avatar_url} alt="" className="w-20 h-20 rounded-full object-cover" />
+            {data.character?.avatar_url ? (
+              <img src={data.character.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover" />
             ) : (
               <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
             )}
             <div>
               <h1 className="text-xl font-black" style={{ color: "var(--primary)" }}>{data.display_name}</h1>
               <p className="text-xs" style={{ color: "var(--muted)" }}>
-                {data.characters.map(c => c.name).join(" / ")}
+                {data.character?.name}
               </p>
             </div>
           </div>

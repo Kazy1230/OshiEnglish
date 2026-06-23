@@ -9,7 +9,7 @@ type CreatorCard = {
   id: number;
   display_name: string;
   bio?: string | null;
-  characters: { id: number; name: string; avatar_url?: string | null }[];
+  character: { id: number; name: string; avatar_url?: string | null } | null;
 };
 
 export default function CreatorsPage() {
@@ -38,15 +38,15 @@ export default function CreatorsPage() {
             {creators.map(cr => (
               <Link key={cr.id} href={`/creators/${cr.id}`} className="card flex flex-col gap-3 hover:shadow-md transition-shadow">
                 <div className="flex items-center gap-3">
-                  {cr.characters[0]?.avatar_url ? (
-                    <img src={cr.characters[0].avatar_url} alt="" className="w-14 h-14 rounded-full object-cover" />
+                  {cr.character?.avatar_url ? (
+                    <img src={cr.character.avatar_url} alt="" className="w-14 h-14 rounded-full object-cover" />
                   ) : (
                     <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
                   )}
                   <div>
                     <p className="font-bold" style={{ color: "var(--primary)" }}>{cr.display_name}</p>
                     <p className="text-xs" style={{ color: "var(--muted)" }}>
-                      {cr.characters.map(c => c.name).join(" / ") || "キャラクター未設定"}
+                      {cr.character?.name || "キャラクター未設定"}
                     </p>
                   </div>
                 </div>

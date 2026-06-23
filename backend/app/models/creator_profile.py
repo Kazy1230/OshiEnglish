@@ -21,6 +21,7 @@ class CreatorProfile(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("Customer", back_populates="creator_profile")
-    characters = relationship("Character", back_populates="creator")
+    # 1クリエイターには1つの人格(キャラクター)のみ紐づく
+    character = relationship("Character", back_populates="creator", uselist=False)
     personality_profile = relationship("PersonalityProfile", back_populates="creator", uselist=False)
     interview_session = relationship("InterviewSession", back_populates="creator", uselist=False)

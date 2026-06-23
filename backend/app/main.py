@@ -86,6 +86,22 @@ def _rename_column(table: str, old: str, new: str, ddl: str):
             conn.commit()
 
 
+def _unique_index_exists(table: str, index_name: str) -> bool:
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.statistics "
+            "WHERE table_schema = DATABASE() AND table_name = :table AND index_name = :index_name AND non_unique = 0"
+        ), {"table": table, "index_name": index_name})
+        return result.scalar() > 0
+
+
+def _ensure_unique_index(table: str, column: str, index_name: str):
+    if _table_exists(table) and _column_exists(table, column) and not _unique_index_exists(table, index_name):
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER TABLE {table} ADD UNIQUE INDEX {index_name} ({column})"))
+            conn.commit()
+
+
 # テーブルリネームは create_all() より前に行う必要がある
 # （create_all()は存在しないテーブルを新規作成するため、先にcreate_all()すると
 #   リネーム先の名前で空テーブルが作られてしまい、リネームが「既に存在する」扱いでスキップされる）
@@ -183,8 +199,22 @@ def _ensure_preset_characters():
         db.close()
 
 
+def _dedupe_characters_per_creator():
+    from app.core.creator_migration import dedupe_characters_per_creator
+
+    db = SessionLocal()
+    try:
+        dedupe_characters_per_creator(db)
+        db.commit()
+    finally:
+        db.close()
+
+
 _ensure_preset_characters()
 _migrate_legacy_characters_to_creator()
+# 1クリエイター=1人格(キャラクター)の制約を追加する前に、既存の重複データを統合しておく
+_dedupe_characters_per_creator()
+_ensure_unique_index("characters", "creator_id", "uq_characters_creator_id")
 
 
 # --- Phase 8: リテンション・通知（デイリー伴走チャットの朝・夜の声かけ） ---

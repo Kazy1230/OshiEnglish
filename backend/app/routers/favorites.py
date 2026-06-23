@@ -49,6 +49,9 @@ def list_favorites(current_user=Depends(get_current_user), db: Session = Depends
         result.append({
             "creator_id": profile.id,
             "display_name": customer_display_name(profile.user),
-            "characters": [{"id": c.id, "name": c.name, "avatar_url": c.image_url} for c in profile.characters],
+            "character": (
+                {"id": profile.character.id, "name": profile.character.name, "avatar_url": profile.character.image_url}
+                if profile.character else None
+            ),
         })
     return result

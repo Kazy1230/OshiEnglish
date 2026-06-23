@@ -86,6 +86,8 @@ def create_character(data: CharacterCreate, current_user=Depends(get_current_cre
         profile = _get_own_creator_profile(db, current_user)
         if not profile:
             raise HTTPException(status_code=400, detail="クリエイタープロフィールが見つかりません")
+        if profile.character:
+            raise HTTPException(status_code=409, detail="クリエイターには1つの人格(キャラクター)のみ設定できます。既存のキャラクターを編集してください。")
         payload["creator_id"] = profile.id
     char = Character(**payload)
     db.add(char)

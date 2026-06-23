@@ -141,7 +141,8 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
 # ----- リクエストスキーマ -----
 
 class CourseCreate(BaseModel):
-    character_id: int
+    # 通常のクリエイターは自分の人格(キャラクター)に自動で紐づくため指定不要。管理者が代理作成する場合のみ使用
+    creator_id: Optional[int] = None
     title: str
     description: Optional[str] = None
     thumbnail_url: Optional[str] = None
@@ -277,11 +278,10 @@ def list_creator_courses(creator_id: int, db: Session = Depends(get_db)):
     profile = db.query(CreatorProfile).filter(CreatorProfile.id == creator_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="クリエイターが見つかりません")
-    character_ids = [c.id for c in profile.characters]
-    if not character_ids:
+    if not profile.character:
         return []
     courses = db.query(Course).filter(
-        Course.character_id.in_(character_ids),
+        Course.character_id == profile.character.id,
         Course.status == "published",
         Course.is_suspended == False,  # noqa: E712
     ).order_by(Course.created_at.desc()).all()
@@ -311,29 +311,33 @@ def get_course(course_id: int, db: Session = Depends(get_db), current_user=Depen
 
 @router.post("/courses", status_code=status.HTTP_201_CREATED)
 def create_course(data: CourseCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """コース新規作成(status='draft')。要(クリエイター)"""
+    """コース新規作成(status='draft')。要(クリエイター)。
+    キャラクター(人格)は1クリエイターに1つしか存在しないため、選択は不要で自動的に紐づく。"""
     if current_user.role not in ("creator", "admin"):
         raise HTTPException(status_code=403, detail="クリエイター権限が必要です")
 
-    character = db.query(Character).filter(Character.id == data.character_id).first()
-    if not character:
-        raise HTTPException(status_code=404, detail="キャラクターが見つかりません")
-
-    if current_user.role != "admin":
+    if current_user.role == "admin":
+        if data.creator_id is None:
+            raise HTTPException(status_code=400, detail="管理者が代理作成する場合はcreator_idを指定してください")
+        profile = db.query(CreatorProfile).filter(CreatorProfile.id == data.creator_id).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="クリエイターが見つかりません")
+    else:
         profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
-        if not profile or character.creator_id != profile.id:
-            raise HTTPException(status_code=403, detail="このキャラクターでコースを作成する権限がありません")
+        if not profile:
+            raise HTTPException(status_code=400, detail="クリエイタープロフィールが見つかりません")
         if profile.status != "active":
             raise HTTPException(status_code=403, detail="クリエイター申請が承認されるまでコースを作成できません")
 
-    # 90日コース生成にはクリエイター本人の人格プロファイルを使う（character.creator_idのプロフィールに紐づくもの）
-    owner_creator_profile_id = character.creator_id
-    personality = None
-    if owner_creator_profile_id is not None:
-        personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == owner_creator_profile_id).first()
+    character = profile.character
+    if not character:
+        raise HTTPException(status_code=400, detail="先にAIインタビューを完了し、人格(キャラクター)を作成してください")
+
+    # 90日コース生成にはクリエイター本人の人格プロファイルを使う
+    personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
 
     course = Course(
-        character_id=data.character_id,
+        character_id=character.id,
         title=data.title,
         description=data.description,
         thumbnail_url=data.thumbnail_url,

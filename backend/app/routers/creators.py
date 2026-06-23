@@ -21,9 +21,11 @@ def _serialize_creator_card(profile: CreatorProfile) -> dict:
         "id": profile.id,
         "display_name": customer_display_name(profile.user),
         "bio": profile.bio,
-        "characters": [
-            {"id": c.id, "name": c.name, "avatar_url": c.image_url} for c in profile.characters
-        ],
+        # 1クリエイター=1人格(キャラクター)
+        "character": (
+            {"id": profile.character.id, "name": profile.character.name, "avatar_url": profile.character.image_url}
+            if profile.character else None
+        ),
     }
 
 
@@ -110,8 +112,7 @@ def get_my_revenue(current_user=Depends(get_current_creator_or_admin), db: Sessi
     if not profile:
         raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
 
-    character_ids = [c.id for c in profile.characters]
-    course_ids = [c.id for c in db.query(Course).filter(Course.character_id.in_(character_ids)).all()] if character_ids else []
+    course_ids = [c.id for c in db.query(Course).filter(Course.character_id == profile.character.id).all()] if profile.character else []
     if not course_ids:
         return {"gross_revenue": 0, "platform_fee": 0, "net_balance": 0, "active_subscriptions": 0, "fee_rate": settings.PLATFORM_FEE_RATE}
 
@@ -157,11 +158,10 @@ def get_creator(creator_id: int, db: Session = Depends(get_db), current_user=Dep
     if not profile:
         raise HTTPException(status_code=404, detail="クリエイターが見つかりません")
 
-    character_ids = [c.id for c in profile.characters]
     courses = []
-    if character_ids:
+    if profile.character:
         courses = db.query(Course).filter(
-            Course.character_id.in_(character_ids),
+            Course.character_id == profile.character.id,
             Course.status == "published",
             Course.is_suspended == False,  # noqa: E712
         ).order_by(Course.created_at.desc()).all()

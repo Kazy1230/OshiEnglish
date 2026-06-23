@@ -5,9 +5,11 @@ from app.core.database import get_db
 from app.core.security import get_current_creator_or_admin
 from app.core.llm import generate_text, extract_json, LLMError
 from app.core import personality_prompts as prompts
+from app.core.character_voice import customer_display_name
 from app.models.creator_profile import CreatorProfile
 from app.models.interview_session import InterviewSession
 from app.models.personality_profile import PersonalityProfile
+from app.models.character import Character
 
 router = APIRouter(prefix="/interview", tags=["AIインタビュー（人格収集）"])
 
@@ -144,6 +146,11 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
         db.add(personality)
     personality.interview_answers = session.qa_history
     personality.profile = generated
+
+    # 1クリエイター=1人格(キャラクター)。インタビュー完了時点でキャラクターが無ければ自動で作成する
+    if not profile.character:
+        db.add(Character(name=customer_display_name(current_user), creator_id=profile.id))
+
     db.commit()
     db.refresh(personality)
     return {"profile": personality.profile, "interview_answers": personality.interview_answers}

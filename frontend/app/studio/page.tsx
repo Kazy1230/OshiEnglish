@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
@@ -15,8 +16,10 @@ export default function StudioPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
 
-  const [characters, setCharacters] = useState<CharacterSummary[]>([]);
-  const [characterId, setCharacterId] = useState<number | null>(null);
+  // 1クリエイター=1人格(キャラクター)のため、選択UIは不要で自動的に決まる
+  const [character, setCharacter] = useState<CharacterSummary | null>(null);
+  const [loadingCharacter, setLoadingCharacter] = useState(true);
+  const characterId = character?.id ?? null;
 
   const [theme, setTheme] = useState("");
   const [consulting, setConsulting] = useState(false);
@@ -37,10 +40,15 @@ export default function StudioPage() {
 
   useEffect(() => {
     if (loading) return;
-    api.listMyCharacters().then(setCharacters).catch(() => {});
+    api.listMyCharacters().then(list => {
+      if (list.length > 0) {
+        setCharacter(list[0]);
+        setStep(s => Math.max(s, 1));
+      }
+    }).catch(() => {}).finally(() => setLoadingCharacter(false));
   }, [loading]);
 
-  if (loading) return <Skeleton />;
+  if (loading || loadingCharacter) return <Skeleton />;
 
   async function handleConsult() {
     if (!theme.trim()) { toast("テーマを入力してください", "error"); return; }
@@ -72,13 +80,11 @@ export default function StudioPage() {
   }
 
   async function handleCreateCourse() {
-    if (!characterId) { toast("キャラクターを選択してください", "error"); return; }
     if (!title.trim()) { toast("コースタイトルを入力してください", "error"); return; }
     if (!voicedContent) { toast("口調変換結果がありません", "error"); return; }
     setSaving(true);
     try {
       const course = await api.createCourse({
-        character_id: characterId,
         title,
         description: consult?.target_audience || undefined,
         category: category || undefined,
@@ -110,24 +116,17 @@ export default function StudioPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
-        {/* Step 0: キャラクター選択 */}
-        <div className="card flex flex-col gap-3">
-          <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>Step 0: キャラクターを選択</p>
-          {characters.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--muted)" }}>キャラクターがまだありません。先にダッシュボードで作成してください。</p>
+        {/* あなたのキャラクター（1クリエイター=1人格のため選択は不要） */}
+        <div className="card flex flex-col gap-2">
+          {character ? (
+            <p className="text-sm" style={{ color: "var(--muted)" }}>
+              🎭 あなたのキャラクター: <span className="font-bold" style={{ color: "var(--primary)" }}>{character.name}</span>
+            </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {characters.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => { setCharacterId(c.id); setStep(s => Math.max(s, 1)); }}
-                  className="px-3 py-1 rounded-full text-xs font-bold border-2"
-                  style={{ borderColor: "var(--accent)", color: characterId === c.id ? "white" : "var(--accent)", background: characterId === c.id ? "var(--accent)" : "transparent" }}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
+            <>
+              <p className="text-sm" style={{ color: "var(--muted)" }}>まだキャラクター(人格)が作成されていません。先にAIインタビューを完了してください。</p>
+              <Link href="/creator/interview" className="btn-primary self-start">AIインタビューへ</Link>
+            </>
           )}
         </div>
 

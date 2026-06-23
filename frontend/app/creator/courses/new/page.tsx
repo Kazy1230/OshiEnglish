@@ -12,8 +12,8 @@ type CharacterSummary = { id: number; name: string };
 export default function NewCoursePage() {
   const router = useRouter();
   const { loading } = useRoleGuard(["creator", "admin"]);
-  const [characters, setCharacters] = useState<CharacterSummary[]>([]);
-  const [characterId, setCharacterId] = useState("");
+  const [character, setCharacter] = useState<CharacterSummary | null>(null);
+  const [loadingCharacter, setLoadingCharacter] = useState(true);
   const [title, setTitle] = useState("");
   const [goal, setGoal] = useState("");
   const [targetLearner, setTargetLearner] = useState("");
@@ -25,16 +25,15 @@ export default function NewCoursePage() {
 
   useEffect(() => {
     if (loading) return;
-    api.listMyCharacters().then(setCharacters).catch(() => {});
+    api.listMyCharacters().then(list => setCharacter(list[0] ?? null)).catch(() => {}).finally(() => setLoadingCharacter(false));
   }, [loading]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!characterId) { toast("キャラクターを選択してください", "error"); return; }
+    if (!character) { toast("先にAIインタビューを完了して人格(キャラクター)を作成してください", "error"); return; }
     setSubmitting(true);
     try {
       const course = await api.createCourse({
-        character_id: Number(characterId),
         title,
         goal,
         target_learner: targetLearner,
@@ -53,7 +52,7 @@ export default function NewCoursePage() {
     }
   }
 
-  if (loading) return <Skeleton />;
+  if (loading || loadingCharacter) return <Skeleton />;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -63,18 +62,15 @@ export default function NewCoursePage() {
       </header>
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <form onSubmit={handleSubmit} className="card flex flex-col gap-4">
-          <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>キャラクター</label>
-            <select value={characterId} onChange={e => setCharacterId(e.target.value)} required>
-              <option value="">選択してください</option>
-              {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {characters.length === 0 && (
-              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-                先に<a href="/dashboard/characters/new" style={{ color: "var(--accent)" }}>キャラクターを作成</a>してください。
-              </p>
-            )}
-          </div>
+          {character ? (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              🎭 このコースは「<span className="font-bold" style={{ color: "var(--primary)" }}>{character.name}</span>」として公開されます。
+            </p>
+          ) : (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              先に<a href="/creator/interview" style={{ color: "var(--accent)" }}>AIインタビュー</a>を完了して人格(キャラクター)を作成してください。
+            </p>
+          )}
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>コース名 *</label>
             <input value={title} onChange={e => setTitle(e.target.value)} required placeholder="例：TOEIC800達成 90日伴走コース" />
@@ -111,7 +107,7 @@ export default function NewCoursePage() {
           <p className="text-xs" style={{ color: "var(--muted)" }}>
             ※ 90日分の学習内容は次の画面でAIが自動生成します。生成には<a href="/creator/profile" style={{ color: "var(--accent)" }}>人格プロファイル</a>が必要です。
           </p>
-          <button type="submit" className="btn-primary text-center" disabled={submitting}>
+          <button type="submit" className="btn-primary text-center" disabled={submitting || !character}>
             {submitting ? "作成中…" : "作成して次へ"}
           </button>
         </form>
