@@ -187,7 +187,13 @@ export default function CourseDetailPage() {
                 </div>
               </div>
             ) : course.my_subscription?.status === "incomplete" ? (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>決済処理中です。少し時間をおいて再度ご確認ください。</p>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm" style={{ color: "var(--muted)" }}>決済処理中です。少し時間をおいて再度ご確認ください。</p>
+                <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
+                  className="text-xs underline self-start disabled:opacity-50" style={{ color: "var(--muted)" }}>
+                  {canceling ? "処理中…" : "キャンセルしてやり直す"}
+                </button>
+              </div>
             ) : (
               <>
                 <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>月額プランを選択してください</p>
