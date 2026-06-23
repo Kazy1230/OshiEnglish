@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
@@ -120,7 +121,10 @@ export default function CreatorAnalyticsPage() {
         )}
 
         {categories.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--muted)" }}>まだ質問が蓄積されていません。</p>
+          <div className="card flex flex-col gap-2">
+            <p className="text-sm" style={{ color: "var(--muted)" }}>まだ質問が蓄積されていません。</p>
+            <Link href="/dashboard" className="btn-ghost self-start">ダッシュボードに戻る</Link>
+          </div>
         ) : (
           categories.map((c, i) => (
             <div key={c.id} className="card flex flex-col gap-3">

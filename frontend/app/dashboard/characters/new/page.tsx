@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
@@ -77,7 +78,8 @@ export default function NewCharacterPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
+      <header className="px-4 sm:px-6 py-4 flex items-center gap-3" style={{ background: "var(--primary)" }}>
+        <Link href="/dashboard" className="text-white/80 text-sm hover:text-white">← ダッシュボード</Link>
         <h1 className="text-white font-black text-lg">キャラクタービルダー</h1>
       </header>
 

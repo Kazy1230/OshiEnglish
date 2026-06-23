@@ -64,6 +64,13 @@ function ResetPasswordForm() {
             </button>
           </form>
         </div>
+
+        <p className="text-center text-xs mt-6">
+          <button type="button" onClick={() => router.push("/login")}
+            className="font-medium transition-colors" style={{ color: "var(--accent)" }}>
+            ログイン画面に戻る
+          </button>
+        </p>
       </div>
     </div>
   );

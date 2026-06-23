@@ -26,7 +26,7 @@ export default function CreatorApplyPage() {
         sns_instagram: snsInstagram.trim() || null,
         sns_twitter: snsTwitter.trim() || null,
       });
-      toast("クリエイター申請を受け付けました。運営の審査をお待ちください。", "success");
+      toast("クリエイター申請を受け付けました。審査と並行して、AIインタビューで人格プロファイルの作成を進めましょう。", "success");
       router.push("/creator/interview");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "申請に失敗しました", "error");

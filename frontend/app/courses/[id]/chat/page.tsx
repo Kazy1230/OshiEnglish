@@ -34,6 +34,7 @@ export default function CourseChatPage() {
   const [today, setToday] = useState<TodayDay | null>(null);
   const [reportedToday, setReportedToday] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [progressError, setProgressError] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   function load() {
@@ -52,15 +53,17 @@ export default function CourseChatPage() {
         setCharacter(detail.character ?? null);
         await load();
 
-        const logs = await api.listDayLogs(courseId).catch(() => [] as { day_number: number; is_completed: boolean }[]);
+        let hadProgressError = false;
+        const logs = await api.listDayLogs(courseId).catch(() => { hadProgressError = true; return [] as { day_number: number; is_completed: boolean }[]; });
         const completed = logs.filter((l: { is_completed: boolean }) => l.is_completed).length;
         const currentDay = Math.min(completed + 1, 90);
         setCompletedDays(completed);
         setReportedToday(logs.some((l: { day_number: number; is_completed: boolean }) => l.day_number === currentDay && l.is_completed));
 
-        const days = await api.listCourseDays(courseId).catch(() => [] as TodayDay[]);
+        const days = await api.listCourseDays(courseId).catch(() => { hadProgressError = true; return [] as TodayDay[]; });
         const todayDay = days.find((d: TodayDay) => d.day === currentDay) ?? null;
         setToday(todayDay);
+        setProgressError(hadProgressError);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
       } finally {
@@ -135,6 +138,12 @@ export default function CourseChatPage() {
           </div>
         </div>
       </header>
+
+      {progressError && (
+        <p className="text-xs text-center mt-2" style={{ color: "var(--muted)" }}>
+          ⚠ 進捗・今日のタスクの取得に失敗しました。再読み込みしてください。
+        </p>
+      )}
 
       {today && !today.is_rest_day && (
         <div className="mx-4 sm:mx-6 mt-4 card flex flex-col gap-2">

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
@@ -61,7 +62,10 @@ export default function CreatorInboxPage() {
           </div>
         )}
         {questions.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--muted)" }}>未回答の質問はありません。</p>
+          <div className="card flex flex-col gap-2">
+            <p className="text-sm" style={{ color: "var(--muted)" }}>未回答の質問はありません。</p>
+            <Link href="/dashboard" className="btn-ghost self-start">ダッシュボードに戻る</Link>
+          </div>
         ) : (
           questions.map(q => (
             <div key={q.id} className="card flex flex-col gap-3">

@@ -26,7 +26,7 @@ function PurchaseCompleteContent() {
         {courseId && (
           <Link href={`/courses/${courseId}`} className="btn-primary">コンテンツを読む →</Link>
         )}
-        <Link href="/purchases" className="text-xs underline" style={{ color: "var(--muted)" }}>購入履歴を見る</Link>
+        <Link href="/mypage" className="text-xs underline" style={{ color: "var(--muted)" }}>マイページで購入済みコースを見る</Link>
       </div>
     </div>
   );

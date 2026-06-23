@@ -301,6 +301,14 @@ export default function PricingPage() {
             <li>未開封の特別記事も本棚で🔒マークが付き、開封ボタンを押すと読めるようになります</li>
           </ul>
         </section>
+
+        <section className="rounded-xl p-6 text-center" style={{ background: t.primary }}>
+          <p className="text-white font-black text-lg mb-1">気になるクリエイターを見つけましょう</p>
+          <p className="text-white/80 text-sm mb-4">90日間の伴走コースから、自分に合ったクリエイターを選べます。</p>
+          <button onClick={() => router.push(loggedIn ? "/creators" : "/login")} className="btn-cta" style={{ background: "white", color: t.primary }}>
+            クリエイターを探す →
+          </button>
+        </section>
       </main>
     </div>
   );
