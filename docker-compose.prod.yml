@@ -30,6 +30,7 @@ services:
       dockerfile: Dockerfile.prod              # 本番用Dockerfile（next build）
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
     container_name: yt_frontend
     env_file: .env
     depends_on:
