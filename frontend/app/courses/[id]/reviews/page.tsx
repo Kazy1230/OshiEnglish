@@ -3,9 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { LogoutButton } from "@/components/LogoutButton";
 import { Skeleton } from "@/components/Skeleton";
 
 type WeeklyContent = {
@@ -36,7 +33,6 @@ export default function ReviewsPage() {
   const courseId = Number(params.id);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mode, toggleMode] = useDarkMode();
 
   useEffect(() => {
     api.getReviews(courseId).then(setReviews).finally(() => setLoading(false));
@@ -46,17 +42,7 @@ export default function ReviewsPage() {
   const monthly = reviews.filter(r => r.review_type === "monthly");
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href={`/courses/${courseId}`} className="text-white/80 text-sm hover:text-white">← コースに戻る</Link>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link href={`/courses/${courseId}/chat`} className="text-white/80 text-sm hover:text-white">伴走チャット</Link>
-          <Link href={`/courses/${courseId}/schedule`} className="text-white/80 text-sm hover:text-white">90日スケジュール</Link>
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
-
+    <div>
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
         <h1 className="text-2xl font-black" style={{ color: "var(--primary)" }}>📈 週次・月次レビュー</h1>
 

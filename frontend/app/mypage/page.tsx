@@ -4,10 +4,7 @@ import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { NotificationBell } from "@/components/NotificationBell";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
 
@@ -15,7 +12,6 @@ export default function MyPage() {
   const { me, loading } = useRoleGuard(["learner", "admin"]);
   const [courses, setCourses] = useState<PurchasedCourse[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
-  const [mode, toggleMode] = useDarkMode();
 
   useEffect(() => {
     if (loading) return;
@@ -26,24 +22,14 @@ export default function MyPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">マイページ</h1>
-        <div className="flex items-center gap-3">
-          <NotificationBell />
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
+      <AppHeader role="learner" title="マイページ" />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          {me?.display_name || me?.username} さん、ようこそ。
-        </p>
-
-        <div className="flex flex-wrap gap-3">
-          <Link href="/" className="btn-ghost">🔍 コースを探す</Link>
-          <Link href="/creators" className="btn-ghost">🎭 クリエイターを探す</Link>
-          <Link href="/change-password" className="btn-ghost">🔒 パスワードを変更</Link>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            {me?.display_name || me?.username} さん、ようこそ。
+          </p>
+          <Link href="/change-password" className="btn-ghost text-xs">🔒 パスワードを変更</Link>
         </div>
 
         <div>

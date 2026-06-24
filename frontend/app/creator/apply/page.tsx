@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { toast } from "@/components/Toast";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 export default function CreatorApplyPage() {
   const router = useRouter();
@@ -42,10 +42,7 @@ export default function CreatorApplyPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">クリエイター申請</h1>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="learner" title="クリエイター申請" />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <form onSubmit={handleSubmit} className="card flex flex-col gap-4">
           <p className="text-sm" style={{ color: "var(--muted)" }}>

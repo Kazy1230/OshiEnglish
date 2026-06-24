@@ -4,8 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { AppHeader } from "@/components/AppHeader";
 import { toast } from "@/components/Toast";
 
 type CreatorDetail = {
@@ -27,7 +26,6 @@ export default function CreatorPage() {
   const [data, setData] = useState<CreatorDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [favoriting, setFavoriting] = useState(false);
-  const [mode, toggleMode] = useDarkMode();
 
   useEffect(() => {
     api.getCreator(creatorId).then(setData).catch(() => {}).finally(() => setLoading(false));
@@ -59,10 +57,7 @@ export default function CreatorPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href="/creators" className="text-white/80 text-sm">← クリエイター一覧</Link>
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-      </header>
+      <AppHeader role="learner" backHref="/creators" backLabel="クリエイター一覧" />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <div className="card flex flex-col sm:flex-row gap-4 sm:items-center">

@@ -3,9 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { LogoutButton } from "@/components/LogoutButton";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
@@ -25,7 +22,6 @@ export default function CourseChatPage() {
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.id);
-  const [mode, toggleMode] = useDarkMode();
   const [questions, setQuestions] = useState<ChatQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
@@ -120,34 +116,23 @@ export default function CourseChatPage() {
   if (loading) return <Skeleton className="h-screen w-full" style={{ borderRadius: 0 }} />;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      <header className="flex flex-col gap-3 px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <div className="flex items-center justify-between">
-          <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
-          <div className="flex items-center gap-3 flex-wrap">
-            <Link href={`/courses/${courseId}/schedule`} className="text-white/80 text-sm hover:text-white">90日スケジュール</Link>
-            <Link href={`/courses/${courseId}/reviews`} className="text-white/80 text-sm hover:text-white">週次・月次レビュー</Link>
-            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-            <LogoutButton variant="onColor" />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {character?.avatar_url ? (
-            <img src={character.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
-          ) : (
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg" style={{ background: "rgba(255,255,255,0.18)" }}>🎭</div>
-          )}
-          <div className="flex-1">
-            <p className="text-white font-bold text-sm">{character?.name ?? "メンター"}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.25)" }}>
-                <div className="h-1.5 rounded-full" style={{ background: "white", width: `${Math.round((completedDays / 90) * 100)}%` }} />
-              </div>
-              <span className="text-white/80 text-xs whitespace-nowrap">{completedDays}/90日</span>
+    <div className="flex flex-col">
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-3" style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
+        {character?.avatar_url ? (
+          <img src={character.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+        ) : (
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
+        )}
+        <div className="flex-1">
+          <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{character?.name ?? "メンター"}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
+              <div className="h-1.5 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedDays / 90) * 100)}%` }} />
             </div>
+            <span className="text-xs whitespace-nowrap" style={{ color: "var(--muted)" }}>{completedDays}/90日</span>
           </div>
         </div>
-      </header>
+      </div>
 
       {progressError && (
         <p className="text-xs text-center mt-2" style={{ color: "var(--muted)" }}>

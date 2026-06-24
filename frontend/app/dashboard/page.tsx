@@ -4,10 +4,7 @@ import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { NotificationBell } from "@/components/NotificationBell";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
@@ -18,7 +15,6 @@ export default function DashboardPage() {
   const [loadingChars, setLoadingChars] = useState(true);
   const [purchasedCourses, setPurchasedCourses] = useState<PurchasedCourse[]>([]);
   const [overdueCount, setOverdueCount] = useState(0);
-  const [mode, toggleMode] = useDarkMode();
 
   useEffect(() => {
     if (loading) return;
@@ -31,14 +27,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">クリエイターダッシュボード</h1>
-        <div className="flex items-center gap-3">
-          <NotificationBell />
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
+      <AppHeader role="creator" title="クリエイターダッシュボード" overdueCount={overdueCount} />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
         <p className="text-sm" style={{ color: "var(--muted)" }}>
@@ -49,28 +38,17 @@ export default function DashboardPage() {
           <Link href="/creator/inbox" className="card flex items-center gap-3" style={{ borderColor: "#e53e3e" }}>
             <span className="text-xl">⚠</span>
             <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>
-              24時間以上未対応のTier B質問が{overdueCount}件あります。今すぐ確認しましょう。
+              未対応のTier B質問が{overdueCount}件あります（ヘッダーの「受講者対応」から確認できます）
             </p>
           </Link>
         )}
 
         <div className="flex flex-wrap gap-3">
           <Link href="/creator/courses/new" className="btn-primary">📅 90日伴走コースを作る</Link>
-          <Link href="/creator/courses" className="btn-ghost">📚 作成したコースを管理</Link>
           <Link href="/studio" className="btn-primary">🎬 AIコンテンツ生成スタジオへ</Link>
           <Link href="/creator/interview" className="btn-ghost">🧠 AIインタビュー（人格プロファイル）</Link>
           <Link href="/creator/profile" className="btn-ghost">👤 人格プロファイルを確認</Link>
           <Link href="/creator/analytics" className="btn-ghost">📊 質問分析ダッシュボード</Link>
-          <Link href="/creator/inbox" className="btn-ghost relative">
-            📨 未回答の質問（Tier B）
-            {overdueCount > 0 && (
-              <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-black text-white"
-                style={{ background: "#e53e3e" }}>
-                {overdueCount}
-              </span>
-            )}
-          </Link>
-          <Link href="/creator/revenue" className="btn-ghost">💰 収益ダッシュボード</Link>
         </div>
 
         <div>

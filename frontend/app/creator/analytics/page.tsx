@@ -5,7 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type Content = { id: number; content_type: string; title: string; url: string };
 type Category = { id: number; name: string; question_count: number; contents: Content[] };
@@ -102,10 +102,7 @@ export default function CreatorAnalyticsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">質問分析ダッシュボード</h1>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="creator" title="質問分析ダッシュボード" />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {pending.length > 0 && (
           <div className="card flex flex-col gap-3" style={{ borderColor: "var(--accent)" }}>

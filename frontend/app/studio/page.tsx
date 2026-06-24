@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { StreamingText } from "@/components/StreamingText";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type CharacterSummary = { id: number; name: string };
 type ConsultResult = { titles: string[]; structure: string[]; target_level: string; target_audience: string };
@@ -112,10 +112,7 @@ export default function StudioPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">AIコンテンツ生成スタジオ</h1>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="creator" title="AIコンテンツ生成スタジオ" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         {/* あなたのキャラクター（1クリエイター=1人格のため選択は不要） */}

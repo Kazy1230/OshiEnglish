@@ -3,9 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { LogoutButton } from "@/components/LogoutButton";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
@@ -22,7 +19,6 @@ export default function CourseSchedulePage() {
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.id);
-  const [mode, toggleMode] = useDarkMode();
 
   const [days, setDays] = useState<Day[]>([]);
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
@@ -61,19 +57,7 @@ export default function CourseSchedulePage() {
   const currentDay = Math.min(completedCount + 1, 90);
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <div className="flex items-center gap-3">
-          <Link href={`/courses/${courseId}/chat`} className="text-white/80 text-sm hover:text-white">← チャットへ</Link>
-          <h1 className="text-white font-black text-lg">90日スケジュール</h1>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link href={`/courses/${courseId}/reviews`} className="text-white/80 text-sm hover:text-white">週次・月次レビュー</Link>
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
-
+    <div>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         {days.length === 0 ? (
           <div className="card">

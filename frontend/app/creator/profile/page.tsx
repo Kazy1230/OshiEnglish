@@ -4,7 +4,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type Profile = {
   communication: { tone?: string; first_person?: string; sentence_ending?: string; catchphrase?: string };
@@ -64,17 +64,12 @@ export default function CreatorProfilePage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">人格プロファイル</h1>
-        <div className="flex items-center gap-3">
-          {profile && !editing && (
-            <button className="text-white/80 text-sm" onClick={startEdit}>編集</button>
-          )}
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
+      <AppHeader role="creator" title="人格プロファイル" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
+        {profile && !editing && (
+          <button className="btn-ghost self-end text-sm" onClick={startEdit}>編集</button>
+        )}
         {!profile ? (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             まだ人格プロファイルがありません。<a href="/creator/interview" style={{ color: "var(--accent)" }}>AIインタビュー</a>を完了させてください。

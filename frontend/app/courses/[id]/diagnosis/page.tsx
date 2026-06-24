@@ -3,9 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { LogoutButton } from "@/components/LogoutButton";
 import { toast } from "@/components/Toast";
 
 type Question = {
@@ -30,7 +27,6 @@ export default function DiagnosisPage() {
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.id);
-  const [mode, toggleMode] = useDarkMode();
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [welcomeMessage, setWelcomeMessage] = useState("");
@@ -155,14 +151,10 @@ export default function DiagnosisPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
-        <div className="flex items-center gap-3">
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
+    <div>
+      <div className="px-4 sm:px-6 pt-4">
+        <Link href={`/courses/${courseId}`} className="text-sm" style={{ color: "var(--accent)" }}>← コースページに戻る</Link>
+      </div>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {phase === "welcome" && (

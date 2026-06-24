@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 import { toast } from "@/components/Toast";
 
 type Enrollment = {
@@ -44,13 +44,7 @@ export default function CourseEnrollmentsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <div className="flex items-center gap-3">
-          <Link href="/creator/courses" className="text-white/80 text-sm hover:text-white">← 作成したコース</Link>
-          <h1 className="text-white font-black text-lg">申込者一覧</h1>
-        </div>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="申込者一覧" />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         <p className="text-sm" style={{ color: "var(--muted)" }}>{enrollments.length}人が申し込んでいます。</p>

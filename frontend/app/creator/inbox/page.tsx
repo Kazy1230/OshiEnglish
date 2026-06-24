@@ -5,7 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type PendingQuestion = {
   id: number;
@@ -51,10 +51,7 @@ export default function CreatorInboxPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">未回答の質問（Tier B）</h1>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="creator" title="未回答の質問（Tier B）" overdueCount={overdueCount} />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {overdueCount > 0 && (
           <div className="card" style={{ borderColor: "#e53e3e" }}>

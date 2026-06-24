@@ -4,11 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { CourseCheckoutModal } from "@/components/CourseCheckoutModal";
-import { NotificationBell } from "@/components/NotificationBell";
-import { LogoutButton } from "@/components/LogoutButton";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
@@ -42,7 +38,6 @@ export default function CourseDetailPage() {
   const [completing, setCompleting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [changingTier, setChangingTier] = useState(false);
-  const [mode, toggleMode] = useDarkMode();
 
   function load() {
     return api.getCourseDetail(courseId).then(c => {
@@ -172,18 +167,7 @@ export default function CourseDetailPage() {
   const completedLessonCount = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4 gap-3 flex-wrap" style={{ background: "var(--primary)" }}>
-        {course.character.creator_id ? (
-          <Link href={`/creators/${course.character.creator_id}`} className="text-white/80 text-sm hover:text-white">← クリエイターページ</Link>
-        ) : <span />}
-        <div className="flex items-center gap-3">
-          <NotificationBell />
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
-
+    <div>
       {course.thumbnail_url && (
         <div className="w-full max-h-64 overflow-hidden">
           <img src={course.thumbnail_url} alt="" className="w-full h-64 object-cover" />
@@ -200,7 +184,12 @@ export default function CourseDetailPage() {
           <div className="flex-1">
             {course.category && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{course.category}</span>}
             <h1 className="text-2xl font-black mt-2" style={{ color: "var(--primary)" }}>{course.title}</h1>
-            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>{course.character.name}</p>
+            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+              {course.character.name}
+              {course.character.creator_id && (
+                <> ・ <Link href={`/creators/${course.character.creator_id}`} className="underline" style={{ color: "var(--accent)" }}>クリエイターページへ</Link></>
+              )}
+            </p>
             {course.description && <p className="text-sm mt-3" style={{ color: "var(--text)" }}>{course.description}</p>}
             <button onClick={handleReport} className="text-xs underline mt-2" style={{ color: "var(--muted)" }}>このコースを通報する</button>
           </div>

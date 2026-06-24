@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type CreatedCourse = {
   id: number;
@@ -35,13 +35,7 @@ export default function CreatorCoursesPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-white/80 text-sm hover:text-white">← ダッシュボード</Link>
-          <h1 className="text-white font-black text-lg">作成したコース</h1>
-        </div>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="creator" title="作成したコース" />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <Link href="/creator/courses/new" className="btn-primary self-start">+ 新しいコースを作る</Link>

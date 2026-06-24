@@ -5,7 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type ChatItem = { role: "ai" | "creator"; text: string };
 
@@ -72,15 +72,10 @@ export default function CreatorInterviewPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">AIインタビュー（人格収集）</h1>
-        <div className="flex items-center gap-3">
-          {progress && <span className="text-white/80 text-sm">{progress.current}/{progress.total}問目</span>}
-          <LogoutButton variant="onColor" />
-        </div>
-      </header>
+      <AppHeader role="creator" title="AIインタビュー（人格収集）" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
+        {progress && <p className="text-xs self-end" style={{ color: "var(--muted)" }}>{progress.current}/{progress.total}問目</p>}
         <div className="flex flex-col gap-3">
           {history.map((item, i) => (
             <div key={i} className={`card max-w-[85%] ${item.role === "creator" ? "self-end" : "self-start"}`}

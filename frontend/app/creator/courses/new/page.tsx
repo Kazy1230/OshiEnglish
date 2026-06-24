@@ -6,7 +6,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
-import { LogoutButton } from "@/components/LogoutButton";
+import { AppHeader } from "@/components/AppHeader";
 
 type CharacterSummary = { id: number; name: string };
 
@@ -57,13 +57,7 @@ export default function NewCoursePage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3" style={{ background: "var(--primary)" }}>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-white/80 text-sm hover:text-white">← ダッシュボード</Link>
-          <h1 className="text-white font-black text-lg">90日伴走コース新規作成</h1>
-        </div>
-        <LogoutButton variant="onColor" />
-      </header>
+      <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="90日伴走コース新規作成" />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <form onSubmit={handleSubmit} className="card flex flex-col gap-4">
           {character ? (

@@ -2,8 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { AppHeader } from "@/components/AppHeader";
 
 type CreatorCard = {
   id: number;
@@ -15,7 +14,6 @@ type CreatorCard = {
 export default function CreatorsPage() {
   const [creators, setCreators] = useState<CreatorCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mode, toggleMode] = useDarkMode();
 
   useEffect(() => {
     api.listCreators().then(setCreators).finally(() => setLoading(false));
@@ -23,10 +21,7 @@ export default function CreatorsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg">クリエイターを選ぶ</h1>
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-      </header>
+      <AppHeader role="learner" title="クリエイターを選ぶ" />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         {loading ? (
