@@ -1,10 +1,12 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_user_optional, get_current_creator_or_admin
+from app.core.security import get_current_user, get_current_user_optional, get_current_creator_or_admin, hash_password, create_access_token
+from app.core.rate_limit import enforce_rate_limit
+from app.models.customer import Customer
 from app.models.creator_profile import CreatorProfile
 from app.models.course import Course
 from app.models.favorite import Favorite
@@ -48,6 +50,59 @@ class CreatorApplyRequest(BaseModel):
     sns_youtube: Optional[str] = None
     sns_instagram: Optional[str] = None
     sns_twitter: Optional[str] = None
+
+
+class CreatorApplySignupRequest(CreatorApplyRequest):
+    email: str
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("パスワードは8文字以上にしてください")
+        return v
+
+
+@router.post("/apply-public", status_code=201)
+def apply_as_creator_public(data: CreatorApplySignupRequest, request: Request, db: Session = Depends(get_db)):
+    """クリエイター申請（未登録者向け）。アカウント作成とクリエイター申請を同時に行い、ログイン済み状態のトークンを返す。
+    既存の学習者アカウントを持つユーザーは、ログイン後に/apply（要ログイン）から申請する。"""
+    enforce_rate_limit(request, "creator-apply-public", limit=10, window_seconds=3600)
+
+    if db.query(Customer).filter(
+        (Customer.email == data.email) | (Customer.username == data.email)
+    ).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="このメールアドレスは既に登録されています")
+
+    user = Customer(
+        username=data.email,
+        email=data.email,
+        hashed_password=hash_password(data.password),
+        role="creator",
+        is_password_reset_required=False,
+    )
+    db.add(user)
+    db.flush()
+
+    profile = CreatorProfile(
+        user_id=user.id,
+        speciality=data.speciality,
+        experience=data.experience,
+        sns_youtube=data.sns_youtube,
+        sns_instagram=data.sns_instagram,
+        sns_twitter=data.sns_twitter,
+        status="pending",
+    )
+    db.add(profile)
+    db.commit()
+
+    token = create_access_token({"sub": str(user.id), "role": user.role})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "is_password_reset_required": False,
+    }
 
 
 @router.post("/apply", status_code=201)

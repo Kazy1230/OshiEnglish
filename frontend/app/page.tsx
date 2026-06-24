@@ -325,7 +325,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <Link href={loggedIn ? "/creator/apply" : "/login?returnTo=/creator/apply"} className="btn-cta whitespace-nowrap text-center flex-shrink-0">
+          <Link href="/creator/apply" className="btn-cta whitespace-nowrap text-center flex-shrink-0">
             クリエイター申請へ →
           </Link>
         </div>

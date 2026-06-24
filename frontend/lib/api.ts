@@ -87,6 +87,7 @@ export const api = {
 
   // クリエイター申請・プロフィール
   applyAsCreator: (data: object) => apiFetch("/creators/apply", { method: "POST", body: JSON.stringify(data) }),
+  applyAsCreatorPublic: (data: object) => apiFetch("/creators/apply-public", { method: "POST", body: JSON.stringify(data) }),
   getMyCreatorProfile: () => apiFetch("/creators/me"),
   updateMyCreatorProfile: (data: object) => apiFetch("/creators/me", { method: "PUT", body: JSON.stringify(data) }),
 
