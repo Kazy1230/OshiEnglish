@@ -56,6 +56,7 @@ export default function DashboardPage() {
 
         <div className="flex flex-wrap gap-3">
           <Link href="/creator/courses/new" className="btn-primary">📅 90日伴走コースを作る</Link>
+          <Link href="/creator/courses" className="btn-ghost">📚 作成したコースを管理</Link>
           <Link href="/studio" className="btn-primary">🎬 AIコンテンツ生成スタジオへ</Link>
           <Link href="/creator/interview" className="btn-ghost">🧠 AIインタビュー（人格プロファイル）</Link>
           <Link href="/creator/profile" className="btn-ghost">👤 人格プロファイルを確認</Link>

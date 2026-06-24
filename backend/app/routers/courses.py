@@ -290,6 +290,70 @@ def list_creator_courses(creator_id: int, db: Session = Depends(get_db)):
     return [_serialize_course_card(c) for c in courses]
 
 
+@router.get("/courses/me/created")
+def list_my_created_courses(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """ログイン中のクリエイターが作成した全コースを、申込者数とともに返す(クリエイターのコース管理画面用)。要(クリエイター)"""
+    if current_user.role not in ("creator", "admin"):
+        raise HTTPException(status_code=403, detail="クリエイター権限が必要です")
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile or not profile.character:
+        return []
+    courses = db.query(Course).filter(Course.character_id == profile.character.id).order_by(Course.created_at.desc()).all()
+    results = []
+    for course in courses:
+        purchase_count = db.query(Purchase).filter(
+            Purchase.course_id == course.id, Purchase.status == "succeeded"
+        ).count()
+        subscription_count = db.query(CourseSubscription).filter(
+            CourseSubscription.course_id == course.id, CourseSubscription.status == "active"
+        ).count()
+        results.append({
+            "id": course.id,
+            "title": course.title,
+            "status": course.status,
+            "is_suspended": course.is_suspended,
+            "enrollment_count": purchase_count + subscription_count,
+        })
+    return results
+
+
+@router.get("/courses/{course_id}/enrollments")
+def list_course_enrollments(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """このコースに申し込んだ学習者一覧(買い切り購入者+サブスク契約者)を返す。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+
+    purchases = db.query(Purchase).filter(
+        Purchase.course_id == course.id, Purchase.status == "succeeded"
+    ).all()
+    results = [
+        {
+            "user_id": p.user_id,
+            "username": p.user.username,
+            "type": "purchase",
+            "tier": None,
+            "status": "succeeded",
+            "enrolled_at": p.purchased_at,
+        }
+        for p in purchases
+    ]
+
+    subscriptions = db.query(CourseSubscription).filter(CourseSubscription.course_id == course.id).all()
+    results += [
+        {
+            "user_id": s.user_id,
+            "username": s.user.username,
+            "type": "subscription",
+            "tier": s.tier,
+            "status": s.status,
+            "enrolled_at": s.created_at,
+        }
+        for s in subscriptions
+    ]
+
+    results.sort(key=lambda r: r["enrolled_at"] or "", reverse=True)
+    return results
+
+
 @router.get("/courses/{course_id}")
 def get_course(course_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user_optional)):
     """コース詳細(レッスン一覧含む)。未購入かつ有料の場合、is_preview=falseのレッスンはbody/youtube_urlをnullで返す"""
@@ -640,23 +704,37 @@ def delete_course_material(material_id: int, current_user=Depends(get_current_us
 
 @router.get("/courses/me/purchased")
 def list_my_purchased_courses(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """ログインユーザーが購入済みの全コースを、レッスン完了数とともに返す(ダッシュボードの学習中コース一覧用)"""
-    purchases = db.query(Purchase).filter(
+    """ログインユーザーが購入済み(買い切り)またはサブスク契約中の全コースを、進捗とともに返す(マイページの学習中コース一覧用)"""
+    purchased_courses = {p.course for p in db.query(Purchase).filter(
         Purchase.user_id == current_user.id, Purchase.status == "succeeded"
-    ).all()
+    ).all()}
+    subscribed_courses = {s.course for s in db.query(CourseSubscription).filter(
+        CourseSubscription.user_id == current_user.id,
+        CourseSubscription.status == "active",
+    ).all()}
+    courses = purchased_courses | subscribed_courses
+
     results = []
-    for purchase in purchases:
-        course = purchase.course
-        lesson_ids = [l.id for l in course.lessons]
-        completed_count = db.query(LessonProgress).filter(
-            LessonProgress.user_id == current_user.id,
-            LessonProgress.lesson_id.in_(lesson_ids),
-            LessonProgress.is_completed == True,
-        ).count() if lesson_ids else 0
+    for course in courses:
+        if course.days:
+            completed_count = db.query(DayLog).filter(
+                DayLog.user_id == current_user.id,
+                DayLog.course_id == course.id,
+                DayLog.is_completed == True,
+            ).count()
+            total = len(course.days)
+        else:
+            lesson_ids = [l.id for l in course.lessons]
+            completed_count = db.query(LessonProgress).filter(
+                LessonProgress.user_id == current_user.id,
+                LessonProgress.lesson_id.in_(lesson_ids),
+                LessonProgress.is_completed == True,
+            ).count() if lesson_ids else 0
+            total = len(lesson_ids)
         results.append({
             "course_id": course.id,
             "title": course.title,
-            "total_lessons": len(lesson_ids),
+            "total_lessons": total,
             "completed_count": completed_count,
         })
     return results

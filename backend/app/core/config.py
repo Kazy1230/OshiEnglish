@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ID: str = ""
     # 決済完了後のリダイレクト先（フロントエンドのベースURL）
     FRONTEND_URL: str = "http://localhost:3000"
+    # テスト環境向け：Stripeを呼ばずに購入・サブスク登録を即時成功させる(UI/ワークフローはそのまま維持する)
+    PAYMENTS_TEST_MODE: bool = False
 
     # ----- メール送信（Resend） -----
     # 未設定の場合、メール送信は何もせずスキップする（ベストエフォート）

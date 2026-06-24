@@ -109,6 +109,8 @@ export const api = {
   createCourse: (data: object) => apiFetch("/courses", { method: "POST", body: JSON.stringify(data) }),
   updateCourse: (id: number, data: object) => apiFetch(`/courses/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   submitCourseForReview: (id: number) => apiFetch(`/courses/${id}/submit-for-review`, { method: "POST" }),
+  getMyCreatedCourses: () => apiFetch("/courses/me/created"),
+  listCourseEnrollments: (courseId: number) => apiFetch(`/courses/${courseId}/enrollments`),
   addCourseLesson: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/lessons`, { method: "POST", body: JSON.stringify(data) }),
   updateLesson: (lessonId: number, data: object) =>

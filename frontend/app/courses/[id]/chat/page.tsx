@@ -121,6 +121,7 @@ export default function CourseChatPage() {
         <div className="flex items-center justify-between">
           <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
           <div className="flex items-center gap-3">
+            <Link href={`/courses/${courseId}/schedule`} className="text-white/80 text-sm">90日スケジュール</Link>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <LogoutButton variant="onColor" />
           </div>

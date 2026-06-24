@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
@@ -28,6 +28,7 @@ type CourseDetail = {
 
 export default function CourseDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const courseId = Number(params.id);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,6 +72,10 @@ export default function CourseDetailPage() {
     setPurchasing(true);
     try {
       const res = await api.checkoutCourse(courseId);
+      if (!res.client_secret) {
+        router.push(`/purchase-complete?course_id=${courseId}`);
+        return;
+      }
       setCheckout({ clientSecret: res.client_secret });
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");
@@ -112,6 +117,10 @@ export default function CourseDetailPage() {
     setPurchasing(true);
     try {
       const res = await api.subscribeToCourse(courseId, tier);
+      if (!res.client_secret) {
+        router.push(`/purchase-complete?course_id=${courseId}`);
+        return;
+      }
       setCheckout({ clientSecret: res.client_secret });
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");

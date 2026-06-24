@@ -57,6 +57,25 @@ def checkout_course(
     if existing:
         raise HTTPException(status_code=409, detail="このコースはすでに購入済みです")
 
+    if settings.PAYMENTS_TEST_MODE:
+        purchase = Purchase(
+            user_id=current_user.id,
+            course_id=course.id,
+            amount=course.price,
+            stripe_payment_intent_id=f"test_{current_user.id}_{course.id}_{int(datetime.utcnow().timestamp())}",
+            status="succeeded",
+        )
+        db.add(purchase)
+        db.commit()
+        _grant_lesson_progress(db, purchase)
+        return {
+            "client_secret": None,
+            "test_mode": True,
+            "amount": course.price,
+            "currency": "jpy",
+            "course_title": course.title,
+        }
+
     if not _stripe_key_configured():
         raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
 
@@ -120,6 +139,25 @@ def subscribe_to_course(
     ).first()
     if existing:
         raise HTTPException(status_code=409, detail="このコースは既にサブスクリプション登録済みです")
+
+    if settings.PAYMENTS_TEST_MODE:
+        db.add(CourseSubscription(
+            user_id=current_user.id,
+            course_id=course.id,
+            tier=data.tier,
+            stripe_customer_id=None,
+            stripe_subscription_id=None,
+            status="active",
+        ))
+        db.commit()
+        return {
+            "client_secret": None,
+            "test_mode": True,
+            "amount": price,
+            "currency": "jpy",
+            "tier": data.tier,
+            "course_title": course.title,
+        }
 
     if not _stripe_key_configured():
         raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
@@ -187,16 +225,16 @@ def cancel_subscription(
     if sub.status == "canceled":
         raise HTTPException(status_code=400, detail="既に解約済みです")
 
-    if not _stripe_key_configured():
-        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
-
-    stripe = _get_stripe()
-    try:
-        if sub.stripe_subscription_id:
-            stripe.Subscription.delete(sub.stripe_subscription_id)
-    except Exception as e:
-        logger.exception("[Stripe] サブスクリプションの解約に失敗しました")
-        raise HTTPException(status_code=502, detail="解約処理に失敗しました") from e
+    if not settings.PAYMENTS_TEST_MODE:
+        if not _stripe_key_configured():
+            raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
+        stripe = _get_stripe()
+        try:
+            if sub.stripe_subscription_id:
+                stripe.Subscription.delete(sub.stripe_subscription_id)
+        except Exception as e:
+            logger.exception("[Stripe] サブスクリプションの解約に失敗しました")
+            raise HTTPException(status_code=502, detail="解約処理に失敗しました") from e
 
     sub.status = "canceled"
     db.commit()
@@ -235,39 +273,53 @@ def change_subscription_tier(
     if not new_price:
         raise HTTPException(status_code=400, detail="このコースは指定されたTierに対応していません")
 
-    if not _stripe_key_configured():
-        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
-    if not sub.stripe_subscription_id:
-        raise HTTPException(status_code=400, detail="このサブスクリプションは決済情報と紐付いていません")
+    if not settings.PAYMENTS_TEST_MODE:
+        if not _stripe_key_configured():
+            raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
+        if not sub.stripe_subscription_id:
+            raise HTTPException(status_code=400, detail="このサブスクリプションは決済情報と紐付いていません")
 
-    stripe = _get_stripe()
-    try:
-        stripe_sub = stripe.Subscription.retrieve(sub.stripe_subscription_id)
-        item_id = stripe_sub["items"]["data"][0]["id"]
-        stripe_product = stripe.Product.create(
-            name=f"{course.title}（Tier {data.tier}）",
-            idempotency_key=f"product_{course.id}_{data.tier}",
-        )
-        stripe.Subscription.modify(
-            sub.stripe_subscription_id,
-            items=[{
-                "id": item_id,
-                "price_data": {
-                    "currency": "jpy",
-                    "product": stripe_product.id,
-                    "unit_amount": new_price,
-                    "recurring": {"interval": "month"},
-                },
-            }],
-            proration_behavior="create_prorations",
-        )
-    except Exception as e:
-        logger.exception("[Stripe] サブスクリプションのTier変更に失敗しました")
-        raise HTTPException(status_code=502, detail="Tier変更処理に失敗しました") from e
+        stripe = _get_stripe()
+        try:
+            stripe_sub = stripe.Subscription.retrieve(sub.stripe_subscription_id)
+            item_id = stripe_sub["items"]["data"][0]["id"]
+            stripe_product = stripe.Product.create(
+                name=f"{course.title}（Tier {data.tier}）",
+                idempotency_key=f"product_{course.id}_{data.tier}",
+            )
+            stripe.Subscription.modify(
+                sub.stripe_subscription_id,
+                items=[{
+                    "id": item_id,
+                    "price_data": {
+                        "currency": "jpy",
+                        "product": stripe_product.id,
+                        "unit_amount": new_price,
+                        "recurring": {"interval": "month"},
+                    },
+                }],
+                proration_behavior="create_prorations",
+            )
+        except Exception as e:
+            logger.exception("[Stripe] サブスクリプションのTier変更に失敗しました")
+            raise HTTPException(status_code=502, detail="Tier変更処理に失敗しました") from e
 
     sub.tier = data.tier
     db.commit()
     return {"message": f"Tier {data.tier}に変更しました", "tier": data.tier}
+
+
+def _grant_lesson_progress(db: Session, purchase: Purchase):
+    """購入済みコースの全レッスンに学習進捗レコードを用意する（未受講状態で作成、冪等）"""
+    lessons = db.query(Lesson).filter(Lesson.course_id == purchase.course_id).all()
+    for lesson in lessons:
+        existing_progress = db.query(LessonProgress).filter(
+            LessonProgress.user_id == purchase.user_id,
+            LessonProgress.lesson_id == lesson.id,
+        ).first()
+        if not existing_progress:
+            db.add(LessonProgress(user_id=purchase.user_id, lesson_id=lesson.id, is_completed=False))
+    db.commit()
 
 
 def _handle_course_payment_succeeded(db: Session, payment_intent: dict):
@@ -280,17 +332,7 @@ def _handle_course_payment_succeeded(db: Session, payment_intent: dict):
 
     purchase.status = "succeeded"
     db.flush()
-
-    lessons = db.query(Lesson).filter(Lesson.course_id == purchase.course_id).all()
-    for lesson in lessons:
-        existing_progress = db.query(LessonProgress).filter(
-            LessonProgress.user_id == purchase.user_id,
-            LessonProgress.lesson_id == lesson.id,
-        ).first()
-        if not existing_progress:
-            db.add(LessonProgress(user_id=purchase.user_id, lesson_id=lesson.id, is_completed=False))
-
-    db.commit()
+    _grant_lesson_progress(db, purchase)
     logger.info(f"[Stripe] コース購入が完了しました: purchase_id={purchase.id}, course_id={purchase.course_id}")
 
 
