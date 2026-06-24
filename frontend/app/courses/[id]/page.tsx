@@ -8,6 +8,8 @@ import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { CourseCheckoutModal } from "@/components/CourseCheckoutModal";
 import { NotificationBell } from "@/components/NotificationBell";
+import { LogoutButton } from "@/components/LogoutButton";
+import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
 type Lesson = {
@@ -18,9 +20,10 @@ type CourseDetail = {
   id: number; title: string; description?: string | null; thumbnail_url?: string | null;
   category?: string | null; status: string; price: number; is_free: boolean;
   tier_a_price?: number | null; tier_b_price?: number | null;
-  character: { id: number; name: string; avatar_url?: string | null };
+  character: { id: number; name: string; avatar_url?: string | null; creator_id: number | null };
   lessons: Lesson[];
   is_purchased: boolean;
+  has_days: boolean;
   is_suspended?: boolean;
   suspension_reason?: string | null;
   my_subscription?: { id: number; tier: "A" | "B"; status: string } | null;
@@ -141,41 +144,90 @@ export default function CourseDetailPage() {
     }
   }
 
-  if (loading) return <p className="p-8" style={{ color: "var(--muted)" }}>読み込み中…</p>;
-  if (!course) return <p className="p-8" style={{ color: "var(--muted)" }}>コースが見つかりません</p>;
+  if (loading) {
+    return (
+      <div className="min-h-screen px-4 sm:px-6 py-8 max-w-4xl mx-auto flex flex-col gap-4" style={{ background: "var(--bg)" }}>
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-8 w-1/2" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (!course) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+        <div className="card max-w-sm text-center flex flex-col gap-3">
+          <p className="text-3xl">🔍</p>
+          <p className="text-sm font-bold" style={{ color: "var(--text)" }}>コースが見つかりません</p>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>削除された、または非公開になった可能性があります。</p>
+          <Link href="/" className="btn-primary self-center">コースを探す</Link>
+        </div>
+      </div>
+    );
+  }
 
   const activeLesson = course.lessons.find(l => l.id === activeLessonId) ?? course.lessons[0];
   const unlocked = course.is_purchased;
+  const completedLessonCount = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href={`/creators/${course.character.id}`} className="text-white/80 text-sm">← クリエイターページ</Link>
+      <header className="flex items-center justify-between px-4 sm:px-6 py-4 gap-3 flex-wrap" style={{ background: "var(--primary)" }}>
+        {course.character.creator_id ? (
+          <Link href={`/creators/${course.character.creator_id}`} className="text-white/80 text-sm hover:text-white">← クリエイターページ</Link>
+        ) : <span />}
         <div className="flex items-center gap-3">
           <NotificationBell />
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+          <LogoutButton variant="onColor" />
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
-        <div>
-          {course.category && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{course.category}</span>}
-          <h1 className="text-2xl font-black mt-2" style={{ color: "var(--primary)" }}>{course.title}</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>{course.character.name}</p>
-          {course.description && <p className="text-sm mt-3" style={{ color: "var(--text)" }}>{course.description}</p>}
-          <button onClick={handleReport} className="text-xs underline mt-2" style={{ color: "var(--muted)" }}>このコースを通報する</button>
+      {course.thumbnail_url && (
+        <div className="w-full max-h-64 overflow-hidden">
+          <img src={course.thumbnail_url} alt="" className="w-full h-64 object-cover" />
         </div>
+      )}
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+        <div className="flex items-start gap-3">
+          {course.character.avatar_url ? (
+            <img src={course.character.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
+          )}
+          <div className="flex-1">
+            {course.category && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{course.category}</span>}
+            <h1 className="text-2xl font-black mt-2" style={{ color: "var(--primary)" }}>{course.title}</h1>
+            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>{course.character.name}</p>
+            {course.description && <p className="text-sm mt-3" style={{ color: "var(--text)" }}>{course.description}</p>}
+            <button onClick={handleReport} className="text-xs underline mt-2" style={{ color: "var(--muted)" }}>このコースを通報する</button>
+          </div>
+        </div>
+
+        {unlocked && course.lessons.length > 0 && (
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
+              <div className="h-2 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedLessonCount / course.lessons.length) * 100)}%` }} />
+            </div>
+            <span className="text-xs font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedLessonCount}/{course.lessons.length} レッスン完了</span>
+          </div>
+        )}
 
         {(course.tier_a_price || course.tier_b_price) ? (
           <div className="card flex flex-col gap-4 sticky top-4 z-10">
             {unlocked ? (
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
                   ✅ {course.my_subscription ? `Tier ${course.my_subscription.tier} 契約中` : "購入済み"}
                 </span>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
                   <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                  {course.has_days && (
+                    <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>90日スケジュール</Link>
+                  )}
                   <Link href={`/courses/${courseId}/reviews`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>週次・月次レビュー</Link>
                   {course.my_subscription && (() => {
                     const otherTier = course.my_subscription.tier === "A" ? "B" : "A";
@@ -230,21 +282,27 @@ export default function CourseDetailPage() {
             )}
           </div>
         ) : (
-          <div className="card flex items-center justify-between gap-4 sticky top-4 z-10">
+          <div className="card flex items-center justify-between gap-4 flex-wrap sticky top-4 z-10">
             <p className="font-black text-lg" style={{ color: "var(--accent)" }}>
               {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
             </p>
             {unlocked ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
                 <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                {course.has_days && (
+                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>90日スケジュール</Link>
+                )}
               </div>
             ) : course.is_free ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
                 <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                {course.has_days && (
+                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>90日スケジュール</Link>
+                )}
               </div>
             ) : (
               <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">

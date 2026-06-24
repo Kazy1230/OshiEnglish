@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { LogoutButton } from "@/components/LogoutButton";
+import { Skeleton } from "@/components/Skeleton";
 
 type WeeklyContent = {
   weekly_summary?: string;
@@ -47,8 +48,10 @@ export default function ReviewsPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
-        <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースに戻る</Link>
-        <div className="flex items-center gap-3">
+        <Link href={`/courses/${courseId}`} className="text-white/80 text-sm hover:text-white">← コースに戻る</Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href={`/courses/${courseId}/chat`} className="text-white/80 text-sm hover:text-white">伴走チャット</Link>
+          <Link href={`/courses/${courseId}/schedule`} className="text-white/80 text-sm hover:text-white">90日スケジュール</Link>
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
           <LogoutButton variant="onColor" />
         </div>
@@ -58,11 +61,19 @@ export default function ReviewsPage() {
         <h1 className="text-2xl font-black" style={{ color: "var(--primary)" }}>📈 週次・月次レビュー</h1>
 
         {loading ? (
-          <p style={{ color: "var(--muted)" }}>読み込み中…</p>
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
         ) : reviews.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            まだレビューが届いていません。7日ごとに週次レビュー、30日ごとに月次レビューが届きます。
-          </p>
+          <div className="card flex flex-col items-center gap-2 text-center py-10">
+            <p className="text-3xl">📬</p>
+            <p className="text-sm font-bold" style={{ color: "var(--text)" }}>まだレビューが届いていません</p>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              7日ごとに週次レビュー、30日ごとに月次レビューが届きます。まずは日々の学習報告を続けましょう。
+            </p>
+            <Link href={`/courses/${courseId}/chat`} className="btn-primary mt-2">伴走チャットへ戻る</Link>
+          </div>
         ) : (
           <>
             {monthly.length > 0 && (

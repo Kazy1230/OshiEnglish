@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { LogoutButton } from "@/components/LogoutButton";
+import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
 type ChatQuestion = {
@@ -29,6 +30,7 @@ export default function CourseChatPage() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingBody, setPendingBody] = useState<string | null>(null);
   const [upgradeCta, setUpgradeCta] = useState<{ topic: string } | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [completedDays, setCompletedDays] = useState(0);
@@ -91,7 +93,7 @@ export default function CourseChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [questions]);
+  }, [questions, pendingBody]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +101,7 @@ export default function CourseChatPage() {
     setSending(true);
     const body = draft;
     setDraft("");
+    setPendingBody(body);
     try {
       const result: ChatQuestion = await api.askChatQuestion(courseId, body);
       setQuestions(prev => [...prev, result]);
@@ -110,18 +113,20 @@ export default function CourseChatPage() {
       setDraft(body);
     } finally {
       setSending(false);
+      setPendingBody(null);
     }
   }
 
-  if (loading) return <p className="p-8" style={{ color: "var(--muted)" }}>読み込み中…</p>;
+  if (loading) return <Skeleton className="h-screen w-full" style={{ borderRadius: 0 }} />;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <header className="flex flex-col gap-3 px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <div className="flex items-center justify-between">
           <Link href={`/courses/${courseId}`} className="text-white/80 text-sm">← コースページ</Link>
-          <div className="flex items-center gap-3">
-            <Link href={`/courses/${courseId}/schedule`} className="text-white/80 text-sm">90日スケジュール</Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Link href={`/courses/${courseId}/schedule`} className="text-white/80 text-sm hover:text-white">90日スケジュール</Link>
+            <Link href={`/courses/${courseId}/reviews`} className="text-white/80 text-sm hover:text-white">週次・月次レビュー</Link>
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
             <LogoutButton variant="onColor" />
           </div>
@@ -191,6 +196,18 @@ export default function CourseChatPage() {
             )}
           </div>
         ))}
+        {pendingBody && (
+          <div className="flex flex-col gap-2">
+            <div className="self-end max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--primary)", color: "white" }}>
+              {pendingBody}
+            </div>
+            <div className="self-start flex items-center gap-1 rounded-2xl px-4 py-3" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+              {[0, 1, 2].map(i => (
+                <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--muted)", animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </main>
 

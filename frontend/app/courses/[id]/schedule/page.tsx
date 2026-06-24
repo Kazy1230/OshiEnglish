@@ -64,10 +64,11 @@ export default function CourseSchedulePage() {
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: "var(--primary)" }}>
         <div className="flex items-center gap-3">
-          <Link href={`/courses/${courseId}/chat`} className="text-white/80 text-sm">← チャットへ</Link>
+          <Link href={`/courses/${courseId}/chat`} className="text-white/80 text-sm hover:text-white">← チャットへ</Link>
           <h1 className="text-white font-black text-lg">90日スケジュール</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href={`/courses/${courseId}/reviews`} className="text-white/80 text-sm hover:text-white">週次・月次レビュー</Link>
           <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
           <LogoutButton variant="onColor" />
         </div>
@@ -128,6 +129,7 @@ export default function CourseSchedulePage() {
 
       {selectedDay && (
         <DayDetailPanel
+          courseId={courseId}
           day={selectedDay}
           log={logs[selectedDay.day] ?? null}
           isToday={selectedDay.day === currentDay}
@@ -138,7 +140,7 @@ export default function CourseSchedulePage() {
   );
 }
 
-function DayDetailPanel({ day, log, isToday, onClose }: { day: Day; log: DayLog | null; isToday: boolean; onClose: () => void }) {
+function DayDetailPanel({ courseId, day, log, isToday, onClose }: { courseId: number; day: Day; log: DayLog | null; isToday: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div className="card max-w-lg w-full max-h-[90vh] overflow-y-auto flex flex-col gap-3" style={{ background: "var(--card-bg, #fff)" }} onClick={e => e.stopPropagation()}>
@@ -169,7 +171,12 @@ function DayDetailPanel({ day, log, isToday, onClose }: { day: Day; log: DayLog 
             {log.memo}
           </div>
         )}
-        <button className="btn-ghost self-end" onClick={onClose}>閉じる</button>
+        <div className="flex gap-2 justify-end">
+          {isToday && !log?.is_completed && !day.is_rest_day && (
+            <Link href={`/courses/${courseId}/chat`} className="btn-primary">チャットで報告する →</Link>
+          )}
+          <button className="btn-ghost" onClick={onClose}>閉じる</button>
+        </div>
       </div>
     </div>
   );

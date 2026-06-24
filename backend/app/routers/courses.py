@@ -64,7 +64,7 @@ def _is_accessible(db: Session, course: Course, user_id: Optional[int]) -> bool:
 # ----- シリアライズ -----
 
 def _serialize_character_brief(character: Character) -> dict:
-    return {"id": character.id, "name": character.name, "avatar_url": character.image_url}
+    return {"id": character.id, "name": character.name, "avatar_url": character.image_url, "creator_id": character.creator_id}
 
 
 def _serialize_lesson(lesson: Lesson, unlocked: bool) -> dict:
@@ -125,6 +125,7 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
     data = _serialize_course_card(course)
     data["lessons"] = [_serialize_lesson(l, unlocked) for l in lessons]
     data["is_purchased"] = unlocked
+    data["has_days"] = len(course.days) > 0
     subscription = None
     if user_id:
         subscription = db.query(CourseSubscription).filter(
