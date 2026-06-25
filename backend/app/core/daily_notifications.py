@@ -5,8 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.email import send_email
+from app.core.config import settings as app_settings
+from app.core.llm import generate_text, LLMError
+from app.core import chat_prompts as prompts
 from app.models.notification_setting import NotificationSetting
 from app.models.learner_profile import LearnerProfile
+from app.models.learner_course_day import LearnerCourseDay
+from app.models.daily_summary import DailySummary
+from app.models.personality_profile import PersonalityProfile
 from app.models.course_day import CourseDay
 from app.models.course import Course
 from app.models.customer import Customer
@@ -37,7 +43,7 @@ def _day_number_for(learner_profile: LearnerProfile, today: datetime) -> int:
         started = started.replace(tzinfo=timezone.utc)
     started_jst = started.astimezone(JST)
     elapsed_days = (today.date() - started_jst.date()).days
-    return max(1, min(90, elapsed_days + 1))
+    return max(1, min(30, elapsed_days + 1))
 
 
 def _already_sent_today(db: Session, user_id: int, course_id: int, slot: str, today: datetime) -> bool:
@@ -58,11 +64,31 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
         return
     day_number = _day_number_for(learner_profile, today)
     course_day = db.query(CourseDay).filter(CourseDay.course_id == course.id, CourseDay.day_number == day_number).first()
-    if not course_day:
+    if not course_day or course_day.is_rest_day:
         return
 
-    message = course_day.ai_message_morning if slot == "morning" else course_day.ai_message_evening
-    if not message:
+    personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+    if not personality or not personality.profile:
+        return
+
+    learner_day = db.query(LearnerCourseDay).filter(
+        LearnerCourseDay.learner_profile_id == learner_profile.id, LearnerCourseDay.day_number == day_number,
+    ).first()
+    today_tasks = learner_day.adjusted_tasks if learner_day else []
+    summaries = db.query(DailySummary).filter(
+        DailySummary.user_id == setting.user_id, DailySummary.course_id == course.id,
+        DailySummary.day_number >= max(1, day_number - 3), DailySummary.day_number < day_number,
+    ).order_by(DailySummary.day_number).all()
+
+    try:
+        message = generate_text(
+            prompts.build_today_message_system(personality.profile, slot),
+            prompts.build_today_message_user(day_number, today_tasks, [s.summary for s in summaries]),
+            max_tokens=300,
+            model=app_settings.ANTHROPIC_MODEL_HAIKU,
+        )
+    except LLMError:
+        logger.exception(f"[DailyNotification] Layer3メッセージ生成に失敗しました: user_id={setting.user_id}, course_id={course.id}, slot={slot}")
         return
 
     user = db.query(Customer).filter(Customer.id == setting.user_id).first()
@@ -82,10 +108,10 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
 
 
 def send_due_notifications():
-    """通知時刻が現在時刻と一致する学習者へ、その日のAIメッセージを送信する（リテンション機能：Push型通知）。
+    """通知時刻が現在時刻と一致する学習者へ、その日のAIメッセージを都度生成して送信する（リテンション機能：Push型通知、Layer3）。
 
     Day番号は診断完了日（LearnerProfile.created_at）からの経過日数で算出する。
-    90日分のAIメッセージはコース生成時（Phase2）に既に事前生成済みのため、ここでは取得・送信のみ行う。
+    メッセージはプリ生成せず、今日のタスク(Layer2)・直近3日サマリーを踏まえてその場で生成する。
     """
     db = SessionLocal()
     try:

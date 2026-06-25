@@ -5,7 +5,7 @@ from app.core.database import Base
 
 
 class LearnerRoadmap(Base):
-    """事業検証ポイント②：診断結果からAIが生成するパーソナライズ90日ロードマップ。"""
+    """事業検証ポイント②：診断結果からAIが生成するパーソナライズ30日ロードマップ。"""
     __tablename__ = "learner_roadmaps"
 
     id = Column(Integer, primary_key=True, index=True)

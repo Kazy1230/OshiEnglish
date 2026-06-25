@@ -155,7 +155,7 @@ if _column_exists("customers", "role"):
 _ensure_column("creator_profiles", "speciality", "VARCHAR(255) NULL")
 _ensure_column("creator_profiles", "experience", "TEXT NULL")
 
-# --- Phase 2: コース構造・90日間コース生成 ---
+# --- Phase 2: コース構造・30日間コース生成 ---
 _ensure_column("courses", "goal", "VARCHAR(255) NULL")
 _ensure_column("courses", "target_learner", "TEXT NULL")
 _ensure_column("courses", "intensity", "VARCHAR(100) NULL")
@@ -173,6 +173,17 @@ _ensure_column("courses", "suspension_reason", "TEXT NULL")
 
 # --- 質問カテゴリの承認制（既存カテゴリは導入前から使われていたものとして自動承認扱いにする） ---
 _ensure_column("question_categories", "status", "VARCHAR(20) NOT NULL DEFAULT 'approved'")
+
+# --- 3層コース生成アーキテクチャへの移行（90日→30日、Layer1/2/3分離） ---
+_ensure_column("course_days", "task_types", "JSON NULL")
+_drop_column("course_days", "tasks")
+_drop_column("course_days", "ai_message_morning")
+_drop_column("course_days", "ai_message_evening")
+_drop_column("course_days", "ai_message_completion")
+_ensure_column("course_subscriptions", "past_due_since", "DATETIME NULL")
+
+# --- クリエイターダッシュボード・紹介ページ再設計（AI生成自己紹介文） ---
+_ensure_column("creator_profiles", "self_intro", "TEXT NULL")
 
 
 def _migrate_legacy_characters_to_creator():
@@ -229,7 +240,7 @@ _drop_unique_index("course_subscriptions", "uq_course_subscriptions_user_course"
 
 # --- Phase 8: リテンション・通知（デイリー伴走チャットの朝・夜の声かけ） ---
 # 専用のジョブキュー/cronコンテナを追加せず、アプリ内のasyncioループで1分間隔にチェックする
-# （Anthropic Batch APIでのメッセージ事前生成はPhase2の90日コース生成時に完了済みのため、
+# （Anthropic Batch APIでのメッセージ事前生成はPhase2の30日コース生成時に完了済みのため、
 #   ここでは生成済みメッセージを通知時刻に合わせて送信するのみ）
 async def _daily_notification_loop():
     from app.core.daily_notifications import send_due_notifications
@@ -267,7 +278,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="ManaVillage API",
-    description="90日間AIメンターシップ・サブスクリプションサービス バックエンドAPI",
+    description="30日間AIメンターシップ・サブスクリプションサービス バックエンドAPI",
     version="1.1.0",
     # DOCS_ENABLED=False で本番環境のSwagger UIを非公開にする
     docs_url="/docs" if settings.DOCS_ENABLED else None,

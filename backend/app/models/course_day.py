@@ -5,7 +5,8 @@ from app.core.database import Base
 
 
 class CourseDay(Base):
-    """90日伴走コースの日単位コンテンツ（AI生成→クリエイターが日単位で確認・編集する）。"""
+    """30日伴走コースの概念コース骨格（Layer1。クリエイターが1回だけ生成、全学習者共通）。
+    メッセージ文は持たない（Layer3で都度生成）。タスクの「型」のみを持つ。"""
     __tablename__ = "course_days"
     __table_args__ = (
         UniqueConstraint("course_id", "day_number", name="uq_course_days_course_day"),
@@ -13,13 +14,11 @@ class CourseDay(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
-    day_number = Column(Integer, nullable=False)  # 1〜90
-    week_number = Column(Integer, nullable=False)  # 1〜13
+    day_number = Column(Integer, nullable=False)  # 1〜30
+    week_number = Column(Integer, nullable=False)  # 1〜4
     theme = Column(String(255), nullable=True)
-    tasks = Column(JSON, nullable=True)  # タスクリスト（文字列配列）
-    ai_message_morning = Column(Text, nullable=True)
-    ai_message_evening = Column(Text, nullable=True)
-    ai_message_completion = Column(Text, nullable=True)
+    # タスク種別と標準時間のみを持つ型データ。例: [{"type": "vocabulary", "label": "単語学習", "base_minutes": 15}]
+    task_types = Column(JSON, nullable=True)
     is_rest_day = Column(Boolean, nullable=False, default=False)
     is_edited_by_creator = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -4,7 +4,7 @@ from app.core.database import Base
 
 
 class DayLog(Base):
-    """学習者の日次学習ログ（Day1〜90の完了状況）。"""
+    """学習者の日次学習ログ（Day1〜30の完了状況）。"""
     __tablename__ = "day_logs"
     __table_args__ = (
         UniqueConstraint("user_id", "course_id", "day_number", name="uq_day_logs_user_course_day"),

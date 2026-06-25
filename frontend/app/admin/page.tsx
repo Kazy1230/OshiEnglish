@@ -8,6 +8,8 @@ import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import type { Tab } from "./types";
 import { CreatorApplicationsTab } from "./tabs/CreatorApplicationsTab";
+import { CreatorsTab } from "./tabs/CreatorsTab";
+import { UsersTab } from "./tabs/UsersTab";
 import { CourseModerationTab } from "./tabs/CourseModerationTab";
 import { ReportsTab } from "./tabs/ReportsTab";
 import { TierBOverdueTab } from "./tabs/TierBOverdueTab";
@@ -45,6 +47,8 @@ export default function AdminPage() {
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "creator_applications", label: "クリエイター審査", icon: "🧑‍🏫" },
+    { key: "creators", label: "クリエイター一覧", icon: "🎭" },
+    { key: "users", label: "ユーザー一覧", icon: "👤" },
     { key: "course_moderation", label: "コース停止管理", icon: "🛑" },
     { key: "reports", label: "通報管理", icon: "🚨" },
     { key: "tier_b_overdue", label: "Tier B監視", icon: "⏰" },
@@ -92,6 +96,8 @@ export default function AdminPage() {
       {/* メインコンテンツ */}
       <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 min-w-0 md:h-screen">
         {tab === "creator_applications" && <CreatorApplicationsTab />}
+        {tab === "creators" && <CreatorsTab />}
+        {tab === "users" && <UsersTab />}
         {tab === "course_moderation" && <CourseModerationTab />}
         {tab === "reports" && <ReportsTab />}
         {tab === "tier_b_overdue" && <TierBOverdueTab />}

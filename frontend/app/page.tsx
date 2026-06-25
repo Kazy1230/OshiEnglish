@@ -30,7 +30,7 @@ function priceLabel(c: CourseCard) {
 
 const STEPS = [
   { icon: "🎭", title: "クリエイターを選ぶ", desc: "得意分野・指導スタイルの合うメンターを見つけます" },
-  { icon: "🗺️", title: "90日プランを受け取る", desc: "クリエイターのメソッドに基づいた、あなた専用のロードマップ" },
+  { icon: "🗺️", title: "30日プランを受け取る", desc: "クリエイターのメソッドに基づいた、あなた専用のロードマップ" },
   { icon: "💬", title: "毎日、伴走してもらう", desc: "日々のタスクと対話で、目標達成までしっかり伴走します" },
 ] as const;
 
@@ -125,13 +125,13 @@ export default function Home() {
         <div className="pointer-events-none absolute top-1/3 right-1/4 w-24 h-24 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }} />
         <div className="relative">
           <span className="pill mb-4" style={{ background: "rgba(255,255,255,0.16)", color: "white" }}>
-            🌱 90日間、好きなクリエイターと目標達成へ
+            🌱 30日間、好きなクリエイターと目標達成へ
           </span>
           <h2 className="text-white text-3xl sm:text-5xl font-black mb-4 leading-tight tracking-tight">
             学びを習慣に変える、<br className="sm:hidden" />伴走型コーチング
           </h2>
           <p className="text-white/85 text-sm sm:text-lg mb-8 max-w-xl mx-auto leading-relaxed">
-            自分に合ったクリエイターを選んで、その人のメソッドで90日間、目標達成まで伴走してもらいましょう。
+            自分に合ったクリエイターを選んで、その人のメソッドで30日間、目標達成まで伴走してもらいましょう。
           </p>
           {!loggedIn ? (
             <div className="flex items-center justify-center gap-3 flex-wrap">
@@ -150,7 +150,7 @@ export default function Home() {
 
           <div className="flex items-center justify-center gap-6 sm:gap-10 mt-10 text-white/90">
             <div>
-              <p className="text-2xl sm:text-3xl font-black">90<span className="text-sm font-bold">日</span></p>
+              <p className="text-2xl sm:text-3xl font-black">30<span className="text-sm font-bold">日</span></p>
               <p className="text-xs text-white/70 mt-0.5">伴走期間</p>
             </div>
             <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.25)" }} />
@@ -321,7 +321,7 @@ export default function Home() {
             <div>
               <p className="font-black text-lg" style={{ color: "var(--primary)" }}>あなたも伴走コースを作りませんか？</p>
               <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-                クリエイターとして申請し、あなたのメソッドで90日コースを作成して、学習者の目標達成に伴走できます。
+                クリエイターとして申請し、あなたのメソッドで30日コースを作成して、学習者の目標達成に伴走できます。
               </p>
             </div>
           </div>

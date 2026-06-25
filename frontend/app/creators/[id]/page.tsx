@@ -11,6 +11,11 @@ type CreatorDetail = {
   id: number;
   display_name: string;
   bio?: string | null;
+  speciality?: string | null;
+  experience?: string | null;
+  self_intro?: string | null;
+  coaching_tags?: string[];
+  total_learners?: number;
   sns_youtube?: string | null;
   sns_instagram?: string | null;
   sns_twitter?: string | null;
@@ -72,6 +77,16 @@ export default function CreatorPage() {
               <p className="text-xs" style={{ color: "var(--muted)" }}>
                 {data.character?.name}
               </p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {data.speciality && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>
+                    {data.speciality}
+                  </span>
+                )}
+                {!!data.total_learners && data.total_learners > 0 && (
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>学習者{data.total_learners}名が選択</span>
+                )}
+              </div>
             </div>
           </div>
           <button onClick={toggleFavorite} disabled={favoriting}
@@ -81,13 +96,35 @@ export default function CreatorPage() {
           </button>
         </div>
 
+        {data.self_intro && (
+          <div className="card" style={{ borderColor: "var(--accent)" }}>
+            <p className="text-xs font-bold mb-1" style={{ color: "var(--accent)" }}>{data.character?.name ?? data.display_name}からのメッセージ</p>
+            <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{data.self_intro}</p>
+          </div>
+        )}
+
         {data.bio && <p className="text-sm" style={{ color: "var(--text)" }}>{data.bio}</p>}
+        {data.experience && (
+          <p className="text-xs" style={{ color: "var(--muted)" }}>指導実績：{data.experience}</p>
+        )}
+
+        {data.coaching_tags && data.coaching_tags.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {data.coaching_tags.map((tag, i) => (
+              <span key={i} className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: "var(--primary)", color: "white", opacity: 0.85 }}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-3 text-xs" style={{ color: "var(--muted)" }}>
           {data.sns_youtube && <a href={data.sns_youtube} target="_blank" rel="noopener noreferrer">▶ YouTube</a>}
           {data.sns_instagram && <a href={data.sns_instagram} target="_blank" rel="noopener noreferrer">📷 Instagram</a>}
           {data.sns_twitter && <a href={data.sns_twitter} target="_blank" rel="noopener noreferrer">🐦 X</a>}
         </div>
+
+        {data.character && <SampleChatPreview characterName={data.character.name} tags={data.coaching_tags ?? []} />}
 
         <div>
           <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>コンテンツ一覧</h2>
@@ -109,6 +146,24 @@ export default function CreatorPage() {
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function SampleChatPreview({ characterName, tags }: { characterName: string; tags: string[] }) {
+  const styleHint = tags[0] ? `（${tags[0]}）` : "";
+  return (
+    <div className="card flex flex-col gap-3">
+      <p className="font-bold" style={{ color: "var(--primary)" }}>チャットのサンプル{styleHint}</p>
+      <div className="flex flex-col gap-2">
+        <div className="self-end max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--primary)", color: "white" }}>
+          最近やる気が出なくて、続けられるか不安です…
+        </div>
+        <div className="self-start max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }}>
+          そう感じる時もありますよね。{characterName}が伴走するので、無理せず今日できる小さな一歩から一緒に進めていきましょう。
+        </div>
+      </div>
+      <p className="text-xs" style={{ color: "var(--muted)" }}>※ サンプルです。実際の会話はコース購入後にご利用いただけます。</p>
     </div>
   );
 }

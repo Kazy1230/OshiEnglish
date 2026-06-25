@@ -20,7 +20,7 @@ export default function PricingPage() {
         <div>
           <h2 className="text-2xl font-black mb-2" style={{ color: "var(--primary)" }}>料金プラン</h2>
           <p className="text-sm" style={{ color: "var(--muted)" }}>
-            ManaVillageは、クリエイターが作る「90日伴走コース」をコース単位で購入する仕組みです。
+            ManaVillageは、クリエイターが作る「30日伴走コース」をコース単位で購入する仕組みです。
             価格はコースごとにクリエイターが設定するため、コース詳細ページで実際の金額をご確認ください。
           </p>
         </div>
@@ -36,9 +36,9 @@ export default function PricingPage() {
           </div>
 
           <div className="card flex flex-col gap-3">
-            <p className="text-sm font-black" style={{ color: "var(--primary)" }}>月額サブスクリプション（90日伴走コース）</p>
+            <p className="text-sm font-black" style={{ color: "var(--primary)" }}>月額サブスクリプション（30日伴走コース）</p>
             <p className="text-sm" style={{ color: "var(--text)" }}>
-              90日間、クリエイターのメソッドに基づいた伴走コーチングを受けられるコースです。2つのTierから選べます。
+              30日間、クリエイターのメソッドに基づいた伴走コーチングを受けられるコースです。2つのTierから選べます。
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-lg p-3" style={{ background: "var(--example-bg, #eee)", border: "1px solid var(--border)" }}>
@@ -69,7 +69,7 @@ export default function PricingPage() {
 
         <section className="rounded-xl p-6 text-center" style={{ background: "var(--primary)" }}>
           <p className="text-white font-black text-lg mb-1">気になるクリエイターを見つけましょう</p>
-          <p className="text-white/80 text-sm mb-4">90日間の伴走コースから、自分に合ったクリエイターを選べます。</p>
+          <p className="text-white/80 text-sm mb-4">30日間の伴走コースから、自分に合ったクリエイターを選べます。</p>
           <button onClick={() => router.push(loggedIn ? "/creators" : "/login")} className="btn-cta" style={{ background: "white", color: "var(--primary)" }}>
             クリエイターを探す →
           </button>

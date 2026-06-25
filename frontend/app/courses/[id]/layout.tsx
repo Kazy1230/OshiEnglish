@@ -8,7 +8,7 @@ import { AppHeader } from "@/components/AppHeader";
 const TABS = [
   { suffix: "", label: "概要" },
   { suffix: "/chat", label: "伴走チャット" },
-  { suffix: "/schedule", label: "90日スケジュール" },
+  { suffix: "/schedule", label: "30日スケジュール" },
   { suffix: "/reviews", label: "レビュー" },
 ];
 
@@ -26,11 +26,11 @@ export default function CourseLayout({ children }: { children: React.ReactNode }
   const basePath = `/courses/${courseId}`;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+    <div className="h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <AppHeader role="learner" backHref="/mypage" backLabel="マイページ" title={title ?? undefined} />
 
       {!isDiagnosis && (
-        <nav className="flex items-center gap-1 px-4 sm:px-6 overflow-x-auto" style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
+        <nav className="flex items-center gap-1 px-4 sm:px-6 overflow-x-auto flex-shrink-0" style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
           {TABS.map(tab => {
             const href = `${basePath}${tab.suffix}`;
             const active = pathname === href;
@@ -51,7 +51,7 @@ export default function CourseLayout({ children }: { children: React.ReactNode }
         </nav>
       )}
 
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
     </div>
   );
 }

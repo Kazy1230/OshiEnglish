@@ -186,8 +186,8 @@ export default function DiagnosisPage() {
           <div className="card flex flex-col items-center gap-3 py-12 text-center">
             <p className="text-3xl animate-pulse">🧠</p>
             <p className="text-sm" style={{ color: "var(--muted)" }}>あなたの状況を分析しています…</p>
-            <p className="text-sm" style={{ color: "var(--muted)" }}>90日間の学習計画を作成しています…</p>
-            <p className="text-xs" style={{ color: "var(--muted)" }}>もう少しお待ちください…</p>
+            <p className="text-sm" style={{ color: "var(--muted)" }}>あなた専用の学習プランを作成中です…</p>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>20〜25秒ほどお待ちください…</p>
           </div>
         )}
 
@@ -216,7 +216,7 @@ export default function DiagnosisPage() {
 
         {phase === "detail" && roadmap && (
           <div className="card flex flex-col gap-4">
-            <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>90日ロードマップ（週単位）</p>
+            <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>30日ロードマップ（週単位）</p>
             <div className="flex flex-col gap-3">
               {roadmap.weekly_plan.map((w, i) => (
                 <div key={i} className="border-l-4 pl-3" style={{ borderColor: "var(--accent)" }}>

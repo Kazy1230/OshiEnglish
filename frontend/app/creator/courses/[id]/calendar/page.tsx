@@ -8,16 +8,25 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
 
+type TaskType = { type: string; label: string; base_minutes: number };
 type Day = {
   id: number;
   day: number;
   week_number: number;
   theme: string | null;
-  tasks: string[] | null;
-  ai_message: { morning: string | null; evening_reminder: string | null; completion: string | null };
+  task_types: TaskType[] | null;
   is_rest_day: boolean;
   is_edited_by_creator: boolean;
 };
+
+const TASK_TYPE_OPTIONS = [
+  { type: "vocabulary", label: "単語学習" },
+  { type: "listening", label: "リスニング練習" },
+  { type: "grammar", label: "文法確認" },
+  { type: "reading", label: "リーディング" },
+  { type: "shadowing", label: "シャドーイング" },
+  { type: "practice", label: "演習" },
+];
 
 type Material = { id: number; type: string; title: string; file_url: string };
 
@@ -81,7 +90,7 @@ export default function CourseCalendarPage() {
           clearInterval(pollRef.current!);
           setGenerating(false);
           await reloadDays();
-          toast("90日分のコンテンツを生成しました。各日を編集するか、このままで良ければ上部の「公開申請する」から運営の審査に進めます。", "success");
+          toast("30日分のコンテンツを生成しました。各日を編集するか、このままで良ければ上部の「公開申請する」から運営の審査に進めます。", "success");
         } else if (status.status === "failed") {
           clearInterval(pollRef.current!);
           setGenerating(false);
@@ -100,10 +109,7 @@ export default function CourseCalendarPage() {
     try {
       const res = await api.updateCourseDay(courseId, selectedDay.day, {
         theme: updated.theme,
-        tasks: updated.tasks,
-        ai_message_morning: updated.ai_message?.morning,
-        ai_message_evening: updated.ai_message?.evening_reminder,
-        ai_message_completion: updated.ai_message?.completion,
+        task_types: updated.task_types,
         is_rest_day: updated.is_rest_day,
       });
       setDays(d => d.map(x => x.day === res.day ? res : x));
@@ -142,7 +148,7 @@ export default function CourseCalendarPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="90日カレンダー編集" />
+      <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="30日カレンダー編集" />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <div className="card flex items-center justify-between flex-wrap gap-3">
@@ -170,10 +176,10 @@ export default function CourseCalendarPage() {
         {days.length === 0 ? (
           <div className="card flex flex-col gap-3 items-start">
             <p className="text-sm" style={{ color: "var(--text)" }}>
-              まだ90日分のコンテンツが生成されていません。クリエイターの人格プロファイルとコース基本情報からAIが自動生成します（数分かかります）。
+              まだ30日分のコンテンツが生成されていません。クリエイターの人格プロファイルとコース基本情報からAIが自動生成します（数分かかります）。
             </p>
             <button className="btn-primary" disabled={generating} onClick={handleGenerate}>
-              {generating ? "生成中…" : "90日分を生成する"}
+              {generating ? "生成中…" : "30日分を生成する"}
             </button>
             {generating && genProgress && (
               <div className="w-full">
@@ -238,11 +244,20 @@ export default function CourseCalendarPage() {
 
 function DayEditPanel({ day, saving, onClose, onSave }: { day: Day; saving: boolean; onClose: () => void; onSave: (updated: Partial<Day>) => void }) {
   const [theme, setTheme] = useState(day.theme ?? "");
-  const [tasks, setTasks] = useState((day.tasks ?? []).join("\n"));
-  const [morning, setMorning] = useState(day.ai_message.morning ?? "");
-  const [evening, setEvening] = useState(day.ai_message.evening_reminder ?? "");
-  const [completion, setCompletion] = useState(day.ai_message.completion ?? "");
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>(day.task_types ?? []);
   const [isRestDay, setIsRestDay] = useState(day.is_rest_day);
+
+  function updateMinutes(type: string, minutes: number) {
+    setTaskTypes(prev => prev.map(t => t.type === type ? { ...t, base_minutes: minutes } : t));
+  }
+
+  function toggleTaskType(opt: { type: string; label: string }) {
+    setTaskTypes(prev =>
+      prev.some(t => t.type === opt.type)
+        ? prev.filter(t => t.type !== opt.type)
+        : [...prev, { type: opt.type, label: opt.label, base_minutes: 15 }]
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
@@ -255,30 +270,44 @@ function DayEditPanel({ day, saving, onClose, onSave }: { day: Day; saving: bool
           </label>
         </div>
         <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>日のテーマ</label>
-          <input value={theme} onChange={e => setTheme(e.target.value)} />
+          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>日のテーマ（15文字以内）</label>
+          <input value={theme} onChange={e => setTheme(e.target.value.slice(0, 15))} maxLength={15} />
         </div>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タスクリスト（1行1項目）</label>
-          <textarea rows={4} value={tasks} onChange={e => setTasks(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>AIメッセージ（朝）</label>
-          <textarea rows={2} value={morning} onChange={e => setMorning(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>AIメッセージ（夜リマインド）</label>
-          <textarea rows={2} value={evening} onChange={e => setEvening(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>AIメッセージ（完了時）</label>
-          <textarea rows={2} value={completion} onChange={e => setCompletion(e.target.value)} />
-        </div>
+        {!isRestDay && (
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タスク種別と標準学習時間</label>
+            <div className="flex flex-col gap-2">
+              {TASK_TYPE_OPTIONS.map(opt => {
+                const current = taskTypes.find(t => t.type === opt.type);
+                return (
+                  <div key={opt.type} className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm flex-1" style={{ color: "var(--text)" }}>
+                      <input type="checkbox" checked={!!current} onChange={() => toggleTaskType(opt)} />
+                      {opt.label}
+                    </label>
+                    {current && (
+                      <input
+                        type="number"
+                        min={5}
+                        max={120}
+                        value={current.base_minutes}
+                        onChange={e => updateMinutes(opt.type, Number(e.target.value))}
+                        className="w-20"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          ※ 学習者ごとの個別タスク配分（個人化プラン）はDay1診断完了時に自動生成されます。ここで編集できるのは全学習者共通の骨格です。
+        </p>
         <div className="flex gap-3">
           <button className="btn-primary flex-1 text-center" disabled={saving} onClick={() => onSave({
             theme,
-            tasks: tasks.split("\n").map(s => s.trim()).filter(Boolean),
-            ai_message: { morning, evening_reminder: evening, completion },
+            task_types: isRestDay ? [] : taskTypes.map(({ type, label, base_minutes }) => ({ type, label, base_minutes })),
             is_rest_day: isRestDay,
           })}>
             {saving ? "保存中…" : "保存する"}

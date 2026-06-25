@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -20,7 +20,13 @@ from app.models.category_content import CategoryContent
 from app.models.creator_profile import CreatorProfile
 from app.models.customer import Customer
 from app.models.character import Character
+from app.models.learner_profile import LearnerProfile
+from app.models.learner_course_day import LearnerCourseDay
+from app.models.daily_summary import DailySummary
+from app.models.day_log import DayLog
 from app.routers.courses import _is_accessible
+
+MAX_MESSAGE_LENGTH = 150
 
 # 同一トピックでこの回数以上質問が続いたらTier Bアップグレードを提案する（事業検証ポイント①、MVP後に実データで調整予定）
 FRUSTRATION_THRESHOLD = 3
@@ -122,6 +128,67 @@ def _notify_creator_of_pending_question(db: Session, course: Course, question_bo
 class AskRequest(BaseModel):
     body: str
 
+    @model_validator(mode="after")
+    def _validate_length(self):
+        if len(self.body) > MAX_MESSAGE_LENGTH:
+            raise ValueError(f"メッセージは{MAX_MESSAGE_LENGTH}文字以内で入力してください")
+        return self
+
+
+def _get_current_day_number(db: Session, user_id: int, course_id: int) -> int:
+    """完了済み日次ログ数+1を「今日」とする（30日でキャップ）。"""
+    completed = db.query(DayLog).filter(
+        DayLog.user_id == user_id, DayLog.course_id == course_id, DayLog.is_completed == True,  # noqa: E712
+    ).count()
+    return min(completed + 1, 30)
+
+
+def _get_today_context(db: Session, user_id: int, course_id: int) -> tuple[int, list, list[str]]:
+    """今日のタスク(Layer2)と直近3日分の圧縮サマリー(Layer3用コンテキスト)を取得する。"""
+    day_number = _get_current_day_number(db, user_id, course_id)
+    profile = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == user_id, LearnerProfile.course_id == course_id
+    ).first()
+    today_tasks: list = []
+    if profile:
+        learner_day = db.query(LearnerCourseDay).filter(
+            LearnerCourseDay.learner_profile_id == profile.id, LearnerCourseDay.day_number == day_number,
+        ).first()
+        if learner_day:
+            today_tasks = learner_day.adjusted_tasks or []
+    summaries = db.query(DailySummary).filter(
+        DailySummary.user_id == user_id, DailySummary.course_id == course_id,
+        DailySummary.day_number >= max(1, day_number - 3), DailySummary.day_number < day_number,
+    ).order_by(DailySummary.day_number).all()
+    return day_number, today_tasks, [s.summary for s in summaries]
+
+
+def _generate_and_save_daily_summary(db: Session, user_id: int, course_id: int, day_number: int) -> None:
+    """当日の質問・回答ログを圧縮してdaily_summariesにupsertする。失敗時はデフォルト文を保存する（13.5）。"""
+    if db.query(DailySummary).filter(
+        DailySummary.user_id == user_id, DailySummary.course_id == course_id, DailySummary.day_number == day_number,
+    ).first():
+        return
+    today_questions = db.query(Question).filter(
+        Question.user_id == user_id, Question.course_id == course_id,
+    ).order_by(Question.created_at).all()
+    log_lines = []
+    for q in today_questions:
+        log_lines.append(f"学習者: {q.body}")
+        for a in q.answers:
+            log_lines.append(f"回答: {a.body}")
+    try:
+        summary_text = generate_text(
+            prompts.DAILY_SUMMARY_SYSTEM,
+            prompts.build_daily_summary_messages("\n".join(log_lines) or "（本日の会話なし）"),
+            max_tokens=150,
+            model=settings.ANTHROPIC_MODEL_HAIKU,
+        )
+    except LLMError:
+        summary_text = "本日のサマリー生成失敗。感情: 不明"
+    db.add(DailySummary(user_id=user_id, course_id=course_id, day_number=day_number, summary=summary_text))
+    db.commit()
+
 
 def _serialize_question(q: Question, frustration_signal: Optional[dict] = None) -> dict:
     answer = q.answers[-1] if q.answers else None
@@ -150,6 +217,8 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     course = _get_accessible_course(db, course_id, current_user)
     if not data.body.strip():
         raise HTTPException(status_code=400, detail="質問内容を入力してください")
+    if prompts.check_injection(data.body):
+        raise HTTPException(status_code=400, detail="このメッセージは送信できません")
 
     enforce_daily_message_limit(current_user.id, course_id)
 
@@ -160,6 +229,7 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     route_to_instructor = tier == "B" and not _today_questions_used_by_tier_b(db, current_user.id, course_id)
 
     personality = _get_personality_profile(db, course) or {}
+    day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
     existing_category_names = [
         c.name for c in db.query(QuestionCategory).filter(QuestionCategory.creator_id == creator_id).all()
     ] if creator_id else []
@@ -196,7 +266,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
         try:
             draft_body = generate_text(
                 prompts.build_answer_system(personality, message_type),
-                prompts.build_answer_messages(data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None),
+                prompts.build_answer_messages(
+                    data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
+                    today_tasks, recent_summaries,
+                ),
                 max_tokens=400,
                 model=settings.ANTHROPIC_MODEL,
             )
@@ -206,6 +279,8 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
         db.commit()
         db.refresh(question)
         _notify_creator_of_pending_question(db, course, data.body)
+        if prompts.is_daily_close_signal(data.body):
+            _generate_and_save_daily_summary(db, current_user.id, course_id, day_number)
         return _serialize_question(question)
 
     # Tier A（またはTier Bの2回目以降）：AIが自動回答。
@@ -215,7 +290,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     try:
         answer_body = generate_text(
             prompts.build_answer_system(personality, message_type),
-            prompts.build_answer_messages(data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None),
+            prompts.build_answer_messages(
+                data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
+                today_tasks, recent_summaries,
+            ),
             max_tokens=400,
             model=answer_model,
         )
@@ -226,6 +304,9 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     db.add(Answer(question_id=question.id, answered_by="ai", body=answer_body, linked_content_url=linked_content.url if linked_content else None, is_draft=False))
     db.commit()
     db.refresh(question)
+
+    if prompts.is_daily_close_signal(data.body):
+        _generate_and_save_daily_summary(db, current_user.id, course_id, day_number)
 
     # Tier A学習者が同一トピックで繰り返し質問している場合、Tier Bアップグレードを提案する（事業検証ポイント①）
     frustration_signal = _detect_frustration(db, current_user.id, course_id, category) if tier == "A" else None
@@ -240,6 +321,38 @@ def get_chat_history(course_id: int, current_user=Depends(get_current_user), db:
         Question.user_id == current_user.id, Question.course_id == course_id
     ).order_by(Question.created_at).all()
     return [_serialize_question(q) for q in questions]
+
+
+@router.get("/{course_id}/today-message")
+def get_today_message(course_id: int, type: str = "morning", current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Layer3: 今日の朝/夜の声かけメッセージを都度生成する。type は 'morning' または 'evening'。要(購入済み学習者)"""
+    if type not in ("morning", "evening"):
+        raise HTTPException(status_code=400, detail="type は 'morning' または 'evening' を指定してください")
+    course = _get_accessible_course(db, course_id, current_user)
+    personality = _get_personality_profile(db, course) or {}
+    day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
+    try:
+        message = generate_text(
+            prompts.build_today_message_system(personality, type),
+            prompts.build_today_message_user(day_number, today_tasks, recent_summaries),
+            max_tokens=300,
+            model=settings.ANTHROPIC_MODEL_HAIKU,
+        )
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"メッセージの生成に失敗しました: {e}") from e
+    return {"day_number": day_number, "type": type, "message": message}
+
+
+@router.post("/{course_id}/daily-summary")
+def post_daily_summary(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """当日のチャットログを圧縮してdaily_summariesに保存する。要(購入済み学習者)"""
+    _get_accessible_course(db, course_id, current_user)
+    day_number = _get_current_day_number(db, current_user.id, course_id)
+    _generate_and_save_daily_summary(db, current_user.id, course_id, day_number)
+    summary = db.query(DailySummary).filter(
+        DailySummary.user_id == current_user.id, DailySummary.course_id == course_id, DailySummary.day_number == day_number,
+    ).first()
+    return {"day_number": day_number, "summary": summary.summary if summary else None}
 
 
 def _get_own_creator_profile(db: Session, current_user) -> CreatorProfile:

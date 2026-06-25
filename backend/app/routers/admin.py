@@ -70,6 +70,50 @@ def reject_creator_application(profile_id: int, data: RejectRequest, admin=Depen
     return {"message": "却下しました"}
 
 
+# ----- クリエイター一覧管理（承認済み・停止済みも含む全件） -----
+
+@router.get("/creators")
+def list_all_creators(admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """全クリエイター一覧（pending/active/suspendedすべて）。要(管理者)"""
+    profiles = db.query(CreatorProfile).order_by(CreatorProfile.id.desc()).all()
+    result = []
+    for p in profiles:
+        user = db.query(Customer).filter(Customer.id == p.user_id).first()
+        course_count = db.query(Course).filter(Course.character_id == (p.character.id if p.character else None)).count() if p.character else 0
+        result.append({
+            "id": p.id,
+            "username": user.username if user else None,
+            "email": user.email if user else None,
+            "status": p.status,
+            "speciality": p.speciality,
+            "character_name": p.character.name if p.character else None,
+            "course_count": course_count,
+        })
+    return result
+
+
+@router.put("/creators/{profile_id}/suspend")
+def suspend_creator(profile_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """承認済みクリエイターを停止する（新規コース作成・コンテンツ生成を不可にする）。要(管理者)"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイターが見つかりません")
+    profile.status = "suspended"
+    db.commit()
+    return {"message": "クリエイターを停止しました"}
+
+
+@router.put("/creators/{profile_id}/reactivate")
+def reactivate_creator(profile_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """停止中のクリエイターを再度activeに戻す。要(管理者)"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイターが見つかりません")
+    profile.status = "active"
+    db.commit()
+    return {"message": "クリエイターを再開しました"}
+
+
 # ----- G-02: 違反コンテンツ・コースの停止 -----
 
 @router.get("/courses")

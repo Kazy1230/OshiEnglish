@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -120,7 +120,7 @@ def subscribe_to_course(
     current_user: Customer = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """90日伴走コースの月額サブスクリプション（Tier A / Tier B）を開始する。"""
+    """30日伴走コースの月額サブスクリプション（Tier A / Tier B）を開始する。"""
     if data.tier not in ("A", "B"):
         raise HTTPException(status_code=400, detail="tier は 'A' または 'B' を指定してください")
 
@@ -355,7 +355,12 @@ def _handle_subscription_updated(db: Session, subscription: dict):
     if not sub:
         return
     status_map = {"active": "active", "trialing": "active", "past_due": "past_due", "canceled": "canceled", "unpaid": "past_due", "incomplete": "incomplete", "incomplete_expired": "canceled"}
-    sub.status = status_map.get(subscription.get("status"), sub.status)
+    new_status = status_map.get(subscription.get("status"), sub.status)
+    if new_status == "past_due" and sub.status != "past_due":
+        sub.past_due_since = datetime.now(timezone.utc)
+    elif new_status == "active":
+        sub.past_due_since = None
+    sub.status = new_status
     period_end = subscription.get("current_period_end")
     if period_end:
         sub.current_period_end = datetime.utcfromtimestamp(period_end)

@@ -6,14 +6,19 @@ import { api } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
+type AdjustedTask = { type: string; minutes: number };
 type Day = {
   day: number;
   week_number: number;
   theme: string | null;
-  tasks: string[] | null;
   is_rest_day: boolean;
 };
+type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
+
+const TASK_TYPE_LABEL: Record<string, string> = {
+  vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
+};
 
 export default function CourseSchedulePage() {
   const params = useParams();
@@ -21,6 +26,7 @@ export default function CourseSchedulePage() {
   const courseId = Number(params.id);
 
   const [days, setDays] = useState<Day[]>([]);
+  const [learnerTasksByDay, setLearnerTasksByDay] = useState<Record<number, AdjustedTask[]>>({});
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
@@ -34,14 +40,18 @@ export default function CourseSchedulePage() {
           router.replace(`/courses/${courseId}`);
           return;
         }
-        const [d, l] = await Promise.all([
+        const [d, l, learnerDays] = await Promise.all([
           api.listCourseDays(courseId).catch(() => [] as Day[]),
           api.listDayLogs(courseId).catch(() => [] as DayLog[]),
+          api.listLearnerCourseDays(courseId).catch(() => [] as LearnerDay[]),
         ]);
         setDays(d);
         const byDay: Record<number, DayLog> = {};
         for (const log of l) byDay[log.day_number] = log;
         setLogs(byDay);
+        const tasksByDay: Record<number, AdjustedTask[]> = {};
+        for (const ld of learnerDays) tasksByDay[ld.day] = ld.adjusted_tasks ?? [];
+        setLearnerTasksByDay(tasksByDay);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
       } finally {
@@ -54,7 +64,7 @@ export default function CourseSchedulePage() {
   if (loading) return <Skeleton />;
 
   const completedCount = Object.values(logs).filter(l => l.is_completed).length;
-  const currentDay = Math.min(completedCount + 1, 90);
+  const currentDay = Math.min(completedCount + 1, 30);
 
   return (
     <div>
@@ -67,9 +77,9 @@ export default function CourseSchedulePage() {
           <>
             <div className="flex items-center gap-3">
               <div className="flex-1 h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
-                <div className="h-2 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedCount / 90) * 100)}%` }} />
+                <div className="h-2 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedCount / 30) * 100)}%` }} />
               </div>
-              <span className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedCount}/90日 完了</span>
+              <span className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedCount}/30日 完了</span>
             </div>
 
             <p className="text-xs" style={{ color: "var(--muted)" }}>
@@ -115,6 +125,7 @@ export default function CourseSchedulePage() {
         <DayDetailPanel
           courseId={courseId}
           day={selectedDay}
+          tasks={learnerTasksByDay[selectedDay.day] ?? []}
           log={logs[selectedDay.day] ?? null}
           isToday={selectedDay.day === currentDay}
           onClose={() => setSelectedDay(null)}
@@ -124,7 +135,7 @@ export default function CourseSchedulePage() {
   );
 }
 
-function DayDetailPanel({ courseId, day, log, isToday, onClose }: { courseId: number; day: Day; log: DayLog | null; isToday: boolean; onClose: () => void }) {
+function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { courseId: number; day: Day; tasks: AdjustedTask[]; log: DayLog | null; isToday: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div className="card max-w-lg w-full max-h-[90vh] overflow-y-auto flex flex-col gap-3" style={{ background: "var(--card-bg, #fff)" }} onClick={e => e.stopPropagation()}>
@@ -142,9 +153,9 @@ function DayDetailPanel({ courseId, day, log, isToday, onClose }: { courseId: nu
         ) : (
           <>
             {day.theme && <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{day.theme}</p>}
-            {day.tasks && day.tasks.length > 0 && (
+            {tasks.length > 0 && (
               <ul className="text-sm list-disc pl-5" style={{ color: "var(--text)" }}>
-                {day.tasks.map((t, i) => <li key={i}>{t}</li>)}
+                {tasks.map((t, i) => <li key={i}>{TASK_TYPE_LABEL[t.type] ?? t.type}（{t.minutes}分）</li>)}
               </ul>
             )}
           </>

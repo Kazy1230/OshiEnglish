@@ -65,7 +65,7 @@ export default function MyPage() {
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Link href={`/courses/${c.course_id}/chat`} className="btn-primary flex-1 text-center">伴走チャットへ</Link>
-                    <Link href={`/courses/${c.course_id}/schedule`} className="btn-ghost flex-1 text-center">90日スケジュール</Link>
+                    <Link href={`/courses/${c.course_id}/schedule`} className="btn-ghost flex-1 text-center">30日スケジュール</Link>
                     <Link href={`/courses/${c.course_id}`} className="btn-ghost flex-1 text-center">コース詳細</Link>
                   </div>
                 </div>

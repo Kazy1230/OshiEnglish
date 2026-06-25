@@ -13,7 +13,7 @@ type CharacterSummary = { id: number; name: string };
 type ConsultResult = { titles: string[]; structure: string[]; target_level: string; target_audience: string };
 
 export default function StudioPage() {
-  const { loading } = useRoleGuard(["creator", "admin"]);
+  const { me, loading } = useRoleGuard(["creator", "admin"]);
   const router = useRouter();
   const [step, setStep] = useState(0);
 
@@ -47,7 +47,15 @@ export default function StudioPage() {
         setStep(s => Math.max(s, 1));
       }
     }).catch(() => {}).finally(() => setLoadingCharacter(false));
-  }, [loading]);
+    if (me?.role !== "admin") {
+      api.getMyCreatorProfile().then(p => {
+        if (p.status !== "active") {
+          toast("クリエイター申請が承認されるまでスタジオは利用できません", "error");
+          router.replace("/dashboard");
+        }
+      }).catch(() => {});
+    }
+  }, [loading, me, router]);
 
   if (loading || loadingCharacter) return <Skeleton />;
 

@@ -90,6 +90,7 @@ export const api = {
   applyAsCreatorPublic: (data: object) => apiFetch("/creators/apply-public", { method: "POST", body: JSON.stringify(data) }),
   getMyCreatorProfile: () => apiFetch("/creators/me"),
   updateMyCreatorProfile: (data: object) => apiFetch("/creators/me", { method: "PUT", body: JSON.stringify(data) }),
+  generateCreatorIntro: () => apiFetch("/creators/me/generate-intro", { method: "POST" }),
 
   // AIインタビュー（人格収集）
   startInterview: () => apiFetch("/interview/start", { method: "POST" }),
@@ -120,14 +121,14 @@ export const api = {
   reorderLessons: (courseId: number, lessonIds: number[]) =>
     apiFetch(`/courses/${courseId}/lessons/reorder`, { method: "PUT", body: JSON.stringify({ lesson_ids: lessonIds }) }),
 
-  // 90日伴走コース：自動生成・日単位編集
+  // 30日伴走コース：自動生成・日単位編集
   generateCourseDays: (courseId: number) => apiFetch(`/courses/${courseId}/generate-days`, { method: "POST" }),
   getCourseGenerationStatus: (courseId: number) => apiFetch(`/courses/${courseId}/generation-status`),
   listCourseDays: (courseId: number) => apiFetch(`/courses/${courseId}/days`),
   updateCourseDay: (courseId: number, dayNumber: number, data: object) =>
     apiFetch(`/courses/${courseId}/days/${dayNumber}`, { method: "PUT", body: JSON.stringify(data) }),
 
-  // 90日伴走コース：参考資料
+  // 30日伴走コース：参考資料
   listCourseMaterials: (courseId: number) => apiFetch(`/courses/${courseId}/materials`),
   addCourseMaterial: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/materials`, { method: "POST", body: JSON.stringify(data) }),
@@ -137,7 +138,7 @@ export const api = {
   checkoutCourse: (courseId: number) =>
     apiFetch("/payments/checkout", { method: "POST", body: JSON.stringify({ course_id: courseId }) }),
 
-  // 90日伴走コース：月額サブスクリプション（Tier A / Tier B）
+  // 30日伴走コース：月額サブスクリプション（Tier A / Tier B）
   subscribeToCourse: (courseId: number, tier: "A" | "B") =>
     apiFetch("/payments/subscribe", { method: "POST", body: JSON.stringify({ course_id: courseId, tier }) }),
   cancelSubscription: (subscriptionId: number) =>
@@ -178,12 +179,13 @@ export const api = {
   submitDiagnosis: (courseId: number, data: object) =>
     apiFetch(`/diagnosis/${courseId}/submit`, { method: "POST", body: JSON.stringify(data) }),
   getRoadmap: (courseId: number) => apiFetch(`/diagnosis/${courseId}/roadmap`),
+  listLearnerCourseDays: (courseId: number) => apiFetch(`/diagnosis/${courseId}/learner-days`),
   getNotificationSettings: (courseId: number) => apiFetch(`/diagnosis/${courseId}/notification-settings`),
   updateNotificationSettings: (courseId: number, data: object) =>
     apiFetch(`/diagnosis/${courseId}/notification-settings`, { method: "PUT", body: JSON.stringify(data) }),
   getReviews: (courseId: number) => apiFetch(`/diagnosis/${courseId}/reviews`),
 
-  // 90日伴走コース：日次学習ログ
+  // 30日伴走コース：日次学習ログ
   listDayLogs: (courseId: number) => apiFetch(`/courses/${courseId}/day-logs`),
   completeDayLog: (courseId: number, dayNumber: number, memo?: string) =>
     apiFetch(`/courses/${courseId}/day-logs/${dayNumber}/complete`, { method: "PUT", body: JSON.stringify({ memo: memo ?? null }) }),
@@ -192,6 +194,9 @@ export const api = {
   askChatQuestion: (courseId: number, body: string) =>
     apiFetch(`/chat/${courseId}/ask`, { method: "POST", body: JSON.stringify({ body }) }),
   getChatHistory: (courseId: number) => apiFetch(`/chat/${courseId}/history`),
+  getTodayMessage: (courseId: number, type: "morning" | "evening") =>
+    apiFetch(`/chat/${courseId}/today-message?type=${type}`),
+  postDailySummary: (courseId: number) => apiFetch(`/chat/${courseId}/daily-summary`, { method: "POST" }),
 
   // クリエイター向け：Tier B未回答質問の承認
   listPendingQuestions: () => apiFetch("/chat/creator/pending"),
@@ -230,5 +235,15 @@ export const api = {
   adminListReports: () => apiFetch("/admin/reports"),
   adminResolveReport: (reportId: number) => apiFetch(`/admin/reports/${reportId}/resolve`, { method: "PUT" }),
   adminListTierBOverdue: () => apiFetch("/admin/tier-b-overdue"),
+  adminListAllCreators: () => apiFetch("/admin/creators"),
+  adminSuspendCreator: (profileId: number) => apiFetch(`/admin/creators/${profileId}/suspend`, { method: "PUT" }),
+  adminReactivateCreator: (profileId: number) => apiFetch(`/admin/creators/${profileId}/reactivate`, { method: "PUT" }),
+
+  // 管理者機能：ユーザー（顧客）管理
+  adminListCustomers: () => apiFetch("/customers/"),
+  adminUpdateCustomer: (customerId: number, data: object) =>
+    apiFetch(`/customers/${customerId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  adminReissuePassword: (customerId: number) => apiFetch(`/customers/${customerId}/reissue-password`, { method: "POST" }),
+  adminDeleteCustomer: (customerId: number) => apiFetch(`/customers/${customerId}`, { method: "DELETE" }),
 
 };

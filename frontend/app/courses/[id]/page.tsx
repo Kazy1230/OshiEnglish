@@ -213,9 +213,9 @@ export default function CourseDetailPage() {
                 </span>
                 <div className="flex items-center gap-3 flex-wrap">
                   <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>メンターに相談する</Link>
                   {course.has_days && (
-                    <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>90日スケジュール</Link>
+                    <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>30日スケジュール</Link>
                   )}
                   <Link href={`/courses/${courseId}/reviews`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>週次・月次レビュー</Link>
                   {course.my_subscription && (() => {
@@ -279,18 +279,18 @@ export default function CourseDetailPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
                 <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>メンターに相談する</Link>
                 {course.has_days && (
-                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>90日スケジュール</Link>
+                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>30日スケジュール</Link>
                 )}
               </div>
             ) : course.is_free ? (
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
                 <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>AIに相談する</Link>
+                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>メンターに相談する</Link>
                 {course.has_days && (
-                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>90日スケジュール</Link>
+                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>30日スケジュール</Link>
                 )}
               </div>
             ) : (

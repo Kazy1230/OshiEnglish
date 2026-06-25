@@ -13,6 +13,8 @@ class CreatorProfile(Base):
     bio = Column(Text, nullable=True)
     speciality = Column(String(255), nullable=True)  # 専門分野
     experience = Column(Text, nullable=True)  # 指導実績
+    # 人格プロファイルの口調を反映したAI生成の自己紹介文（クリエイターが手動で生成・保存する。都度生成はしない）
+    self_intro = Column(Text, nullable=True)
     sns_youtube = Column(String(500), nullable=True)
     sns_instagram = Column(String(500), nullable=True)
     sns_twitter = Column(String(500), nullable=True)

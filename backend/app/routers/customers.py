@@ -147,6 +147,28 @@ def withdraw(current_user: Customer = Depends(get_current_user), db: Session = D
     if current_user.role == "admin":
         raise HTTPException(status_code=403, detail="管理者アカウントは退会できません")
 
+    if current_user.role == "creator":
+        from app.models.creator_profile import CreatorProfile
+        from app.models.character import Character
+        from app.models.course import Course
+        from app.models.course_subscription import CourseSubscription
+
+        creator_profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+        if creator_profile:
+            course_ids = [
+                c.id for c in db.query(Course).join(Character, Course.character_id == Character.id)
+                .filter(Character.creator_id == creator_profile.id).all()
+            ]
+            active_count = db.query(CourseSubscription).filter(
+                CourseSubscription.course_id.in_(course_ids),
+                CourseSubscription.status.in_(["active", "past_due"]),
+            ).count() if course_ids else 0
+            if active_count > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"在籍中の学習者が{active_count}名います。運営にご連絡のうえ、返金・引き継ぎ対応の完了後に退会してください。",
+                )
+
     if current_user.stripe_subscription_id and settings.STRIPE_SECRET_KEY:
         try:
             import stripe

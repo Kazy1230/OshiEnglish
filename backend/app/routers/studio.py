@@ -24,6 +24,16 @@ def _get_own_creator_profile_id(db: Session, current_user) -> Optional[int]:
     raise HTTPException(status_code=400, detail="クリエイタープロフィールが見つかりません")
 
 
+def _require_active_creator(db: Session, current_user) -> None:
+    """コンテンツ生成(LLM呼び出しを伴う)は、運営の承認(status='active')が済んだクリエイターのみ利用できる。
+    未承認の申請者がAPIコストを発生させ続けられる状態を防ぐ。"""
+    if current_user.role == "admin":
+        return
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile or profile.status != "active":
+        raise HTTPException(status_code=403, detail="クリエイター申請が承認されるまでコンテンツ生成は利用できません")
+
+
 def _get_owned_character(db: Session, character_id: int, current_user) -> Character:
     char = db.query(Character).filter(Character.id == character_id).first()
     if not char:
@@ -74,7 +84,9 @@ class ConsultRequest(BaseModel):
 def consult(
     data: ConsultRequest,
     current_user=Depends(get_current_creator_or_admin),
+    db: Session = Depends(get_db),
 ):
+    _require_active_creator(db, current_user)
     try:
         text = generate_text(prompts.CONSULT_SYSTEM, prompts.build_consult_messages(data.theme))
         return extract_json(text)
@@ -96,6 +108,7 @@ def generate_raw(
     current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
+    _require_active_creator(db, current_user)
     creator_id = _get_own_creator_profile_id(db, current_user)
     draft = ContentDraft(
         creator_id=creator_id,
@@ -145,6 +158,7 @@ def generate_voiced(
     current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
+    _require_active_creator(db, current_user)
     draft = _get_owned_draft(db, data.draft_id, current_user)
     character = _get_owned_character(db, data.character_id, current_user)
     if not draft.raw_content:
@@ -190,6 +204,7 @@ def generate_script(
     current_user=Depends(get_current_creator_or_admin),
     db: Session = Depends(get_db),
 ):
+    _require_active_creator(db, current_user)
     draft = _get_owned_draft(db, data.draft_id, current_user)
     _get_owned_character(db, data.character_id, current_user)
     if not draft.voiced_content:

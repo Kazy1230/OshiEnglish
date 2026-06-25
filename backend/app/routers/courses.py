@@ -47,11 +47,20 @@ def _is_purchased(db: Session, user_id: Optional[int], course_id: int) -> bool:
     ).first() is not None
     if has_one_time_purchase:
         return True
-    return db.query(CourseSubscription).filter(
+    sub = db.query(CourseSubscription).filter(
         CourseSubscription.user_id == user_id,
         CourseSubscription.course_id == course_id,
-        CourseSubscription.status == "active",
-    ).first() is not None
+        CourseSubscription.status.in_(["active", "past_due"]),
+    ).first()
+    if not sub:
+        return False
+    if sub.status == "active":
+        return True
+    # past_due（決済失敗）でも3日間は猶予期間としてアクセスを許可する
+    from datetime import datetime, timezone, timedelta
+    if not sub.past_due_since:
+        return True
+    return datetime.now(timezone.utc) < sub.past_due_since.replace(tzinfo=timezone.utc) + timedelta(days=3)
 
 
 def _is_accessible(db: Session, course: Course, user_id: Optional[int]) -> bool:
@@ -107,12 +116,7 @@ def _serialize_course_day(day: CourseDay) -> dict:
         "day": day.day_number,
         "week_number": day.week_number,
         "theme": day.theme,
-        "tasks": day.tasks,
-        "ai_message": {
-            "morning": day.ai_message_morning,
-            "evening_reminder": day.ai_message_evening,
-            "completion": day.ai_message_completion,
-        },
+        "task_types": day.task_types,
         "is_rest_day": day.is_rest_day,
         "is_edited_by_creator": day.is_edited_by_creator,
     }
@@ -198,10 +202,7 @@ class CourseUpdate(BaseModel):
 
 class CourseDayUpdate(BaseModel):
     theme: Optional[str] = None
-    tasks: Optional[List[str]] = None
-    ai_message_morning: Optional[str] = None
-    ai_message_evening: Optional[str] = None
-    ai_message_completion: Optional[str] = None
+    task_types: Optional[List[dict]] = None
     is_rest_day: Optional[bool] = None
 
 
@@ -400,7 +401,7 @@ def create_course(data: CourseCreate, current_user=Depends(get_current_user), db
     if not character:
         raise HTTPException(status_code=400, detail="先にAIインタビューを完了し、人格(キャラクター)を作成してください")
 
-    # 90日コース生成にはクリエイター本人の人格プロファイルを使う
+    # 30日コース生成にはクリエイター本人の人格プロファイルを使う
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
 
     course = Course(
@@ -451,7 +452,7 @@ def submit_course_for_review(course_id: int, current_user=Depends(get_current_us
     if course.status != "draft":
         raise HTTPException(status_code=400, detail="公開申請できるのはdraft状態のコースのみです")
     if len(course.lessons) == 0 and len(course.days) == 0:
-        raise HTTPException(status_code=400, detail="レッスンまたは90日分のコンテンツが1件以上ないと公開申請できません")
+        raise HTTPException(status_code=400, detail="レッスンまたは30日分のコンテンツが1件以上ないと公開申請できません")
     if current_user.role != "admin":
         profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
         if not profile or profile.status != "active":
@@ -530,12 +531,11 @@ def reorder_lessons(course_id: int, data: ReorderRequest, current_user=Depends(g
     return {"lessons": [{"id": l.id, "order": l.order, "title": l.title} for l in lessons]}
 
 
-# ----- 90日伴走コース：自動生成・日単位編集 -----
+# ----- 30日伴走コース：Layer1骨格自動生成・日単位編集 -----
 
 def _run_course_days_generation(course_id: int):
-    """90日分の生成本体。週単位で13回のAI呼び出しを行うため数分かかる。
-    requestのDBセッションが閉じた後も動くようバックグラウンドタスクとして実行し、
-    自前でSessionLocal()を開く。週ごとにコミットすることでポーリング側に進行状況が見える。"""
+    """Layer1（概念コース骨格）の生成本体。1回のAI呼び出しで30日分をまとめて生成する（目安15秒）。
+    requestのDBセッションが閉じた後も動くようバックグラウンドタスクとして実行し、自前でSessionLocal()を開く。"""
     from app.core.database import SessionLocal
 
     db = SessionLocal()
@@ -545,43 +545,33 @@ def _run_course_days_generation(course_id: int):
             return
         personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
 
-        day_cursor = 1
-        for week_number in range(1, 14):
-            day_count = gen_prompts.days_in_week(week_number)
-            try:
-                text = generate_text(
-                    gen_prompts.COURSE_DAY_GENERATION_SYSTEM,
-                    gen_prompts.build_course_day_generation_messages(
-                        personality.profile, course.title, course.goal, course.target_learner, course.intensity,
-                        week_number, day_cursor, day_count,
-                    ),
-                    max_tokens=6000,
-                )
-                days_data = gen_prompts.extract_json_array(text)
-                if len(days_data) != day_count:
-                    raise LLMError(f"{day_count}日分のはずが{len(days_data)}日分でした")
-            except LLMError as e:
-                course.days_generation_status = "failed"
-                course.days_generation_error = f"第{week_number}週の生成に失敗しました: {e}"
-                db.commit()
-                return
-
-            for offset, day_data in enumerate(days_data):
-                ai_message = day_data.get("ai_message", {})
-                db.add(CourseDay(
-                    course_id=course.id,
-                    day_number=day_cursor + offset,
-                    week_number=week_number,
-                    theme=day_data.get("theme"),
-                    tasks=day_data.get("tasks"),
-                    ai_message_morning=ai_message.get("morning"),
-                    ai_message_evening=ai_message.get("evening_reminder"),
-                    ai_message_completion=ai_message.get("completion"),
-                    is_rest_day=bool(day_data.get("is_rest_day", False)),
-                ))
+        try:
+            text = generate_text(
+                gen_prompts.COURSE_DAY_GENERATION_SYSTEM,
+                gen_prompts.build_course_day_generation_messages(
+                    personality.profile, course.title, course.goal, course.target_learner, course.intensity,
+                ),
+                max_tokens=4000,
+            )
+            days_data = gen_prompts.extract_json_array(text)
+            if len(days_data) != 30:
+                raise LLMError(f"30日分のはずが{len(days_data)}日分でした")
+        except LLMError as e:
+            course.days_generation_status = "failed"
+            course.days_generation_error = f"コース骨格の生成に失敗しました: {e}"
             db.commit()
-            day_cursor += day_count
+            return
 
+        for day_data in days_data:
+            day_number = day_data.get("day")
+            db.add(CourseDay(
+                course_id=course.id,
+                day_number=day_number,
+                week_number=day_data.get("week") or ((day_number - 1) // 7 + 1),
+                theme=day_data.get("theme"),
+                task_types=day_data.get("task_types"),
+                is_rest_day=bool(day_data.get("is_rest_day", False)),
+            ))
         course.days_generation_status = "completed"
         db.commit()
     finally:
@@ -590,8 +580,8 @@ def _run_course_days_generation(course_id: int):
 
 @router.post("/courses/{course_id}/generate-days", status_code=status.HTTP_202_ACCEPTED)
 def generate_course_days(course_id: int, background_tasks: BackgroundTasks, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """人格プロファイル＋コース基本情報をもとに90日分の日次コンテンツをAI生成する。要(本人)。
-    週単位で13回のAI呼び出しを行うため数分かかる。バックグラウンドで実行し即座に202を返す。
+    """人格プロファイル＋コース基本情報をもとに30日分のコース骨格(Layer1)をAI生成する。要(本人)。
+    1回のAI呼び出しで完結するため目安15秒。バックグラウンドで実行し即座に202を返す。
     進行状況は GET /courses/{course_id}/generation-status をポーリングして確認する。"""
     course = _get_owned_course(db, course_id, current_user)
     if course.days_generation_status == "generating":
@@ -616,20 +606,20 @@ def generate_course_days(course_id: int, background_tasks: BackgroundTasks, curr
 
 @router.get("/courses/{course_id}/generation-status")
 def get_course_generation_status(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """90日生成の進行状況をポーリングするためのエンドポイント（フロントエンドのプログレスバー用）。要(本人)"""
+    """コース骨格(Layer1)生成の進行状況をポーリングするためのエンドポイント。要(本人)"""
     course = _get_owned_course(db, course_id, current_user)
     day_count = db.query(CourseDay).filter(CourseDay.course_id == course.id).count()
     return {
         "status": course.days_generation_status,
         "error": course.days_generation_error,
         "days_done": day_count,
-        "days_total": 90,
+        "days_total": 30,
     }
 
 
 @router.get("/courses/{course_id}/days")
 def list_course_days(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """90日分の日次コンテンツ一覧（カレンダービュー用）。要(本人または購入済み学習者)"""
+    """30日分のコース骨格(Layer1)一覧（カレンダービュー用）。要(本人または購入済み学習者)"""
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="コースが見つかりません")
@@ -793,7 +783,7 @@ def complete_lesson(lesson_id: int, current_user=Depends(get_current_user), db: 
     return {"message": "レッスンを完了にしました"}
 
 
-# ----- 90日伴走コース：日次学習ログ（Day1〜90の完了状況） -----
+# ----- 30日伴走コース：日次学習ログ（Day1〜30の完了状況） -----
 
 @router.get("/courses/{course_id}/day-logs")
 def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
@@ -813,7 +803,7 @@ def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Se
             "completed_at": by_day[d].completed_at if d in by_day else None,
             "memo": by_day[d].memo if d in by_day else None,
         }
-        for d in range(1, 91)
+        for d in range(1, 31)
     ]
 
 
@@ -831,8 +821,8 @@ def complete_day_log(course_id: int, day_number: int, data: DayLogCompleteReques
         raise HTTPException(status_code=404, detail="コースが見つかりません")
     if not _is_accessible(db, course, current_user.id):
         raise HTTPException(status_code=403, detail="このコースを購入していません")
-    if not (1 <= day_number <= 90):
-        raise HTTPException(status_code=400, detail="day_numberは1〜90で指定してください")
+    if not (1 <= day_number <= 30):
+        raise HTTPException(status_code=400, detail="day_numberは1〜30で指定してください")
 
     log = db.query(DayLog).filter(
         DayLog.user_id == current_user.id, DayLog.course_id == course_id, DayLog.day_number == day_number

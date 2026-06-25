@@ -14,6 +14,8 @@ from app.models.notification import Notification
 from app.models.content_draft import ContentDraft
 from app.models.learner_profile import LearnerProfile
 from app.models.learner_roadmap import LearnerRoadmap
+from app.models.learner_course_day import LearnerCourseDay
+from app.models.daily_summary import DailySummary
 from app.models.notification_setting import NotificationSetting
 from app.models.day_log import DayLog
 from app.models.course_subscription import CourseSubscription

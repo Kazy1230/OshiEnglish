@@ -17,12 +17,12 @@ class Course(Base):
     status = Column(String(20), nullable=False, default="draft")  # draft / published / unpublished
     price = Column(Integer, nullable=False, default=0)  # 単位: 円
     is_free = Column(Boolean, nullable=False, default=False)
-    # --- 90日伴走コース（v1.1） ---
+    # --- 30日伴走コース（v1.1） ---
     goal = Column(String(255), nullable=True)  # 例:「TOEIC800点を取得する」
     target_learner = Column(Text, nullable=True)  # 例:「現在600点前後・3ヶ月後に受験予定」
-    intensity = Column(String(100), nullable=True)  # 例:「1日30〜60分」。90日コース生成のインプットに使用
+    intensity = Column(String(100), nullable=True)  # 例:「1日30〜60分」。30日コース生成のインプットに使用
     personality_profile_id = Column(Integer, ForeignKey("personality_profiles.id"), nullable=True, index=True)
-    # 90日分の生成は週単位で複数回のAI呼び出しを要する（数分かかる）ため、バックグラウンドタスクで実行し
+    # 30日分の生成は週単位で複数回のAI呼び出しを要する（数分かかる）ため、バックグラウンドタスクで実行し
     # このカラムで進行状況を管理する（フロントエンドはポーリングしてプログレスバーを表示する）
     days_generation_status = Column(String(20), nullable=False, default="idle")  # idle / generating / completed / failed
     days_generation_error = Column(Text, nullable=True)

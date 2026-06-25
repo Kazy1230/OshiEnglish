@@ -12,7 +12,7 @@ type CharacterSummary = { id: number; name: string };
 
 export default function NewCoursePage() {
   const router = useRouter();
-  const { loading } = useRoleGuard(["creator", "admin"]);
+  const { me, loading } = useRoleGuard(["creator", "admin"]);
   const [character, setCharacter] = useState<CharacterSummary | null>(null);
   const [loadingCharacter, setLoadingCharacter] = useState(true);
   const [title, setTitle] = useState("");
@@ -27,7 +27,15 @@ export default function NewCoursePage() {
   useEffect(() => {
     if (loading) return;
     api.listMyCharacters().then(list => setCharacter(list[0] ?? null)).catch(() => {}).finally(() => setLoadingCharacter(false));
-  }, [loading]);
+    if (me?.role !== "admin") {
+      api.getMyCreatorProfile().then(p => {
+        if (p.status !== "active") {
+          toast("クリエイター申請が承認されるまでコースを作成できません", "error");
+          router.replace("/dashboard");
+        }
+      }).catch(() => {});
+    }
+  }, [loading, me, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +52,7 @@ export default function NewCoursePage() {
         tier_a_price: Number(tierAPrice),
         tier_b_price: enableTierB ? Number(tierBPrice) : null,
       });
-      toast("コースを作成しました。次に90日分のコンテンツを生成しましょう。", "success");
+      toast("コースを作成しました。次に30日分のコンテンツを生成しましょう。", "success");
       router.push(`/creator/courses/${course.id}/calendar`);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "作成に失敗しました", "error");
@@ -57,7 +65,7 @@ export default function NewCoursePage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="90日伴走コース新規作成" />
+      <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="30日伴走コース新規作成" />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <form onSubmit={handleSubmit} className="card flex flex-col gap-4">
           {character ? (
@@ -71,7 +79,7 @@ export default function NewCoursePage() {
           )}
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>コース名 *</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} required placeholder="例：TOEIC800達成 90日伴走コース" />
+            <input value={title} onChange={e => setTitle(e.target.value)} required placeholder="例：TOEIC800達成 30日伴走コース" />
           </div>
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>ゴール *</label>
@@ -103,7 +111,7 @@ export default function NewCoursePage() {
             )}
           </div>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            ※ 90日分の学習内容は次の画面でAIが自動生成します。生成には<a href="/creator/profile" style={{ color: "var(--accent)" }}>人格プロファイル</a>が必要です。
+            ※ 30日分の学習内容は次の画面でAIが自動生成します。生成には<a href="/creator/profile" style={{ color: "var(--accent)" }}>人格プロファイル</a>が必要です。
           </p>
           <button type="submit" className="btn-primary text-center" disabled={submitting || !character}>
             {submitting ? "作成中…" : "作成して次へ"}

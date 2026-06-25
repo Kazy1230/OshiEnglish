@@ -1,19 +1,21 @@
-# 90日伴走コース自動生成のプロンプト設計。
-# 設計書: docs/第2版/ManaVillage_コース生成ワークフロー詳細仕様.md セクション5
+# 30日伴走コース「概念コース骨格」(Layer1)生成のプロンプト設計。
+# 3層コース生成アーキテクチャ：
+#   Layer1(本ファイル) = クリエイターが1回だけ生成する全学習者共通の骨格。メッセージ文は持たない。
+#   Layer2 = 学習者の診断結果でタスク配分を個人化(personalize_prompts.py)。
+#   Layer3 = 毎日の動的メッセージ生成(chat_prompts.py)。
 #
-# 90日を13週（1〜12週=各7日、13週=6日、合計90日）に分割し、週ごとにAIへ生成依頼する。
-# 1回のAPI呼び出しで90日分を生成すると出力トークン量・JSON崩れのリスクが大きいため、
-# 週単位（最大7日分）で生成することで安定性を優先する設計とした
-# （詳細設計書が想定する「30〜60秒の一括生成」は、フロントエンド側で
-#  13週分の生成をプログレスバー付きで順次実行することで体感的に再現する）。
+# 旧設計（週単位13回のAI呼び出し、12〜13分）から、1回のAI呼び出しで30日分を
+# まとめて生成する方式に変更し、生成時間を約15秒に短縮する。
 import json
 import re
 
+TASK_TYPES = ["vocabulary", "listening", "grammar", "reading", "shadowing", "practice"]
+
 WEEK_PHASES = [
-    (1, 2, "基礎固め期"),
-    (3, 8, "実力養成期"),
-    (9, 12, "実戦演習期"),
-    (13, 13, "仕上げ・本番準備期"),
+    (1, 1, "基礎"),
+    (2, 2, "強化"),
+    (3, 3, "実践"),
+    (4, 4, "仕上げ"),
 ]
 
 
@@ -24,35 +26,30 @@ def phase_label_for_week(week_number: int) -> str:
     return "学習期"
 
 
-def days_in_week(week_number: int) -> int:
-    """週ごとの日数。1〜12週は7日、13週のみ6日（合計90日）。"""
-    return 6 if week_number == 13 else 7
+COURSE_DAY_GENERATION_SYSTEM = """あなたは英語学習コースの設計専門家です。
+クリエイターの人格プロファイルとコース基本情報をもとに、30日分のコース骨格をJSON配列で生成してください。
+メッセージ文は生成しません。タスクの「型」（種別と標準学習時間）のみを生成してください。
 
-
-COURSE_DAY_GENERATION_SYSTEM = """あなたは英語学習の専門コーチです。
-クリエイターの人格プロファイルとコース基本情報をもとに、90日伴走コースの指定された週の
-日単位コンテンツを生成してください。
-
-以下のJSON形式の配列のみで出力してください（説明文は不要）。配列の要素数は指定された日数と必ず一致させてください:
+以下のJSON形式の配列のみで出力してください（説明文は不要）。配列の要素数は必ず30にしてください:
 [
   {
     "day": 1,
-    "theme": "その日の学習テーマ（短く具体的に）",
-    "tasks": ["タスク1", "タスク2", "タスク3"],
-    "ai_message": {
-      "morning": "朝に届く声かけメッセージ（人格プロファイルの口調で）",
-      "evening_reminder": "夜に届くリマインドメッセージ",
-      "completion": "学習報告完了時に届く労いメッセージ"
-    },
+    "week": 1,
+    "theme": "その日の学習テーマ（15文字以内）",
+    "task_types": [
+      {"type": "vocabulary", "label": "単語学習", "base_minutes": 15}
+    ],
     "is_rest_day": false
   }
 ]
 
-注意:
-- ai_messageの3項目は必ず人格プロファイルの口調・語尾・口癖を反映すること
-- 週の学習フェーズ（基礎固め/実力養成/実戦演習/仕上げ）に沿った難易度・内容にすること
-- 学習強度（1日あたりの学習時間目安）を超えない量のタスクにすること
-- 適度に休息日（is_rest_day=true）を含めてよいが、週6〜7日のうち1日程度に留めること
+【制約】
+- themeは15文字以内
+- task_typesのtypeはvocabulary/listening/grammar/reading/shadowing/practiceから選ぶ
+- base_minutesは各タスクの標準学習時間(分)。1日の標準学習時間を超えないこと
+- 週の流れ: Week1=基礎 Week2=強化 Week3=実践 Week4=仕上げ
+- 休息日は7日ごとに1日程度設ける（is_rest_day=true、その日はtask_typesを空配列にする）
+- 必ず人格プロファイルの方向性（指導方針・専門分野）を反映したテーマ選定にすること
 """
 
 
@@ -62,20 +59,15 @@ def build_course_day_generation_messages(
     goal: str,
     target_learner: str,
     intensity: str,
-    week_number: int,
-    day_start: int,
-    day_count: int,
 ) -> list[dict]:
-    phase = phase_label_for_week(week_number)
     content = (
         f"【人格プロファイル】\n{json.dumps(personality_profile, ensure_ascii=False, indent=2)}\n\n"
-        f"【コース基本情報】\n"
+        f"【コース情報】\n"
         f"コース名: {course_title}\n"
         f"ゴール: {goal}\n"
         f"対象者: {target_learner}\n"
-        f"学習強度: {intensity}\n\n"
-        f"【生成対象】\n"
-        f"第{week_number}週（{phase}）, Day{day_start}〜Day{day_start + day_count - 1} の{day_count}日分を生成してください。"
+        f"1日の標準学習時間: {intensity}\n\n"
+        f"上記のコース情報で30日分のコース骨格を生成してください。"
     )
     return [{"role": "user", "content": content}]
 

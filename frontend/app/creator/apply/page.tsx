@@ -117,7 +117,7 @@ export default function CreatorApplyPage() {
           <p className="text-xs font-black tracking-wide" style={{ color: "var(--accent)" }}>FOR CREATORS</p>
           <h1 className="text-3xl font-black mt-1" style={{ color: "var(--primary)" }}>クリエイターとして参加</h1>
           <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
-            あなたのメソッドで90日伴走コースを作り、学習者の目標達成に伴走しませんか？
+            あなたのメソッドで30日伴走コースを作り、学習者の目標達成に伴走しませんか？
           </p>
         </div>
 

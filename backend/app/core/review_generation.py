@@ -23,7 +23,7 @@ JST = timezone(timedelta(hours=9))
 
 WEEKLY_PERIOD_DAYS = 7
 MONTHLY_PERIOD_DAYS = 30
-TOTAL_DAYS = 90
+TOTAL_DAYS = 30
 
 
 def _day_number_for(learner_profile: LearnerProfile, today: datetime) -> int:

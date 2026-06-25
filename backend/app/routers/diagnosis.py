@@ -7,11 +7,13 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.llm import generate_text, extract_json, LLMError
 from app.core import diagnosis_prompts as prompts
+from app.core import personalize_prompts
 from app.models.course import Course
 from app.models.course_day import CourseDay
 from app.models.personality_profile import PersonalityProfile
 from app.models.learner_profile import LearnerProfile
 from app.models.learner_roadmap import LearnerRoadmap
+from app.models.learner_course_day import LearnerCourseDay
 from app.models.notification_setting import NotificationSetting
 from app.models.learner_review import LearnerReview
 from app.routers.courses import _is_accessible
@@ -96,13 +98,13 @@ class DiagnosisSubmitRequest(BaseModel):
 
 @router.post("/{course_id}/submit", status_code=201)
 def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """診断7問の回答を送信し、AIが90日ロードマップを生成して返す（事業検証ポイント②）。要(購入済み学習者)"""
+    """診断7問の回答を送信し、AIが30日ロードマップを生成して返す（事業検証ポイント②）。要(購入済み学習者)"""
     course = _get_purchased_course(db, course_id, current_user)
     personality = _get_personality_profile(db, course)
 
     course_days = sorted(course.days, key=lambda d: d.day_number)
     if not course_days:
-        raise HTTPException(status_code=400, detail="このコースはまだ90日分のコンテンツが生成されていません")
+        raise HTTPException(status_code=400, detail="このコースはまだ30日分のコンテンツが生成されていません")
 
     week_themes = []
     seen_weeks = set()
@@ -151,7 +153,66 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     db.commit()
     db.refresh(roadmap)
 
+    _generate_learner_course_days(db, profile, personality, course_days)
+
     return _serialize_roadmap(roadmap)
+
+
+def _generate_learner_course_days(db: Session, profile: LearnerProfile, personality: PersonalityProfile, course_days: list[CourseDay]) -> None:
+    """Layer2: 学習者専用の30日タスク配分を生成し learner_course_days に保存する。
+    生成に失敗した場合はLayer1のtask_typesをそのままコピーして処理を継続する（学習者を止めない）。"""
+    db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id == profile.id).delete()
+
+    course_days_brief = [
+        {"day": d.day_number, "theme": d.theme, "task_types": d.task_types, "is_rest_day": d.is_rest_day}
+        for d in course_days
+    ]
+    adjusted_by_day: dict[int, dict] = {}
+    try:
+        text = generate_text(
+            personalize_prompts.PERSONALIZE_SYSTEM,
+            personalize_prompts.build_personalize_messages(profile, personality.profile, course_days_brief),
+            max_tokens=4000,
+        )
+        for item in personalize_prompts.extract_json_array(text):
+            adjusted_by_day[item.get("day")] = item
+    except LLMError:
+        adjusted_by_day = {}
+
+    for d in course_days:
+        item = adjusted_by_day.get(d.day_number)
+        if item:
+            adjusted_tasks = item.get("adjusted_tasks", [])
+            reason = item.get("personalize_reason")
+        else:
+            # フォールバック: Layer1の標準タスクをそのまま使う
+            adjusted_tasks = [{"type": t.get("type"), "minutes": t.get("base_minutes")} for t in (d.task_types or [])]
+            reason = "標準プランを使用"
+        db.add(LearnerCourseDay(
+            learner_profile_id=profile.id,
+            day_number=d.day_number,
+            adjusted_tasks=adjusted_tasks,
+            personalize_reason=reason,
+        ))
+    db.commit()
+
+
+@router.get("/{course_id}/learner-days")
+def list_learner_course_days(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """個人化済みの30日タスク配分(Layer2)を取得する。要(購入済み学習者)"""
+    _get_purchased_course(db, course_id, current_user)
+    profile = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == current_user.id, LearnerProfile.course_id == course_id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="まだ診断が完了していません")
+    days = db.query(LearnerCourseDay).filter(
+        LearnerCourseDay.learner_profile_id == profile.id
+    ).order_by(LearnerCourseDay.day_number).all()
+    return [
+        {"day": d.day_number, "adjusted_tasks": d.adjusted_tasks, "personalize_reason": d.personalize_reason}
+        for d in days
+    ]
 
 
 @router.get("/{course_id}/roadmap")
