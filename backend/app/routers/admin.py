@@ -12,9 +12,23 @@ from app.models.customer import Customer
 from app.models.course import Course
 from app.models.character import Character
 from app.models.question import Question
+from app.models.answer import Answer
 from app.models.report import Report
 from app.models.favorite import Favorite
 from app.models.notification import Notification
+from app.models.course_subscription import CourseSubscription
+from app.models.purchase import Purchase
+from app.models.lesson import Lesson
+from app.models.lesson_progress import LessonProgress
+from app.models.course_day import CourseDay
+from app.models.course_material import CourseMaterial
+from app.models.day_log import DayLog
+from app.models.daily_summary import DailySummary
+from app.models.learner_review import LearnerReview
+from app.models.learner_profile import LearnerProfile
+from app.models.learner_roadmap import LearnerRoadmap
+from app.models.learner_course_day import LearnerCourseDay
+from app.models.notification_setting import NotificationSetting
 
 router = APIRouter(prefix="/admin", tags=["管理者機能"])
 
@@ -144,6 +158,56 @@ def suspend_course(course_id: int, data: SuspendRequest, admin=Depends(get_curre
     course.suspension_reason = data.reason
     db.commit()
     return {"message": "コースを停止しました"}
+
+
+def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> None:
+    """コース1件に紐づく全データを削除する（commitはしない）。
+    forceがFalseの場合、在籍中（active/past_due）の学習者がいればHTTPExceptionを投げて中断する。"""
+    active_subscriptions = db.query(CourseSubscription).filter(
+        CourseSubscription.course_id == course_id,
+        CourseSubscription.status.in_(["active", "past_due"]),
+    ).count()
+    if active_subscriptions > 0 and not force:
+        raise HTTPException(status_code=409, detail=f"在籍中の学習者が{active_subscriptions}名います。先にコースを停止し、退会・返金対応の完了後に削除してください。")
+
+    learner_profile_ids = [r[0] for r in db.query(LearnerProfile.id).filter(LearnerProfile.course_id == course_id).all()]
+    if learner_profile_ids:
+        db.query(LearnerRoadmap).filter(LearnerRoadmap.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
+        db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
+    db.query(LearnerProfile).filter(LearnerProfile.course_id == course_id).delete(synchronize_session=False)
+
+    question_ids = [r[0] for r in db.query(Question.id).filter(Question.course_id == course_id).all()]
+    if question_ids:
+        db.query(Answer).filter(Answer.question_id.in_(question_ids)).delete(synchronize_session=False)
+    db.query(Question).filter(Question.course_id == course_id).delete(synchronize_session=False)
+
+    lesson_ids = [r[0] for r in db.query(Lesson.id).filter(Lesson.course_id == course_id).all()]
+    if lesson_ids:
+        db.query(LessonProgress).filter(LessonProgress.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+    db.query(Lesson).filter(Lesson.course_id == course_id).delete(synchronize_session=False)
+
+    db.query(CourseDay).filter(CourseDay.course_id == course_id).delete(synchronize_session=False)
+    db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete(synchronize_session=False)
+    db.query(DayLog).filter(DayLog.course_id == course_id).delete(synchronize_session=False)
+    db.query(DailySummary).filter(DailySummary.course_id == course_id).delete(synchronize_session=False)
+    db.query(LearnerReview).filter(LearnerReview.course_id == course_id).delete(synchronize_session=False)
+    db.query(NotificationSetting).filter(NotificationSetting.course_id == course_id).delete(synchronize_session=False)
+    db.query(Purchase).filter(Purchase.course_id == course_id).delete(synchronize_session=False)
+    db.query(CourseSubscription).filter(CourseSubscription.course_id == course_id).delete(synchronize_session=False)
+
+    db.query(Course).filter(Course.id == course_id).delete(synchronize_session=False)
+
+
+@router.delete("/courses/{course_id}")
+def delete_course(course_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """コースを完全に削除する。在籍中（active/past_due）の学習者がいる場合は削除できない。要(管理者)"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+
+    delete_course_cascade(db, course_id)
+    db.commit()
+    return {"message": "コースを削除しました"}
 
 
 @router.put("/courses/{course_id}/unsuspend")

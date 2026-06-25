@@ -21,6 +21,8 @@ class Course(Base):
     goal = Column(String(255), nullable=True)  # 例:「TOEIC800点を取得する」
     target_learner = Column(Text, nullable=True)  # 例:「現在600点前後・3ヶ月後に受験予定」
     intensity = Column(String(100), nullable=True)  # 例:「1日30〜60分」。30日コース生成のインプットに使用
+    study_materials = Column(Text, nullable=True)  # 使用する教材（例:「公式問題集Vol.8」）。30日コース生成のインプットに使用
+    pace = Column(String(50), nullable=True)  # 進行速度（例:「ゆっくり」「標準」「速め」）。30日コース生成のインプットに使用
     personality_profile_id = Column(Integer, ForeignKey("personality_profiles.id"), nullable=True, index=True)
     # 30日分の生成は週単位で複数回のAI呼び出しを要する（数分かかる）ため、バックグラウンドタスクで実行し
     # このカラムで進行状況を管理する（フロントエンドはポーリングしてプログレスバーを表示する）

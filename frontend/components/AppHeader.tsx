@@ -42,7 +42,9 @@ export function AppHeader({
   return (
     <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 flex-wrap" style={{ background: "var(--primary)" }}>
       <div className="flex items-center gap-4 flex-wrap">
-        <Link href={homeHref} className="text-white font-black text-lg whitespace-nowrap">ManaVillage</Link>
+        <Link href={homeHref} className="text-white font-black text-lg tracking-tight whitespace-nowrap">
+          Mana<span style={{ color: "var(--accent)", filter: "brightness(1.6)" }}>Village</span>
+        </Link>
         {backHref && (
           <Link href={backHref} className="text-white/80 text-sm hover:text-white whitespace-nowrap">← {backLabel}</Link>
         )}

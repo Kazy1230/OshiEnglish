@@ -5,6 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
+import { SectionHeading } from "@/components/SectionHeading";
 
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
 
@@ -33,13 +34,13 @@ export default function MyPage() {
         </div>
 
         <div>
-          <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>学習中のコース</h2>
+          <SectionHeading>学習中のコース</SectionHeading>
           {loadingCourses ? (
             <p style={{ color: "var(--muted)" }}>読み込み中…</p>
           ) : courses.length === 0 ? (
             <div className="card flex flex-col gap-2">
               <p className="text-sm" style={{ color: "var(--muted)" }}>まだ購入したコースがありません。</p>
-              <Link href="/" className="btn-primary self-start">コースを探す</Link>
+              <Link href="/" className="btn-cta self-start">コースを探す →</Link>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -47,10 +48,7 @@ export default function MyPage() {
                 <div key={c.course_id} className="card flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-bold" style={{ color: "var(--primary)" }}>{c.title}</p>
-                    <span
-                      className="text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap"
-                      style={{ background: "var(--accent)", color: "white" }}
-                    >
+                    <span className="pill whitespace-nowrap" style={{ background: "var(--accent)", color: "white" }}>
                       購入済み
                     </span>
                   </div>

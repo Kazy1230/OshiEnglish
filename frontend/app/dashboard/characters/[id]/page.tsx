@@ -27,6 +27,8 @@ export default function EditCharacterPage() {
   const [ngText, setNgText] = useState("");
   const [loadingChar, setLoadingChar] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [sampleText, setSampleText] = useState("仮定法過去完了は、過去の事実に反する仮定を表す表現です。");
   const [previewResult, setPreviewResult] = useState<string | null>(null);
@@ -45,10 +47,41 @@ export default function EditCharacterPage() {
       const tp: ToneProfile = c.tone_profile || {};
       setTone(tp);
       setNgText((tp.ng_expressions || []).join("、"));
+      setImageUrl(c.image_url || null);
     }).catch(() => toast("キャラクターの読み込みに失敗しました", "error")).finally(() => setLoadingChar(false));
   }, [loading, characterId]);
 
   if (loading || loadingChar) return <Skeleton />;
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const res = await api.uploadCharacterImage(characterId, file);
+      setImageUrl(res.image_url);
+      toast("アイコンを更新しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "アップロードに失敗しました", "error");
+    } finally {
+      setUploadingImage(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleImageDelete() {
+    if (!confirm("アイコンを削除しますか？")) return;
+    setUploadingImage(true);
+    try {
+      await api.deleteCharacterImage(characterId);
+      setImageUrl(null);
+      toast("アイコンを削除しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function handleGenerate() {
     if (!concept.trim()) { toast("キャラクターのイメージを入力してください", "error"); return; }
@@ -108,6 +141,27 @@ export default function EditCharacterPage() {
       <AppHeader role="creator" title="キャラクター編集" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+        <div className="card flex items-center gap-4">
+          {imageUrl ? (
+            <img src={imageUrl} alt="" className="w-20 h-20 rounded-full object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
+          )}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>アイコン画像</label>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>PNG / JPG / WEBP、5MBまで</p>
+            <div className="flex gap-2 items-center">
+              <label className="btn-primary text-xs cursor-pointer" style={{ opacity: uploadingImage ? 0.5 : 1 }}>
+                {uploadingImage ? "処理中…" : imageUrl ? "変更する" : "アップロードする"}
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageSelect} disabled={uploadingImage} className="hidden" />
+              </label>
+              {imageUrl && (
+                <button onClick={handleImageDelete} disabled={uploadingImage} className="text-xs underline" style={{ color: "#e53e3e" }}>削除</button>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="card flex flex-col gap-3">
           <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>AIにキャラクター設定を提案してもらう（任意）</label>
           <textarea

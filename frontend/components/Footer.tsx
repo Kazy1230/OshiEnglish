@@ -23,7 +23,9 @@ export function Footer() {
   }
 
   return (
-    <footer className="py-6 text-center text-xs flex items-center justify-center gap-4" style={{ color: "var(--muted)" }}>
+    <footer className="py-3 px-4 text-center text-xs flex items-center justify-center gap-3 flex-wrap" style={{ color: "var(--muted)" }}>
+      <span>© ManaVillage</span>
+      <span aria-hidden="true">・</span>
       <button onClick={handleWithdraw} className="hover:underline">退会する</button>
     </footer>
   );

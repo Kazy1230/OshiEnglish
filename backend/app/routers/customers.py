@@ -5,12 +5,29 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+from sqlalchemy.exc import IntegrityError
+
 from app.core.database import get_db
 from app.core.security import get_current_admin, get_current_user, hash_password
 from app.core.credentials import generate_temp_password
 from app.core.email import send_email
 from app.core.config import settings
 from app.models.customer import Customer
+from app.models.purchase import Purchase
+from app.models.course_subscription import CourseSubscription
+from app.models.favorite import Favorite
+from app.models.notification import Notification
+from app.models.notification_setting import NotificationSetting
+from app.models.lesson_progress import LessonProgress
+from app.models.day_log import DayLog
+from app.models.daily_summary import DailySummary
+from app.models.learner_review import LearnerReview
+from app.models.learner_profile import LearnerProfile
+from app.models.learner_roadmap import LearnerRoadmap
+from app.models.learner_course_day import LearnerCourseDay
+from app.models.question import Question
+from app.models.answer import Answer
+from app.models.report import Report
 
 logger = logging.getLogger(__name__)
 
@@ -130,14 +147,86 @@ def reissue_password(customer_id: int, admin=Depends(get_current_admin), db: Ses
     }
 
 
+def _cascade_delete_learner_data(db: Session, user_id: int) -> None:
+    """学習者の活動履歴（購入・質問・進捗など）をCustomer削除前に削除する。
+    外部キー制約のためCustomer単体のdb.delete()ではIntegrityErrorになるのを防ぐ。"""
+    learner_profile_ids = [
+        r[0] for r in db.query(LearnerProfile.id).filter(LearnerProfile.user_id == user_id).all()
+    ]
+    if learner_profile_ids:
+        db.query(LearnerRoadmap).filter(LearnerRoadmap.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
+        db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
+    db.query(LearnerProfile).filter(LearnerProfile.user_id == user_id).delete(synchronize_session=False)
+
+    question_ids = [r[0] for r in db.query(Question.id).filter(Question.user_id == user_id).all()]
+    if question_ids:
+        db.query(Answer).filter(Answer.question_id.in_(question_ids)).delete(synchronize_session=False)
+    db.query(Question).filter(Question.user_id == user_id).delete(synchronize_session=False)
+
+    db.query(Purchase).filter(Purchase.user_id == user_id).delete(synchronize_session=False)
+    db.query(CourseSubscription).filter(CourseSubscription.user_id == user_id).delete(synchronize_session=False)
+    db.query(Favorite).filter(Favorite.user_id == user_id).delete(synchronize_session=False)
+    db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
+    db.query(NotificationSetting).filter(NotificationSetting.user_id == user_id).delete(synchronize_session=False)
+    db.query(LessonProgress).filter(LessonProgress.user_id == user_id).delete(synchronize_session=False)
+    db.query(DayLog).filter(DayLog.user_id == user_id).delete(synchronize_session=False)
+    db.query(DailySummary).filter(DailySummary.user_id == user_id).delete(synchronize_session=False)
+    db.query(LearnerReview).filter(LearnerReview.user_id == user_id).delete(synchronize_session=False)
+    db.query(Report).filter(Report.reporter_id == user_id).delete(synchronize_session=False)
+
+
+def _cascade_delete_creator_data(db: Session, customer: Customer) -> None:
+    """クリエイターの所有物（人格・コース・申請データ等）をCustomer削除前に削除する。
+    テスト環境向けの強制削除のため、在籍学習者の有無は問わず削除する（admin.delete_course_cascadeをforce=Trueで利用）。"""
+    from app.routers.admin import delete_course_cascade
+    from app.models.creator_profile import CreatorProfile
+    from app.models.character import Character
+    from app.models.course import Course
+    from app.models.personality_profile import PersonalityProfile
+    from app.models.interview_session import InterviewSession
+    from app.models.question_category import QuestionCategory
+    from app.models.category_content import CategoryContent
+
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == customer.id).first()
+    if not profile:
+        return
+
+    category_ids = [r[0] for r in db.query(QuestionCategory.id).filter(QuestionCategory.creator_id == profile.id).all()]
+    if category_ids:
+        db.query(CategoryContent).filter(CategoryContent.category_id.in_(category_ids)).delete(synchronize_session=False)
+    db.query(QuestionCategory).filter(QuestionCategory.creator_id == profile.id).delete(synchronize_session=False)
+
+    character = db.query(Character).filter(Character.creator_id == profile.id).first()
+    if character:
+        course_ids = [r[0] for r in db.query(Course.id).filter(Course.character_id == character.id).all()]
+        for course_id in course_ids:
+            delete_course_cascade(db, course_id, force=True)
+        db.query(Character).filter(Character.id == character.id).delete(synchronize_session=False)
+
+    db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).delete(synchronize_session=False)
+    db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).delete(synchronize_session=False)
+    db.query(CreatorProfile).filter(CreatorProfile.id == profile.id).delete(synchronize_session=False)
+
+
 @router.delete("/{customer_id}")
 def delete_customer(customer_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """顧客を完全に削除する（テスト環境向け：クリエイターの場合はコース・人格データも含めて強制削除する）。要(管理者)"""
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="顧客が見つかりません")
 
-    db.delete(customer)
-    db.commit()
+    if customer.role == "admin":
+        raise HTTPException(status_code=400, detail="管理者アカウントはこの画面から削除できません。")
+
+    try:
+        if customer.role == "creator":
+            _cascade_delete_creator_data(db, customer)
+        _cascade_delete_learner_data(db, customer.id)
+        db.delete(customer)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="関連データが残っているため削除できませんでした。「停止する」をご利用ください。")
     return {"message": "削除しました"}
 
 

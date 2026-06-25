@@ -19,6 +19,8 @@ export default function NewCoursePage() {
   const [goal, setGoal] = useState("");
   const [targetLearner, setTargetLearner] = useState("");
   const [intensity, setIntensity] = useState("");
+  const [studyMaterials, setStudyMaterials] = useState("");
+  const [pace, setPace] = useState("標準");
   const [tierAPrice, setTierAPrice] = useState("1480");
   const [tierBPrice, setTierBPrice] = useState("3980");
   const [enableTierB, setEnableTierB] = useState(true);
@@ -47,6 +49,8 @@ export default function NewCoursePage() {
         goal,
         target_learner: targetLearner,
         intensity,
+        study_materials: studyMaterials,
+        pace,
         price: 0,
         is_free: false,
         tier_a_price: Number(tierAPrice),
@@ -92,6 +96,19 @@ export default function NewCoursePage() {
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>学習強度 *</label>
             <input value={intensity} onChange={e => setIntensity(e.target.value)} required placeholder="例：1日30〜60分" />
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>使用する教材 *</label>
+            <textarea rows={2} value={studyMaterials} onChange={e => setStudyMaterials(e.target.value)} required placeholder="例：公式問題集Vol.8、市販の単語アプリ" />
+            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>AIがこの教材を前提にタスク内容を組み立てます。</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>進行速度 *</label>
+            <select value={pace} onChange={e => setPace(e.target.value)} required>
+              <option value="ゆっくり">ゆっくり（無理なく着実に）</option>
+              <option value="標準">標準</option>
+              <option value="速め">速め（短期集中）</option>
+            </select>
           </div>
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>Tier A（AIのみ伴走）月額 *</label>

@@ -329,10 +329,6 @@ export default function Home() {
             クリエイター申請へ →
           </Link>
         </div>
-
-        <footer className="text-center text-xs pb-10" style={{ color: "var(--muted)" }}>
-          © ManaVillage
-        </footer>
       </main>
     </div>
   );

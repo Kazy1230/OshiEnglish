@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
@@ -130,6 +131,10 @@ export default function CreatorProfilePage() {
                 {generatingIntro ? "生成中…" : selfIntro ? "再生成する" : "自己紹介を生成する"}
               </button>
             </div>
+
+            {!editing && (
+              <Link href="/dashboard" className="btn-cta text-center">完了してダッシュボードへ →</Link>
+            )}
           </>
         )}
       </main>

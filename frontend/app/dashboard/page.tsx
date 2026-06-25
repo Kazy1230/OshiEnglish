@@ -5,6 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
+import { SectionHeading } from "@/components/SectionHeading";
 
 type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
@@ -150,7 +151,7 @@ export default function DashboardPage() {
 
         {/* 機能タイル */}
         <div>
-          <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>機能</h2>
+          <SectionHeading>機能</SectionHeading>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {tiles.map(t => (
               t.locked ? (
@@ -159,7 +160,7 @@ export default function DashboardPage() {
                   <span className="text-xs font-bold" style={{ color: "var(--text)" }}>{t.label}</span>
                 </span>
               ) : (
-                <Link key={t.href} href={t.href} className="card flex flex-col items-center gap-1 py-5 text-center hover:shadow-md transition-shadow">
+                <Link key={t.href} href={t.href} className="card flex flex-col items-center gap-1 py-5 text-center hover-lift">
                   <span className="text-2xl">{t.icon}</span>
                   <span className="text-xs font-bold" style={{ color: "var(--text)" }}>{t.label}</span>
                 </Link>
@@ -170,10 +171,10 @@ export default function DashboardPage() {
 
         {purchasedCourses.length > 0 && (
           <div>
-            <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>学習中コース</h2>
+            <SectionHeading>学習中コース</SectionHeading>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {purchasedCourses.map(c => (
-                <Link key={c.course_id} href={`/courses/${c.course_id}`} className="card flex flex-col gap-2 hover:shadow-md transition-shadow">
+                <Link key={c.course_id} href={`/courses/${c.course_id}`} className="card flex flex-col gap-2 hover-lift">
                   <p className="font-bold" style={{ color: "var(--primary)" }}>{c.title}</p>
                   <p className="text-sm" style={{ color: "var(--accent)" }}>
                     {c.completed_count}/{c.total_lessons} レッスン完了

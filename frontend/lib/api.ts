@@ -153,6 +153,12 @@ export const api = {
   updateCharacterFull: (id: number, data: object) => apiFetch(`/characters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   previewCharacterVoice: (id: number, sampleText: string) =>
     apiFetch(`/characters/${id}/preview`, { method: "POST", body: JSON.stringify({ sample_text: sampleText }) }),
+  uploadCharacterImage: (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiUpload(`/characters/${id}/image`, formData);
+  },
+  deleteCharacterImage: (id: number) => apiFetch(`/characters/${id}/image`, { method: "DELETE" }),
 
   // AIコンテンツ生成スタジオ：Step0/Step1（非ストリーミング）・下書き管理
   generateCharacterConcept: (characterConcept: string) =>
@@ -232,6 +238,7 @@ export const api = {
   adminApproveCourse: (courseId: number) => apiFetch(`/admin/courses/${courseId}/approve`, { method: "PUT" }),
   adminRejectCourse: (courseId: number, reason?: string) =>
     apiFetch(`/admin/courses/${courseId}/reject`, { method: "PUT", body: JSON.stringify({ reason: reason ?? null }) }),
+  adminDeleteCourse: (courseId: number) => apiFetch(`/admin/courses/${courseId}`, { method: "DELETE" }),
   adminListReports: () => apiFetch("/admin/reports"),
   adminResolveReport: (reportId: number) => apiFetch(`/admin/reports/${reportId}/resolve`, { method: "PUT" }),
   adminListTierBOverdue: () => apiFetch("/admin/tier-b-overdue"),

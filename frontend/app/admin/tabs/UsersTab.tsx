@@ -50,7 +50,10 @@ export function UsersTab() {
   }
 
   async function handleDelete(c: AdminCustomer) {
-    if (!confirm(`${c.username} を完全に削除しますか？この操作は取り消せません。`)) return;
+    const warning = c.role === "creator"
+      ? `${c.username} を完全に削除しますか？クリエイターのコース・人格データもすべて削除されます。この操作は取り消せません。`
+      : `${c.username} を完全に削除しますか？この操作は取り消せません。`;
+    if (!confirm(warning)) return;
     try {
       await api.adminDeleteCustomer(c.id);
       toast("削除しました", "success");

@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { toast } from "@/components/Toast";
+import { SampleChatPreview } from "@/components/SampleChatPreview";
+import { SectionHeading } from "@/components/SectionHeading";
 
 type CreatorDetail = {
   id: number;
@@ -79,7 +81,7 @@ export default function CreatorPage() {
               </p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {data.speciality && (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>
+                  <span className="pill" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>
                     {data.speciality}
                   </span>
                 )}
@@ -127,14 +129,14 @@ export default function CreatorPage() {
         {data.character && <SampleChatPreview characterName={data.character.name} tags={data.coaching_tags ?? []} />}
 
         <div>
-          <h2 className="font-bold mb-3" style={{ color: "var(--primary)" }}>コンテンツ一覧</h2>
+          <SectionHeading>コンテンツ一覧</SectionHeading>
           {data.courses.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--muted)" }}>まだ公開コンテンツがありません。</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {data.courses.map(c => (
-                <Link key={c.id} href={`/courses/${c.id}`} className="card flex flex-col gap-2 hover:shadow-md transition-shadow">
-                  {c.category && <span className="text-xs font-bold self-start px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{c.category}</span>}
+                <Link key={c.id} href={`/courses/${c.id}`} className="card flex flex-col gap-2 hover-lift">
+                  {c.category && <span className="pill self-start" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{c.category}</span>}
                   <p className="font-bold" style={{ color: "var(--primary)" }}>{c.title}</p>
                   {c.description && <p className="text-xs line-clamp-2" style={{ color: "var(--muted)" }}>{c.description}</p>}
                   <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>
@@ -146,24 +148,6 @@ export default function CreatorPage() {
           )}
         </div>
       </main>
-    </div>
-  );
-}
-
-function SampleChatPreview({ characterName, tags }: { characterName: string; tags: string[] }) {
-  const styleHint = tags[0] ? `（${tags[0]}）` : "";
-  return (
-    <div className="card flex flex-col gap-3">
-      <p className="font-bold" style={{ color: "var(--primary)" }}>チャットのサンプル{styleHint}</p>
-      <div className="flex flex-col gap-2">
-        <div className="self-end max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--primary)", color: "white" }}>
-          最近やる気が出なくて、続けられるか不安です…
-        </div>
-        <div className="self-start max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }}>
-          そう感じる時もありますよね。{characterName}が伴走するので、無理せず今日できる小さな一歩から一緒に進めていきましょう。
-        </div>
-      </div>
-      <p className="text-xs" style={{ color: "var(--muted)" }}>※ サンプルです。実際の会話はコース購入後にご利用いただけます。</p>
     </div>
   );
 }

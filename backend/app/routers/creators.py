@@ -206,7 +206,15 @@ def get_my_revenue(current_user=Depends(get_current_creator_or_admin), db: Sessi
 def list_creators(db: Session = Depends(get_db)):
     """クリエイター一覧取得(公開中のプロフィールのみ)"""
     profiles = db.query(CreatorProfile).filter(CreatorProfile.status == "active").all()
-    return [_serialize_creator_card(p) for p in profiles]
+    result = []
+    for p in profiles:
+        data = _serialize_creator_card(p)
+        course_ids = [r[0] for r in db.query(Course.id).filter(Course.character_id == p.character.id, Course.status == "published").all()] if p.character else []
+        personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == p.id).first()
+        data["total_learners"] = _count_total_learners(db, course_ids)
+        data["coaching_tags"] = creator_prompts.coaching_tags_from_profile(personality.profile) if personality and personality.profile else []
+        result.append(data)
+    return result
 
 
 def _count_total_learners(db: Session, course_ids: list[int]) -> int:

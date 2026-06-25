@@ -102,6 +102,8 @@ def _serialize_course_card(course: Course) -> dict:
         "goal": course.goal,
         "target_learner": course.target_learner,
         "intensity": course.intensity,
+        "study_materials": course.study_materials,
+        "pace": course.pace,
         "tier_a_price": course.tier_a_price,
         "tier_b_price": course.tier_b_price,
         "is_suspended": course.is_suspended,
@@ -157,6 +159,8 @@ class CourseCreate(BaseModel):
     goal: Optional[str] = None
     target_learner: Optional[str] = None
     intensity: Optional[str] = None
+    study_materials: Optional[str] = None
+    pace: Optional[str] = None
     tier_a_price: Optional[int] = None
     tier_b_price: Optional[int] = None
 
@@ -184,6 +188,8 @@ class CourseUpdate(BaseModel):
     goal: Optional[str] = None
     target_learner: Optional[str] = None
     intensity: Optional[str] = None
+    study_materials: Optional[str] = None
+    pace: Optional[str] = None
     tier_a_price: Optional[int] = None
     tier_b_price: Optional[int] = None
 
@@ -416,6 +422,8 @@ def create_course(data: CourseCreate, current_user=Depends(get_current_user), db
         goal=data.goal,
         target_learner=data.target_learner,
         intensity=data.intensity,
+        study_materials=data.study_materials,
+        pace=data.pace,
         personality_profile_id=personality.id if personality else None,
         tier_a_price=data.tier_a_price,
         tier_b_price=data.tier_b_price,
@@ -550,6 +558,7 @@ def _run_course_days_generation(course_id: int):
                 gen_prompts.COURSE_DAY_GENERATION_SYSTEM,
                 gen_prompts.build_course_day_generation_messages(
                     personality.profile, course.title, course.goal, course.target_learner, course.intensity,
+                    course.study_materials, course.pace,
                 ),
                 max_tokens=4000,
             )
@@ -590,6 +599,8 @@ def generate_course_days(course_id: int, background_tasks: BackgroundTasks, curr
         raise HTTPException(status_code=400, detail="先にクリエイターの人格プロファイルを生成・設定してください")
     if not (course.goal and course.target_learner and course.intensity):
         raise HTTPException(status_code=400, detail="コースのゴール・対象者・学習強度を入力してください")
+    if not (course.study_materials and course.pace):
+        raise HTTPException(status_code=400, detail="使用する教材と進行速度を入力してください")
 
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
     if not personality or not personality.profile:

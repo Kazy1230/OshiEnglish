@@ -185,6 +185,10 @@ _ensure_column("course_subscriptions", "past_due_since", "DATETIME NULL")
 # --- クリエイターダッシュボード・紹介ページ再設計（AI生成自己紹介文） ---
 _ensure_column("creator_profiles", "self_intro", "TEXT NULL")
 
+# --- コース作成時に使用教材・進行速度を入力させ、Layer1生成のインプットにする ---
+_ensure_column("courses", "study_materials", "TEXT NULL")
+_ensure_column("courses", "pace", "VARCHAR(50) NULL")
+
 
 def _migrate_legacy_characters_to_creator():
     from app.core.creator_migration import migrate_legacy_characters_to_creator

@@ -49,7 +49,7 @@ export default function AdminPage() {
     { key: "creator_applications", label: "クリエイター審査", icon: "🧑‍🏫" },
     { key: "creators", label: "クリエイター一覧", icon: "🎭" },
     { key: "users", label: "ユーザー一覧", icon: "👤" },
-    { key: "course_moderation", label: "コース停止管理", icon: "🛑" },
+    { key: "course_moderation", label: "コース一覧", icon: "📚" },
     { key: "reports", label: "通報管理", icon: "🚨" },
     { key: "tier_b_overdue", label: "Tier B監視", icon: "⏰" },
   ];
