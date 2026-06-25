@@ -135,6 +135,7 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
             prompts.ROADMAP_GENERATION_SYSTEM,
             prompts.build_roadmap_generation_messages(profile, personality.profile, week_themes),
             max_tokens=3000,
+            json_mode=True,
         )
         generated = extract_json(text)
     except LLMError as e:
@@ -173,6 +174,7 @@ def _generate_learner_course_days(db: Session, profile: LearnerProfile, personal
             personalize_prompts.PERSONALIZE_SYSTEM,
             personalize_prompts.build_personalize_messages(profile, personality.profile, course_days_brief),
             max_tokens=4000,
+            json_mode=True,
         )
         for item in personalize_prompts.extract_json_array(text):
             adjusted_by_day[item.get("day")] = item

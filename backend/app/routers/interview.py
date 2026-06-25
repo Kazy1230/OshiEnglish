@@ -84,6 +84,7 @@ def submit_answer(data: InterviewAnswerRequest, current_user=Depends(get_current
                 prompts.FOLLOW_UP_DECISION_SYSTEM,
                 prompts.build_follow_up_decision_messages(session.pending_question, data.answer),
                 max_tokens=300,
+                json_mode=True,
             )
             decision = extract_json(text)
         except LLMError:
@@ -135,6 +136,7 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
             prompts.PROFILE_GENERATION_SYSTEM,
             prompts.build_profile_generation_messages(session.qa_history or []),
             max_tokens=1500,
+            json_mode=True,
         )
         generated = extract_json(text)
     except LLMError as e:

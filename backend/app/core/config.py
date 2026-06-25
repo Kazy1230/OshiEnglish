@@ -14,11 +14,13 @@ class Settings(BaseSettings):
     # 本番では False に設定してSwagger UIを非公開にする
     DOCS_ENABLED: bool = True
 
-    # DM返信の下書き生成（キャラクターになりきった文章生成）に使用するAnthropic API
-    ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
-    # デイリー伴走チャットのデフォルトモデル（低コスト）。NEEDS_SONNETキーワードに該当する質問のみANTHROPIC_MODELへエスカレーション
-    ANTHROPIC_MODEL_HAIKU: str = "claude-haiku-4-5-20251001"
+    # DM返信の下書き生成（キャラクターになりきった文章生成）に使用するDeepSeek API
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    # デイリー伴走チャットのデフォルトモデル（低コスト）。NEEDS_SONNETキーワードに該当する質問のみDEEPSEEK_MODELへエスカレーション
+    # DeepSeekにはAnthropicのSonnet/Haikuのような明確な上位/下位モデルの区別がないため、
+    # 現状は同じdeepseek-chatを指す（将来deepseek-reasoner等に分けたい場合はここを変更する）
+    DEEPSEEK_MODEL_LITE: str = "deepseek-chat"
 
     # クリエイター収益管理：プラットフォーム手数料率（要件定義書5.9節「ユーザー課金→手数料控除→クリエイター残高」）
     PLATFORM_FEE_RATE: float = 0.2

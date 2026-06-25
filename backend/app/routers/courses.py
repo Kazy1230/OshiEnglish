@@ -561,6 +561,7 @@ def _run_course_days_generation(course_id: int):
                     course.study_materials, course.pace,
                 ),
                 max_tokens=4000,
+                json_mode=True,
             )
             days_data = gen_prompts.extract_json_array(text)
             if len(days_data) != 30:

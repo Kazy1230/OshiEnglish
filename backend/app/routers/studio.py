@@ -68,7 +68,7 @@ def generate_character_concept(
     current_user=Depends(get_current_creator_or_admin),
 ):
     try:
-        text = generate_text(prompts.CHARACTER_CONCEPT_SYSTEM, prompts.build_character_concept_messages(data.character_concept))
+        text = generate_text(prompts.CHARACTER_CONCEPT_SYSTEM, prompts.build_character_concept_messages(data.character_concept), json_mode=True)
         return extract_json(text)
     except LLMError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -88,7 +88,7 @@ def consult(
 ):
     _require_active_creator(db, current_user)
     try:
-        text = generate_text(prompts.CONSULT_SYSTEM, prompts.build_consult_messages(data.theme))
+        text = generate_text(prompts.CONSULT_SYSTEM, prompts.build_consult_messages(data.theme), json_mode=True)
         return extract_json(text)
     except LLMError as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -182,7 +182,7 @@ def _generate_and_save_daily_summary(db: Session, user_id: int, course_id: int, 
             prompts.DAILY_SUMMARY_SYSTEM,
             prompts.build_daily_summary_messages("\n".join(log_lines) or "（本日の会話なし）"),
             max_tokens=150,
-            model=settings.ANTHROPIC_MODEL_HAIKU,
+            model=settings.DEEPSEEK_MODEL_LITE,
         )
     except LLMError:
         summary_text = "本日のサマリー生成失敗。感情: 不明"
@@ -239,7 +239,8 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
             prompts.CLASSIFY_SYSTEM,
             prompts.build_classify_messages(data.body, existing_category_names),
             max_tokens=200,
-            model=settings.ANTHROPIC_MODEL_HAIKU,
+            model=settings.DEEPSEEK_MODEL_LITE,
+            json_mode=True,
         )
         classified = extract_json(classify_raw)
     except LLMError as e:
@@ -271,7 +272,7 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
                     today_tasks, recent_summaries,
                 ),
                 max_tokens=400,
-                model=settings.ANTHROPIC_MODEL,
+                model=settings.DEEPSEEK_MODEL,
             )
         except LLMError as e:
             raise HTTPException(status_code=500, detail=f"下書き回答の生成に失敗しました: {e}") from e
@@ -286,7 +287,7 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     # Tier A（またはTier Bの2回目以降）：AIが自動回答。
     # 学習内容・感情系の相談はSonnet、状況報告等の定型応答はHaiku（設計書2.5節のモデル使い分け方針）
     linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
-    answer_model = prompts.select_answer_model(message_type, data.body, settings.ANTHROPIC_MODEL_HAIKU, settings.ANTHROPIC_MODEL)
+    answer_model = prompts.select_answer_model(message_type, data.body, settings.DEEPSEEK_MODEL_LITE, settings.DEEPSEEK_MODEL)
     try:
         answer_body = generate_text(
             prompts.build_answer_system(personality, message_type),
@@ -336,7 +337,7 @@ def get_today_message(course_id: int, type: str = "morning", current_user=Depend
             prompts.build_today_message_system(personality, type),
             prompts.build_today_message_user(day_number, today_tasks, recent_summaries),
             max_tokens=300,
-            model=settings.ANTHROPIC_MODEL_HAIKU,
+            model=settings.DEEPSEEK_MODEL_LITE,
         )
     except LLMError as e:
         raise HTTPException(status_code=500, detail=f"メッセージの生成に失敗しました: {e}") from e

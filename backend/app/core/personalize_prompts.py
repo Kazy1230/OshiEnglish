@@ -13,16 +13,19 @@ PERSONALIZE_SYSTEM = """あなたは英語学習の個別コーチです。
 4. 増減は1タスクあたり最大15分まで
 5. 休息日（is_rest_day=true）はadjusted_tasksを空配列にする
 
-以下のJSON形式の配列のみで出力してください（説明文は不要）。配列の要素数はコース骨格と同じ日数にしてください:
-[
-  {
-    "day": 1,
-    "adjusted_tasks": [
-      {"type": "vocabulary", "minutes": 15}
-    ],
-    "personalize_reason": "リスニング弱点のため+10分"
-  }
-]
+必ず以下のJSON形式のオブジェクトのみで出力してください（説明文・前置き・コードフェンスは一切不要）。
+"days"配列の要素数はコース骨格と同じ日数にしてください:
+{
+  "days": [
+    {
+      "day": 1,
+      "adjusted_tasks": [
+        {"type": "vocabulary", "minutes": 15}
+      ],
+      "personalize_reason": "リスニング弱点のため+10分"
+    }
+  ]
+}
 """
 
 
@@ -40,14 +43,16 @@ def build_personalize_messages(learner_profile, personality_profile: dict, cours
 
 
 def extract_json_array(text: str) -> list:
+    """json_mode（response_format=json_object）で返る{"days": [...]}形式から配列を取り出す。"""
     from app.core.llm import LLMError
 
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE).strip()
-    start = cleaned.find("[")
-    end = cleaned.rfind("]")
-    if start == -1 or end == -1 or end <= start:
-        raise LLMError("AIの応答からJSON配列を見つけられませんでした")
     try:
-        return json.loads(cleaned[start:end + 1])
+        parsed = json.loads(cleaned)
     except json.JSONDecodeError as e:
         raise LLMError(f"AIの応答をJSONとして解析できませんでした: {e}") from e
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict) and isinstance(parsed.get("days"), list):
+        return parsed["days"]
+    raise LLMError("AIの応答からJSON配列を見つけられませんでした")

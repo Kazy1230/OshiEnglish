@@ -83,6 +83,7 @@ def _generate_weekly_review(db: Session, learner_profile: LearnerProfile, course
             prompts.build_weekly_review_messages(
                 personality.profile, week_number, completed_days, completed_days, incomplete_days, category_names, top_weakness,
             ),
+            json_mode=True,
         )
         content = extract_json(text)
     except (LLMError, ValueError) as e:
@@ -127,6 +128,7 @@ def _generate_monthly_review(db: Session, learner_profile: LearnerProfile, cours
                 roadmap.level_analysis if roadmap else None,
                 completed_days, day_end - day_start, completed_days, incomplete_days, category_names,
             ),
+            json_mode=True,
         )
         content = extract_json(text)
     except (LLMError, ValueError) as e:

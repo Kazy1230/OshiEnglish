@@ -85,7 +85,7 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
             prompts.build_today_message_system(personality.profile, slot),
             prompts.build_today_message_user(day_number, today_tasks, [s.summary for s in summaries]),
             max_tokens=300,
-            model=app_settings.ANTHROPIC_MODEL_HAIKU,
+            model=app_settings.DEEPSEEK_MODEL_LITE,
         )
     except LLMError:
         logger.exception(f"[DailyNotification] Layer3メッセージ生成に失敗しました: user_id={setting.user_id}, course_id={course.id}, slot={slot}")
