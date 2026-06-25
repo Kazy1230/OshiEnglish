@@ -23,8 +23,10 @@ def migrate_legacy_characters_to_creator(db: Session) -> int:
         return 0
 
     for character in orphan_characters:
-        slug = re.sub(r"[^a-zA-Z0-9]+", "", character.name) or str(character.id)
-        username = f"manavillage_official_{slug}".lower()
+        # 名前が重複するキャラクターが複数あっても1クリエイター=1キャラクターの制約を破らないよう、
+        # character.idを必ずユーザー名に含めて一意性を保証する
+        slug = re.sub(r"[^a-zA-Z0-9]+", "", character.name) or "character"
+        username = f"manavillage_official_{slug}_{character.id}".lower()
 
         official_user = db.query(Customer).filter(Customer.username == username).first()
         if official_user is None:
