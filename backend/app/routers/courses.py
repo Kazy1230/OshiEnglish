@@ -739,6 +739,11 @@ def list_my_purchased_courses(current_user=Depends(get_current_user), db: Sessio
             "title": course.title,
             "total_lessons": total,
             "completed_count": completed_count,
+            "thumbnail_url": course.thumbnail_url,
+            "character": (
+                {"name": course.character.name, "avatar_url": course.character.image_url}
+                if course.character else None
+            ),
         })
     return results
 
