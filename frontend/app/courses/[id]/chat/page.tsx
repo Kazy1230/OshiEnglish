@@ -82,7 +82,7 @@ export default function CourseChatPage() {
 
         const learnerDays = await api.listLearnerCourseDays(courseId).catch(() => [] as LearnerDay[]);
         const todayLearnerDay = learnerDays.find((d: LearnerDay) => d.day === currentDay) ?? null;
-        const carryover = (todayLearnerDay?.carryover_tasks ?? []).map(t => ({ ...t, carryover: true }));
+        const carryover = (todayLearnerDay?.carryover_tasks ?? []).map((t: AdjustedTask) => ({ ...t, carryover: true }));
         setTodayTasks([...(todayLearnerDay?.adjusted_tasks ?? []), ...carryover]);
         setProgressError(hadProgressError);
       } catch (err: unknown) {
