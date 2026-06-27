@@ -42,6 +42,8 @@ def checkout_course(
     db: Session = Depends(get_db),
 ):
     """コース購入用のStripe Payment Intentを作成する。"""
+    if current_user.role == "creator":
+        raise HTTPException(status_code=403, detail="クリエイターアカウントはコースを購入できません")
     course = db.query(Course).filter(Course.id == data.course_id).first()
     if not course or course.status != "published":
         raise HTTPException(status_code=404, detail="コースが見つかりません")
@@ -121,6 +123,8 @@ def subscribe_to_course(
     db: Session = Depends(get_db),
 ):
     """30日伴走コースの月額サブスクリプション（Tier A / Tier B）を開始する。"""
+    if current_user.role == "creator":
+        raise HTTPException(status_code=403, detail="クリエイターアカウントはコースを購入できません")
     if data.tier not in ("A", "B"):
         raise HTTPException(status_code=400, detail="tier は 'A' または 'B' を指定してください")
 

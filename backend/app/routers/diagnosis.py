@@ -126,6 +126,8 @@ class DiagnosisSubmitRequest(BaseModel):
 @router.post("/{course_id}/submit", status_code=201)
 def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """診断7問の回答を送信し、AIが30日ロードマップを生成して返す（事業検証ポイント②）。要(購入済み学習者)"""
+    if current_user.role == "creator":
+        raise HTTPException(status_code=403, detail="クリエイターアカウントは学習者として診断を受けられません")
     course = _get_purchased_course(db, course_id, current_user)
     personality = _get_personality_profile(db, course)
 
@@ -148,9 +150,10 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     profile = db.query(LearnerProfile).filter(
         LearnerProfile.user_id == current_user.id, LearnerProfile.course_id == course_id
     ).first()
-    if not profile:
-        profile = LearnerProfile(user_id=current_user.id, course_id=course_id)
-        db.add(profile)
+    if profile:
+        raise HTTPException(status_code=409, detail="Day1診断は既に完了しています。再診断はできません。")
+    profile = LearnerProfile(user_id=current_user.id, course_id=course_id)
+    db.add(profile)
 
     profile.current_score = data.current_score
     profile.target_score = data.target_score

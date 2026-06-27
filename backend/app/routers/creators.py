@@ -118,6 +118,13 @@ def apply_as_creator(data: CreatorApplyRequest, current_user=Depends(get_current
     if existing:
         raise HTTPException(status_code=400, detail="すでにクリエイター申請済みです")
 
+    has_learner_history = (
+        db.query(Purchase).filter(Purchase.user_id == current_user.id, Purchase.status == "succeeded").first()
+        or db.query(CourseSubscription).filter(CourseSubscription.user_id == current_user.id).first()
+    )
+    if has_learner_history:
+        raise HTTPException(status_code=400, detail="学習者として購入・契約履歴があるアカウントはクリエイター申請できません")
+
     profile = CreatorProfile(
         user_id=current_user.id,
         speciality=data.speciality,

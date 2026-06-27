@@ -141,6 +141,12 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
     data["lessons"] = [_serialize_lesson(l, unlocked) for l in lessons]
     data["is_purchased"] = unlocked
     data["has_days"] = len(course.days) > 0
+    data["has_diagnosis"] = (
+        db.query(LearnerProfile).filter(
+            LearnerProfile.user_id == user_id, LearnerProfile.course_id == course.id,
+        ).first() is not None
+        if user_id else False
+    )
     subscription = None
     if user_id:
         subscription = db.query(CourseSubscription).filter(

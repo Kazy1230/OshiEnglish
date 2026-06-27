@@ -16,19 +16,12 @@ type ChatQuestion = {
   frustration_signal?: { topic: string; count: number } | null;
 };
 type Character = { id: number; name: string; avatar_url?: string | null };
-type AdjustedTask = { type: string; minutes: number; carryover?: boolean };
-type TodayDay = { day: number; theme?: string | null; is_rest_day: boolean };
-type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null };
 
 const QUICK_ACTIONS: { id: string; label: string; type: "report" | "emotion" | "question" }[] = [
   { id: "half_done", label: "📖 半分できた", type: "report" },
   { id: "struggled", label: "😓 今日は難しかった", type: "emotion" },
   { id: "question", label: "❓ 質問がある", type: "question" },
 ];
-
-const TASK_TYPE_LABEL: Record<string, string> = {
-  vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
-};
 
 export default function CourseChatPage() {
   const params = useParams();
@@ -43,11 +36,6 @@ export default function CourseChatPage() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [tier, setTier] = useState<"A" | "B" | null>(null);
   const [completedDays, setCompletedDays] = useState(0);
-  const [today, setToday] = useState<TodayDay | null>(null);
-  const [todayTasks, setTodayTasks] = useState<AdjustedTask[]>([]);
-  const [reportedToday, setReportedToday] = useState(false);
-  const [reporting, setReporting] = useState(false);
-  const [checkedTaskTypes, setCheckedTaskTypes] = useState<Set<string>>(new Set());
   const [progressError, setProgressError] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
@@ -72,18 +60,7 @@ export default function CourseChatPage() {
         let hadProgressError = false;
         const logs = await api.listDayLogs(courseId).catch(() => { hadProgressError = true; return [] as { day_number: number; is_completed: boolean }[]; });
         const completed = logs.filter((l: { is_completed: boolean }) => l.is_completed).length;
-        const currentDay = Math.min(completed + 1, 30);
         setCompletedDays(completed);
-        setReportedToday(logs.some((l: { day_number: number; is_completed: boolean }) => l.day_number === currentDay && l.is_completed));
-
-        const days = await api.listCourseDays(courseId).catch(() => { hadProgressError = true; return [] as TodayDay[]; });
-        const todayDay = days.find((d: TodayDay) => d.day === currentDay) ?? null;
-        setToday(todayDay);
-
-        const learnerDays = await api.listLearnerCourseDays(courseId).catch(() => [] as LearnerDay[]);
-        const todayLearnerDay = learnerDays.find((d: LearnerDay) => d.day === currentDay) ?? null;
-        const carryover = (todayLearnerDay?.carryover_tasks ?? []).map((t: AdjustedTask) => ({ ...t, carryover: true }));
-        setTodayTasks([...(todayLearnerDay?.adjusted_tasks ?? []), ...carryover]);
         setProgressError(hadProgressError);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
@@ -93,30 +70,6 @@ export default function CourseChatPage() {
     }
     init();
   }, [courseId, router]);
-
-  function toggleTaskType(type: string) {
-    setCheckedTaskTypes(prev => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
-  }
-
-  async function handleReportToday() {
-    if (!today || reporting || reportedToday) return;
-    setReporting(true);
-    try {
-      await api.completeDayLog(courseId, today.day, undefined, Array.from(checkedTaskTypes));
-      setReportedToday(true);
-      setCompletedDays(prev => prev + 1);
-      toast("今日の学習を報告しました！", "success");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "報告に失敗しました", "error");
-    } finally {
-      setReporting(false);
-    }
-  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto" });
@@ -190,43 +143,8 @@ export default function CourseChatPage() {
 
       {progressError && (
         <p className="text-xs text-center mt-2 flex-shrink-0" style={{ color: "var(--muted)" }}>
-          ⚠ 進捗・今日のタスクの取得に失敗しました。再読み込みしてください。
+          ⚠ 進捗の取得に失敗しました。再読み込みしてください。
         </p>
-      )}
-
-      {today && !today.is_rest_day && (
-        <div className="mx-4 sm:mx-6 mt-4 card flex flex-col gap-2 flex-shrink-0">
-          <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>Day {today.day} の今日のタスク{today.theme ? `：${today.theme}` : ""}</p>
-          {todayTasks.length > 0 && (
-            <ul className="text-sm flex flex-col gap-1" style={{ color: "var(--text)" }}>
-              {todayTasks.map((t, i) => (
-                <li key={i} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={checkedTaskTypes.has(t.type)}
-                    onChange={() => toggleTaskType(t.type)}
-                    disabled={reportedToday}
-                  />
-                  <span>
-                    {TASK_TYPE_LABEL[t.type] ?? t.type}（{t.minutes}分）
-                    {t.carryover && (
-                      <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "var(--accent)", color: "white" }}>
-                        繰越
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button
-            onClick={handleReportToday}
-            disabled={reporting || reportedToday}
-            className="btn-primary self-start disabled:opacity-50"
-          >
-            {reportedToday ? "✅ 今日の学習を報告済み" : reporting ? "報告中…" : "今日の学習を報告する"}
-          </button>
-        </div>
       )}
 
       <main className="flex-1 min-h-0 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4 overflow-y-auto">
