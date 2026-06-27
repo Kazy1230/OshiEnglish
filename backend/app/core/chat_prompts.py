@@ -146,6 +146,29 @@ def build_today_message_user(day_number: int, today_tasks: list[dict], recent_su
     return [{"role": "user", "content": content}]
 
 
+def build_reminder_message_system(personality_profile: dict, tier: int) -> str:
+    """改善提案書5節: 3段階リマインドメール。tierは未開封日数に応じた1/2/3のトーン段階。"""
+    comm = personality_profile.get("communication", {})
+    coaching = personality_profile.get("coaching_style", {})
+    tone_instruction = {
+        1: "通常の声かけ。今日のタスクを確認しようと軽く促す。",
+        2: "促進トーン。昨日できなかった分を一緒に取り戻そうと前向きに励ます。",
+        3: "感情に寄り添うトーン。プレッシャーをかけず「少しだけでもいいから開いてみて」という温かい呼びかけにする。",
+    }[tier]
+    return f"""あなたは英語学習コーチとして、以下の人格で学習者にリマインドメッセージを送ってください。
+
+【人格設定】
+- 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）
+- 励まし方: {coaching.get('encouragement', '')}
+
+【今回のトーン】{tone_instruction}
+100文字以内。人格プロファイルの口調を必ず守ること。説明文や前置きは不要です。"""
+
+
+def build_reminder_message_user(days_inactive: int) -> list[dict]:
+    return [{"role": "user", "content": f"学習者は{days_inactive}日間チャットを開いていません。リマインドメッセージを生成してください。"}]
+
+
 DAILY_SUMMARY_SYSTEM = """以下の会話を3文以内・100トークン以内に圧縮してください。
 含めるべき情報:
 - 学習者が完了したタスク

@@ -188,6 +188,12 @@ _ensure_column("creator_profiles", "self_intro", "TEXT NULL")
 # --- コース作成時に使用教材・進行速度を入力させ、Layer1生成のインプットにする ---
 _ensure_column("courses", "study_materials", "TEXT NULL")
 _ensure_column("courses", "pace", "VARCHAR(50) NULL")
+# --- 教材進捗ベースのパーソナライズ（議論サマリー20260626 13節） ---
+_ensure_column("course_textbooks", "target_laps", "INT NOT NULL DEFAULT 1")
+# --- 繰越タスク設計（議論サマリー20260626 15節） ---
+_ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
+_ensure_column("day_logs", "completed_task_types", "JSON NULL")
+_ensure_column("interview_sessions", "base_type", "VARCHAR(50) NULL")
 
 
 def _migrate_legacy_characters_to_creator():
@@ -232,7 +238,20 @@ def _dedupe_characters_per_creator():
         db.close()
 
 
+def _ensure_preset_textbooks():
+    """TOEFL ITP向けプリセット教材が textbooks テーブルに存在することを保証する。"""
+    from app.core.textbook_seeds import seed_textbooks
+
+    db = SessionLocal()
+    try:
+        seed_textbooks(db)
+        db.commit()
+    finally:
+        db.close()
+
+
 _ensure_preset_characters()
+_ensure_preset_textbooks()
 _migrate_legacy_characters_to_creator()
 # 1クリエイター=1人格(キャラクター)の制約を追加する前に、既存の重複データを統合しておく
 _dedupe_characters_per_creator()
@@ -257,6 +276,19 @@ async def _daily_notification_loop():
         await asyncio.sleep(60)
 
 
+# --- 改善提案書5節: 3段階リマインドメール（チャット未開封日数に応じたメール） ---
+# 1日1コースあたり1通までという粒度のため、1時間間隔のチェックで十分
+async def _inactivity_reminder_loop():
+    from app.core.daily_notifications import check_inactive_reminders
+
+    while True:
+        try:
+            await asyncio.to_thread(check_inactive_reminders)
+        except Exception:
+            logger.exception("[InactivityReminder] 定期チェックに失敗しました")
+        await asyncio.sleep(3600)
+
+
 
 # --- 週次・月次レビュー（要件定義書5.5）---
 # 日次通知よりチェック頻度が低くても十分なため、AI呼び出しコストを抑えて30分間隔でチェックする
@@ -275,9 +307,11 @@ async def _review_generation_loop():
 async def lifespan(_app: FastAPI):
     notification_task = asyncio.create_task(_daily_notification_loop())
     review_task = asyncio.create_task(_review_generation_loop())
+    inactivity_task = asyncio.create_task(_inactivity_reminder_loop())
     yield
     notification_task.cancel()
     review_task.cancel()
+    inactivity_task.cancel()
 
 
 app = FastAPI(

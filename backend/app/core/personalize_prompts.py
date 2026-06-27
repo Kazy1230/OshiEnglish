@@ -12,6 +12,8 @@ PERSONALIZE_SYSTEM = """あなたは英語学習の個別コーチです。
 3. 得意分野は配分を減らして苦手に回す
 4. 増減は1タスクあたり最大15分まで
 5. 休息日（is_rest_day=true）はadjusted_tasksを空配列にする
+6. 「教材ごとの残りタスク量」が指定されている場合、すでに進んでいる教材のタスクは減らし、
+   残りが多い教材のタスクを優先的に増やす（既にやり終えた範囲を重複して課さない）
 
 必ず以下のJSON形式のオブジェクトのみで出力してください（説明文・前置き・コードフェンスは一切不要）。
 "days"配列の要素数はコース骨格と同じ日数にしてください:
@@ -29,13 +31,20 @@ PERSONALIZE_SYSTEM = """あなたは英語学習の個別コーチです。
 """
 
 
-def build_personalize_messages(learner_profile, personality_profile: dict, course_days: list[dict]) -> list[dict]:
+def build_personalize_messages(
+    learner_profile,
+    personality_profile: dict,
+    course_days: list[dict],
+    textbook_progress_summary: list[str] | None = None,
+) -> list[dict]:
+    progress_text = "\n".join(textbook_progress_summary) if textbook_progress_summary else "指定なし"
     content = (
         f"【学習者の診断結果】\n"
         f"現在スコア: {learner_profile.current_score}\n"
         f"目標スコア: {learner_profile.target_score}\n"
         f"1日の学習時間: {learner_profile.daily_study_time}\n"
         f"苦手分野: {', '.join(learner_profile.weak_areas or [])}\n\n"
+        f"【教材ごとの残りタスク量】\n{progress_text}\n\n"
         f"【コース骨格(Layer1)】\n{json.dumps(course_days, ensure_ascii=False, indent=2)}\n\n"
         f"上記の情報で30日分のパーソナライズ配分を生成してください。"
     )

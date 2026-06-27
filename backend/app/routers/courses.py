@@ -1,3 +1,4 @@
+import re
 from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -18,8 +19,15 @@ from app.models.course_material import CourseMaterial
 from app.models.personality_profile import PersonalityProfile
 from app.models.day_log import DayLog
 from app.models.course_subscription import CourseSubscription
+from app.models.textbook import Textbook
+from app.models.course_textbook import CourseTextbook
+from app.models.textbook_day_assignment import TextbookDayAssignment
+from app.models.course_diagnosis_question import CourseDiagnosisQuestion
+from app.models.learner_profile import LearnerProfile
+from app.models.learner_course_day import LearnerCourseDay
 from app.core.llm import generate_text, LLMError
 from app.core import course_generation_prompts as gen_prompts
+from app.core import quality_check_prompts as qc_prompts
 
 router = APIRouter(tags=["コース・レッスン"])
 
@@ -453,6 +461,108 @@ def update_course(course_id: int, data: CourseUpdate, current_user=Depends(get_c
     return _serialize_course_detail(db, course, current_user)
 
 
+def _quality_level(score: int, max_score: int) -> str:
+    ratio = score / max_score if max_score else 0
+    if ratio >= 0.8:
+        return "good"
+    if ratio >= 0.5:
+        return "warning"
+    return "critical"
+
+
+def _check_goal_specificity(course: Course) -> dict:
+    has_number = bool(re.search(r"\d", course.goal or ""))
+    score = 20 if has_number else 0
+    feedback = (
+        "目標に具体的な数値が含まれています。"
+        if has_number
+        else "目標に具体的な数値目標を含めましょう（例：「TOEIC800点を取得する」）。"
+    )
+    return {"key": "goal_specificity", "label": "目標の具体性", "score": score, "max": 20, "level": _quality_level(score, 20), "feedback": feedback}
+
+
+def _check_task_density(course: Course) -> dict:
+    rest_days = sum(1 for d in course.days if d.is_rest_day)
+    if rest_days <= 4:
+        score = 20
+        feedback = f"休息日は{rest_days}日で、適切なペースです。"
+    else:
+        score = max(0, 20 - (rest_days - 4) * 4)
+        feedback = f"休息日が{rest_days}日あります。3〜4日程度に減らすと、学習者がより継続しやすくなります。"
+    return {"key": "task_density", "label": "30日間のタスク密度", "score": score, "max": 20, "level": _quality_level(score, 20), "feedback": feedback}
+
+
+def _check_textbook_coverage(db: Session, course: Course) -> dict:
+    course_textbooks = db.query(CourseTextbook).filter(CourseTextbook.course_id == course.id).all()
+    total = 0
+    assigned = 0
+    unassigned_examples = []
+    for ct in course_textbooks:
+        for a in ct.day_assignments:
+            total += 1
+            if a.day_number is not None:
+                assigned += 1
+            elif len(unassigned_examples) < 3:
+                name = ct.textbook.name if ct.textbook else ct.custom_name
+                unassigned_examples.append(f"「{name}」{a.toc_item}")
+    if total == 0:
+        return {"key": "textbook_coverage", "label": "教材マッピングの網羅性", "score": 0, "max": 20, "level": "critical", "feedback": "使用教材の章・項目が日程に割り当てられていません。"}
+    score = round(20 * assigned / total)
+    if assigned == total:
+        feedback = "選択した教材のすべての章が30日間に割り振られています。"
+    else:
+        feedback = f"未割り当ての項目があります（例: {'、'.join(unassigned_examples)}）。全ての教材を活用しましょう。"
+    return {"key": "textbook_coverage", "label": "教材マッピングの網羅性", "score": score, "max": 20, "level": _quality_level(score, 20), "feedback": feedback}
+
+
+def _check_goal_intensity_fit(course: Course) -> dict:
+    try:
+        text = generate_text(
+            qc_prompts.GOAL_FIT_SYSTEM,
+            qc_prompts.build_goal_fit_messages(course.goal, course.target_learner, course.intensity, course.pace),
+            max_tokens=300,
+            json_mode=True,
+        )
+        result = qc_prompts.extract_goal_fit_result(text)
+    except LLMError:
+        result = {"score": 20, "feedback": "AIによる整合性判定に失敗したため、この項目は満点扱いとしています。"}
+    return {"key": "goal_intensity_fit", "label": "目標と学習時間の整合性", "score": result["score"], "max": 20, "level": _quality_level(result["score"], 20), "feedback": result["feedback"]}
+
+
+def _check_custom_questions(course: Course) -> dict:
+    count = len(course.diagnosis_questions)
+    score = 20 if count > 0 else 0
+    if count > 0:
+        examples = "、".join(f"「{q.question_text}」" for q in course.diagnosis_questions[:2])
+        feedback = f"カスタム質問を{count}件設定しています。{examples}はパーソナライズに役立つ良い質問です。"
+    else:
+        feedback = "Day1診断のカスタム質問が未設定です。学習者の状況を把握する質問を1つ以上追加しましょう。"
+    return {"key": "custom_questions", "label": "カスタム質問の設定", "score": score, "max": 20, "level": _quality_level(score, 20), "feedback": feedback}
+
+
+@router.get("/courses/{course_id}/quality-check")
+def get_course_quality_check(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """コース公開前のセルフチェック（評価ボタン）。5項目×20点で採点し、改善案を返す。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    if len(course.days) == 0:
+        raise HTTPException(status_code=400, detail="30日分のコンテンツが生成されてからチェックできます")
+
+    items = [
+        _check_goal_specificity(course),
+        _check_task_density(course),
+        _check_textbook_coverage(db, course),
+        _check_goal_intensity_fit(course),
+        _check_custom_questions(course),
+    ]
+    total_score = sum(item["score"] for item in items)
+    return {
+        "score": total_score,
+        "max_score": 100,
+        "recommendation": "publish" if total_score >= 70 else "review",
+        "items": items,
+    }
+
+
 @router.post("/courses/{course_id}/submit-for-review")
 def submit_course_for_review(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """コースの公開申請を行う(draft→review)。運営の承認後に公開される。要(本人)"""
@@ -541,6 +651,26 @@ def reorder_lessons(course_id: int, data: ReorderRequest, current_user=Depends(g
 
 # ----- 30日伴走コース：Layer1骨格自動生成・日単位編集 -----
 
+def _build_day_textbook_plan(db: Session, course_id: int) -> dict[int, list[dict]]:
+    """course_textbooks + textbook_day_assignmentsから、day_number(1〜30)ごとの教材項目割り当てを組み立てる。
+    day_numberがNULL（「やらない」）の項目は含めない。"""
+    course_textbooks = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()
+    plan: dict[int, list[dict]] = {}
+    for ct in course_textbooks:
+        name = ct.textbook.name if ct.textbook else ct.custom_name
+        for assignment in ct.day_assignments:
+            if assignment.day_number is None:
+                continue
+            plan.setdefault(assignment.day_number, []).append({
+                "textbook_name": name,
+                "item": assignment.toc_item,
+                "type": ct.type,
+                "daily_words": ct.daily_words,
+                "review_words": ct.review_words,
+            })
+    return plan
+
+
 def _run_course_days_generation(course_id: int):
     """Layer1（概念コース骨格）の生成本体。1回のAI呼び出しで30日分をまとめて生成する（目安15秒）。
     requestのDBセッションが閉じた後も動くようバックグラウンドタスクとして実行し、自前でSessionLocal()を開く。"""
@@ -552,13 +682,14 @@ def _run_course_days_generation(course_id: int):
         if not course:
             return
         personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+        day_textbook_plan = _build_day_textbook_plan(db, course.id)
 
         try:
             text = generate_text(
                 gen_prompts.COURSE_DAY_GENERATION_SYSTEM,
                 gen_prompts.build_course_day_generation_messages(
                     personality.profile, course.title, course.goal, course.target_learner, course.intensity,
-                    course.study_materials, course.pace,
+                    course.study_materials, course.pace, day_textbook_plan,
                 ),
                 max_tokens=4000,
                 json_mode=True,
@@ -703,6 +834,147 @@ def delete_course_material(material_id: int, current_user=Depends(get_current_us
     return {"message": "削除しました"}
 
 
+# ----- 教材ベースのコース作成（議論サマリー20260626 1節・10節） -----
+
+@router.get("/textbooks")
+def search_textbooks(query: Optional[str] = None, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """プリセット教材を書籍名で検索する。要(ログイン済み)"""
+    q = db.query(Textbook).filter(Textbook.is_preset == True)
+    if query:
+        q = q.filter(Textbook.name.ilike(f"%{query}%"))
+    return [
+        {"id": t.id, "name": t.name, "publisher": t.publisher, "type": t.type, "target": t.target, "toc": t.toc}
+        for t in q.all()
+    ]
+
+
+def _serialize_course_textbook(ct: CourseTextbook) -> dict:
+    toc = ct.textbook.toc if ct.textbook else ct.custom_toc
+    assignments_by_item = {a.toc_item: a.day_number for a in ct.day_assignments}
+    return {
+        "id": ct.id,
+        "course_id": ct.course_id,
+        "textbook_id": ct.textbook_id,
+        "name": ct.textbook.name if ct.textbook else ct.custom_name,
+        "type": ct.type,
+        "daily_words": ct.daily_words,
+        "review_words": ct.review_words,
+        "target_laps": ct.target_laps,
+        "day_assignments": [
+            {"toc_item": item.get("item"), "day_number": assignments_by_item.get(item.get("item"))}
+            for item in (toc or [])
+        ],
+    }
+
+
+class CourseTextbookCreate(BaseModel):
+    textbook_id: Optional[int] = None
+    custom_name: Optional[str] = None
+    custom_toc: Optional[List[dict]] = None
+    type: str = "textbook"  # textbook / vocabulary
+    daily_words: Optional[int] = None
+    review_words: Optional[int] = None
+    target_laps: int = 1  # コース完了条件として求める周回数
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if not self.textbook_id and not (self.custom_name and self.custom_toc):
+            raise ValueError("textbook_id、またはcustom_name+custom_tocのいずれかを指定してください")
+        return self
+
+
+@router.get("/courses/{course_id}/textbooks")
+def list_course_textbooks(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """コースに紐づく教材一覧（日程割り当て込み）。要(本人)"""
+    _get_owned_course(db, course_id, current_user)
+    textbooks = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()
+    return [_serialize_course_textbook(t) for t in textbooks]
+
+
+@router.post("/courses/{course_id}/textbooks", status_code=status.HTTP_201_CREATED)
+def add_course_textbook(course_id: int, data: CourseTextbookCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """コースに教材を追加する（プリセット選択 or 手入力）。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    if data.textbook_id and not db.query(Textbook).filter(Textbook.id == data.textbook_id).first():
+        raise HTTPException(status_code=404, detail="教材が見つかりません")
+
+    course_textbook = CourseTextbook(
+        course_id=course.id,
+        textbook_id=data.textbook_id,
+        custom_name=data.custom_name,
+        custom_toc=data.custom_toc,
+        type=data.type,
+        daily_words=data.daily_words,
+        review_words=data.review_words,
+        target_laps=data.target_laps,
+    )
+    db.add(course_textbook)
+    db.commit()
+    db.refresh(course_textbook)
+    return _serialize_course_textbook(course_textbook)
+
+
+class CourseTextbookUpdate(BaseModel):
+    daily_words: Optional[int] = None
+    review_words: Optional[int] = None
+    target_laps: Optional[int] = None
+
+
+@router.put("/course-textbooks/{course_textbook_id}")
+def update_course_textbook(course_textbook_id: int, data: CourseTextbookUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """単語帳の1日あたり新規語数・復習語数・目標周回数を更新する。要(本人)"""
+    course_textbook = db.query(CourseTextbook).filter(CourseTextbook.id == course_textbook_id).first()
+    if not course_textbook:
+        raise HTTPException(status_code=404, detail="教材が見つかりません")
+    _get_owned_course(db, course_textbook.course_id, current_user)
+    for key, val in data.model_dump(exclude_none=True).items():
+        setattr(course_textbook, key, val)
+    db.commit()
+    db.refresh(course_textbook)
+    return _serialize_course_textbook(course_textbook)
+
+
+@router.delete("/course-textbooks/{course_textbook_id}")
+def delete_course_textbook(course_textbook_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """コースから教材を削除する。要(本人)"""
+    course_textbook = db.query(CourseTextbook).filter(CourseTextbook.id == course_textbook_id).first()
+    if not course_textbook:
+        raise HTTPException(status_code=404, detail="教材が見つかりません")
+    _get_owned_course(db, course_textbook.course_id, current_user)
+    db.delete(course_textbook)
+    db.commit()
+    return {"message": "削除しました"}
+
+
+class DayAssignmentItem(BaseModel):
+    toc_item: str
+    day_number: Optional[int] = None  # 1〜30。NULLは「やらない」
+
+
+class DayAssignmentsUpdate(BaseModel):
+    assignments: List[DayAssignmentItem]
+
+
+@router.put("/course-textbooks/{course_textbook_id}/day-assignments")
+def set_day_assignments(course_textbook_id: int, data: DayAssignmentsUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """教材の各章を1〜30日のどこでやるか（またはやらない）を一括設定する。要(本人)"""
+    course_textbook = db.query(CourseTextbook).filter(CourseTextbook.id == course_textbook_id).first()
+    if not course_textbook:
+        raise HTTPException(status_code=404, detail="教材が見つかりません")
+    _get_owned_course(db, course_textbook.course_id, current_user)
+
+    for item in data.assignments:
+        if item.day_number is not None and not (1 <= item.day_number <= 30):
+            raise HTTPException(status_code=400, detail="day_numberは1〜30で指定してください")
+
+    db.query(TextbookDayAssignment).filter(TextbookDayAssignment.course_textbook_id == course_textbook_id).delete(synchronize_session=False)
+    for item in data.assignments:
+        db.add(TextbookDayAssignment(course_textbook_id=course_textbook_id, toc_item=item.toc_item, day_number=item.day_number))
+    db.commit()
+    db.refresh(course_textbook)
+    return _serialize_course_textbook(course_textbook)
+
+
 # ----- 学習進捗(リテンション機能) -----
 
 @router.get("/courses/me/purchased")
@@ -826,11 +1098,41 @@ def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Se
 
 class DayLogCompleteRequest(BaseModel):
     memo: Optional[str] = None
+    completed_task_types: Optional[List[str]] = None  # 実際に完了したタスク種別。未指定なら全タスク完了とみなす
+
+
+def _apply_carryover(db: Session, course_id: int, user_id: int, day_number: int, completed_task_types: Optional[list[str]]) -> None:
+    """完了報告された日のタスクのうち未完了だった分を、翌日のcarryover_tasksに反映する（議論サマリー15節）。
+    completed_task_typesがNone（未指定）の場合は全タスク完了とみなし、繰越は発生させない。"""
+    if completed_task_types is None or day_number >= 30:
+        return
+    profile = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == user_id, LearnerProfile.course_id == course_id
+    ).first()
+    if not profile:
+        return
+    today_learner_day = db.query(LearnerCourseDay).filter(
+        LearnerCourseDay.learner_profile_id == profile.id, LearnerCourseDay.day_number == day_number,
+    ).first()
+    if not today_learner_day:
+        return
+    skipped_tasks = [t for t in (today_learner_day.adjusted_tasks or []) if t.get("type") not in completed_task_types]
+
+    next_day = db.query(LearnerCourseDay).filter(
+        LearnerCourseDay.learner_profile_id == profile.id, LearnerCourseDay.day_number == day_number + 1,
+    ).first()
+    if not next_day:
+        return
+    # 同じ日からの繰越を複数回送信されても重複加算しないよう、この日からの分は一旦除いて再構成する
+    other_carryover = [t for t in (next_day.carryover_tasks or []) if t.get("carryover_from_day") != day_number]
+    new_carryover = [{**t, "carryover_from_day": day_number} for t in skipped_tasks]
+    next_day.carryover_tasks = other_carryover + new_carryover if new_carryover else other_carryover or None
 
 
 @router.put("/courses/{course_id}/day-logs/{day_number}/complete")
 def complete_day_log(course_id: int, day_number: int, data: DayLogCompleteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """指定日の学習完了を記録する（学習者が「完了」と報告した時に呼ぶ）。要(購入済み学習者)"""
+    """指定日の学習完了を記録する（学習者が「完了」と報告した時に呼ぶ）。
+    completed_task_typesを指定すると、未完了だったタスク種別が翌日に繰越タスクとして引き継がれる。要(購入済み学習者)"""
     from datetime import datetime, timezone
 
     course = db.query(Course).filter(Course.id == course_id).first()
@@ -851,5 +1153,108 @@ def complete_day_log(course_id: int, day_number: int, data: DayLogCompleteReques
     log.completed_at = datetime.now(timezone.utc)
     if data.memo is not None:
         log.memo = data.memo
+    log.completed_task_types = data.completed_task_types
+    _apply_carryover(db, course_id, current_user.id, day_number, data.completed_task_types)
     db.commit()
     return {"day_number": day_number, "is_completed": True, "completed_at": log.completed_at, "memo": log.memo}
+
+
+# ----- Day1診断のカスタム質問（議論サマリー20260626 14節） -----
+
+VALID_ANSWER_TYPES = ("text", "number", "single", "multi")
+
+
+def _serialize_diagnosis_question(q: CourseDiagnosisQuestion) -> dict:
+    return {
+        "id": q.id,
+        "course_id": q.course_id,
+        "question_text": q.question_text,
+        "answer_type": q.answer_type,
+        "options": q.options,
+        "is_required": q.is_required,
+        "order": q.order,
+    }
+
+
+class DiagnosisQuestionCreate(BaseModel):
+    question_text: str
+    answer_type: str = "text"
+    options: Optional[List[str]] = None
+    is_required: bool = True
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if self.answer_type not in VALID_ANSWER_TYPES:
+            raise ValueError(f"answer_typeは{VALID_ANSWER_TYPES}のいずれかを指定してください")
+        if self.answer_type in ("single", "multi") and not self.options:
+            raise ValueError("single/multiの場合はoptionsを指定してください")
+        return self
+
+
+class DiagnosisQuestionUpdate(BaseModel):
+    question_text: Optional[str] = None
+    answer_type: Optional[str] = None
+    options: Optional[List[str]] = None
+    is_required: Optional[bool] = None
+    order: Optional[int] = None
+
+
+@router.get("/courses/{course_id}/diagnosis-questions")
+def list_diagnosis_questions(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """コースに設定されたDay1診断のカスタム質問一覧。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    return [_serialize_diagnosis_question(q) for q in course.diagnosis_questions]
+
+
+@router.post("/courses/{course_id}/diagnosis-questions", status_code=status.HTTP_201_CREATED)
+def add_diagnosis_question(course_id: int, data: DiagnosisQuestionCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Day1診断のカスタム質問を追加する。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    next_order = max((q.order for q in course.diagnosis_questions), default=-1) + 1
+    question = CourseDiagnosisQuestion(
+        course_id=course.id,
+        question_text=data.question_text,
+        answer_type=data.answer_type,
+        options=data.options,
+        is_required=data.is_required,
+        order=next_order,
+    )
+    db.add(question)
+    db.commit()
+    db.refresh(question)
+    return _serialize_diagnosis_question(question)
+
+
+@router.put("/diagnosis-questions/{question_id}")
+def update_diagnosis_question(question_id: int, data: DiagnosisQuestionUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Day1診断のカスタム質問を更新する。要(本人)"""
+    question = db.query(CourseDiagnosisQuestion).filter(CourseDiagnosisQuestion.id == question_id).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="質問が見つかりません")
+    _get_owned_course(db, question.course_id, current_user)
+
+    updates = data.model_dump(exclude_none=True)
+    answer_type = updates.get("answer_type", question.answer_type)
+    if answer_type not in VALID_ANSWER_TYPES:
+        raise HTTPException(status_code=400, detail=f"answer_typeは{VALID_ANSWER_TYPES}のいずれかを指定してください")
+    options = updates.get("options", question.options)
+    if answer_type in ("single", "multi") and not options:
+        raise HTTPException(status_code=400, detail="single/multiの場合はoptionsを指定してください")
+
+    for key, val in updates.items():
+        setattr(question, key, val)
+    db.commit()
+    db.refresh(question)
+    return _serialize_diagnosis_question(question)
+
+
+@router.delete("/diagnosis-questions/{question_id}")
+def delete_diagnosis_question(question_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Day1診断のカスタム質問を削除する。要(本人)"""
+    question = db.query(CourseDiagnosisQuestion).filter(CourseDiagnosisQuestion.id == question_id).first()
+    if not question:
+        raise HTTPException(status_code=404, detail="質問が見つかりません")
+    _get_owned_course(db, question.course_id, current_user)
+    db.delete(question)
+    db.commit()
+    return {"message": "削除しました"}

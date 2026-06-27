@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, model_validator
@@ -10,6 +10,10 @@ from app.core import diagnosis_prompts as prompts
 from app.core import personalize_prompts
 from app.models.course import Course
 from app.models.course_day import CourseDay
+from app.models.course_textbook import CourseTextbook
+from app.models.learner_textbook_progress import LearnerTextbookProgress
+from app.models.course_diagnosis_question import CourseDiagnosisQuestion
+from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.personality_profile import PersonalityProfile
 from app.models.learner_profile import LearnerProfile
 from app.models.learner_roadmap import LearnerRoadmap
@@ -51,9 +55,17 @@ def _serialize_roadmap(roadmap: LearnerRoadmap) -> dict:
 
 @router.get("/{course_id}/questions")
 def get_diagnosis_questions(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """診断チャットの固定7問（選択肢含む）を返す。要(購入済み学習者)"""
-    _get_purchased_course(db, course_id, current_user)
-    return {"questions": prompts.FIXED_QUESTIONS}
+    """診断チャットの固定7問（選択肢含む）、教材ごとの進捗質問、クリエイター独自のカスタム質問を返す。要(購入済み学習者)"""
+    course = _get_purchased_course(db, course_id, current_user)
+    textbook_questions = [
+        {"course_textbook_id": ct.id, "name": ct.textbook.name if ct.textbook else ct.custom_name, "target_laps": ct.target_laps}
+        for ct in course.textbooks
+    ]
+    custom_questions = [
+        {"id": q.id, "question_text": q.question_text, "answer_type": q.answer_type, "options": q.options, "is_required": q.is_required}
+        for q in course.diagnosis_questions
+    ]
+    return {"questions": prompts.FIXED_QUESTIONS, "textbook_questions": textbook_questions, "custom_questions": custom_questions}
 
 
 @router.post("/{course_id}/welcome")
@@ -72,6 +84,19 @@ def get_welcome_message(course_id: int, current_user=Depends(get_current_user), 
     return {"message": message}
 
 
+class TextbookProgressInput(BaseModel):
+    course_textbook_id: int
+    status: Literal["not_started", "in_progress", "completed"]
+    lap_number: Optional[int] = None  # in_progressの場合：現在何周目か（1始まり）
+    percent: Optional[int] = None  # in_progressの場合：その周の進捗(0〜100)
+    note: Optional[str] = None
+
+
+class CustomAnswerInput(BaseModel):
+    question_id: int
+    answer: str
+
+
 class DiagnosisSubmitRequest(BaseModel):
     current_score: Optional[int] = None
     has_taken_before: bool = True  # False=未受験（current_scoreは無視される）
@@ -81,6 +106,8 @@ class DiagnosisSubmitRequest(BaseModel):
     weak_areas: List[str]
     study_history: Optional[str] = None
     materials: Optional[str] = None
+    textbook_progress: Optional[List[TextbookProgressInput]] = None
+    custom_answers: Optional[List[CustomAnswerInput]] = None
 
     @model_validator(mode="after")
     def _validate(self):
@@ -106,6 +133,11 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     if not course_days:
         raise HTTPException(status_code=400, detail="このコースはまだ30日分のコンテンツが生成されていません")
 
+    answered_question_ids = {a.question_id for a in (data.custom_answers or [])}
+    missing_required = [q.question_text for q in course.diagnosis_questions if q.is_required and q.id not in answered_question_ids]
+    if missing_required:
+        raise HTTPException(status_code=400, detail=f"必須の質問に回答してください: {'、'.join(missing_required)}")
+
     week_themes = []
     seen_weeks = set()
     for d in course_days:
@@ -129,6 +161,9 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     profile.materials = data.materials
     db.commit()
     db.refresh(profile)
+
+    _save_textbook_progress(db, profile, data.textbook_progress or [])
+    _save_custom_answers(db, profile, data.custom_answers or [])
 
     try:
         text = generate_text(
@@ -159,6 +194,66 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     return _serialize_roadmap(roadmap)
 
 
+def _save_textbook_progress(db: Session, profile: LearnerProfile, items: list[TextbookProgressInput]) -> None:
+    """Day1診断で入力された教材ごとの進捗をlearner_textbook_progressにupsertする。
+    current_progressは「1周=100%」単位の累計値（議論サマリー13節）。"""
+    for item in items:
+        course_textbook = db.query(CourseTextbook).filter(CourseTextbook.id == item.course_textbook_id).first()
+        if not course_textbook:
+            continue
+        if item.status == "not_started":
+            current_progress = 0
+        elif item.status == "completed":
+            current_progress = course_textbook.target_laps * 100
+        else:
+            lap_number = max(item.lap_number or 1, 1)
+            percent = min(max(item.percent or 0, 0), 100)
+            current_progress = (lap_number - 1) * 100 + percent
+
+        progress = db.query(LearnerTextbookProgress).filter(
+            LearnerTextbookProgress.learner_profile_id == profile.id,
+            LearnerTextbookProgress.course_textbook_id == item.course_textbook_id,
+        ).first()
+        if not progress:
+            progress = LearnerTextbookProgress(learner_profile_id=profile.id, course_textbook_id=item.course_textbook_id)
+            db.add(progress)
+        progress.current_progress = current_progress
+        progress.note = item.note
+    db.commit()
+
+
+def _save_custom_answers(db: Session, profile: LearnerProfile, items: list[CustomAnswerInput]) -> None:
+    """Day1診断で入力されたクリエイター独自のカスタム質問への回答をlearner_diagnosis_answersにupsertする。"""
+    for item in items:
+        question = db.query(CourseDiagnosisQuestion).filter(CourseDiagnosisQuestion.id == item.question_id).first()
+        if not question or question.course_id != profile.course_id:
+            continue
+        answer = db.query(LearnerDiagnosisAnswer).filter(
+            LearnerDiagnosisAnswer.learner_profile_id == profile.id,
+            LearnerDiagnosisAnswer.question_id == item.question_id,
+        ).first()
+        if not answer:
+            answer = LearnerDiagnosisAnswer(learner_profile_id=profile.id, question_id=item.question_id)
+            db.add(answer)
+        answer.answer = item.answer
+    db.commit()
+
+
+def _build_textbook_progress_summary(db: Session, profile: LearnerProfile) -> list[str]:
+    """Layer2プロンプト用に、教材ごとの残りタスク量を人間が読める文章にする（議論サマリー13節の計算式）。"""
+    progresses = db.query(LearnerTextbookProgress).filter(LearnerTextbookProgress.learner_profile_id == profile.id).all()
+    summary = []
+    for p in progresses:
+        ct = db.query(CourseTextbook).filter(CourseTextbook.id == p.course_textbook_id).first()
+        if not ct:
+            continue
+        name = ct.textbook.name if ct.textbook else ct.custom_name
+        total = ct.target_laps * 100
+        remaining = max(total - float(p.current_progress), 0)
+        summary.append(f"「{name}」目標{ct.target_laps}周（{total}%）中、現在{p.current_progress}%済み → 残り{remaining:.0f}%分を30日に配分")
+    return summary
+
+
 def _generate_learner_course_days(db: Session, profile: LearnerProfile, personality: PersonalityProfile, course_days: list[CourseDay]) -> None:
     """Layer2: 学習者専用の30日タスク配分を生成し learner_course_days に保存する。
     生成に失敗した場合はLayer1のtask_typesをそのままコピーして処理を継続する（学習者を止めない）。"""
@@ -168,11 +263,12 @@ def _generate_learner_course_days(db: Session, profile: LearnerProfile, personal
         {"day": d.day_number, "theme": d.theme, "task_types": d.task_types, "is_rest_day": d.is_rest_day}
         for d in course_days
     ]
+    textbook_progress_summary = _build_textbook_progress_summary(db, profile)
     adjusted_by_day: dict[int, dict] = {}
     try:
         text = generate_text(
             personalize_prompts.PERSONALIZE_SYSTEM,
-            personalize_prompts.build_personalize_messages(profile, personality.profile, course_days_brief),
+            personalize_prompts.build_personalize_messages(profile, personality.profile, course_days_brief, textbook_progress_summary),
             max_tokens=4000,
             json_mode=True,
         )
@@ -212,7 +308,7 @@ def list_learner_course_days(course_id: int, current_user=Depends(get_current_us
         LearnerCourseDay.learner_profile_id == profile.id
     ).order_by(LearnerCourseDay.day_number).all()
     return [
-        {"day": d.day_number, "adjusted_tasks": d.adjusted_tasks, "personalize_reason": d.personalize_reason}
+        {"day": d.day_number, "adjusted_tasks": d.adjusted_tasks, "personalize_reason": d.personalize_reason, "carryover_tasks": d.carryover_tasks}
         for d in days
     ]
 

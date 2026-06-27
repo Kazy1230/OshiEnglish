@@ -120,7 +120,7 @@ export default function StudioPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" title="AIコンテンツ生成スタジオ" />
+      <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIコンテンツ生成スタジオ" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         {/* あなたのキャラクター（1クリエイター=1人格のため選択は不要） */}

@@ -25,6 +25,8 @@ from app.models.learner_review import LearnerReview
 from app.models.learner_profile import LearnerProfile
 from app.models.learner_roadmap import LearnerRoadmap
 from app.models.learner_course_day import LearnerCourseDay
+from app.models.learner_textbook_progress import LearnerTextbookProgress
+from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
@@ -156,6 +158,8 @@ def _cascade_delete_learner_data(db: Session, user_id: int) -> None:
     if learner_profile_ids:
         db.query(LearnerRoadmap).filter(LearnerRoadmap.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
         db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
+        db.query(LearnerTextbookProgress).filter(LearnerTextbookProgress.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
+        db.query(LearnerDiagnosisAnswer).filter(LearnerDiagnosisAnswer.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
     db.query(LearnerProfile).filter(LearnerProfile.user_id == user_id).delete(synchronize_session=False)
 
     question_ids = [r[0] for r in db.query(Question.id).filter(Question.user_id == user_id).all()]

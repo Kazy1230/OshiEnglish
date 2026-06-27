@@ -15,4 +15,6 @@ class LearnerCourseDay(Base):
     day_number = Column(Integer, nullable=False)  # 1〜30
     adjusted_tasks = Column(JSON, nullable=False)  # 例: [{"type": "vocabulary", "minutes": 15}]
     personalize_reason = Column(Text, nullable=True)
+    # 前日に未完了だったタスクの繰越（議論サマリー15節）。例: [{"type": "vocabulary", "minutes": 10, "carryover_from_day": 5}]
+    carryover_tasks = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

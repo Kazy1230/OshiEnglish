@@ -138,7 +138,7 @@ export default function EditCharacterPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" title="キャラクター編集" />
+      <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="キャラクター編集" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <div className="card flex items-center gap-4">

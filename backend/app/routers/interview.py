@@ -1,4 +1,7 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -21,9 +24,19 @@ def _get_own_creator_profile(db: Session, current_user) -> CreatorProfile:
     return profile
 
 
+BASE_TYPES = ("共感型", "指導型", "激励型", "厳格型")
+
+
+class InterviewStartRequest(BaseModel):
+    base_type: Optional[str] = None
+
+
 @router.post("/start")
-def start_interview(current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
-    """インタビューを開始（または途中保存から再開）し、現在出すべき質問を返す。"""
+def start_interview(data: InterviewStartRequest = InterviewStartRequest(), current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    """インタビューを開始（または途中保存から再開）し、現在出すべき質問を返す。
+
+    base_typeはStep0で選んだ指導スタイルのプリセット（初回開始時のみ反映、再開時は無視）。
+    """
     profile = _get_own_creator_profile(db, current_user)
 
     session = db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).first()
@@ -31,6 +44,8 @@ def start_interview(current_user=Depends(get_current_creator_or_admin), db: Sess
         return {"status": "completed", "question": None, "progress": {"current": 5, "total": 5}}
 
     if not session:
+        if data.base_type and data.base_type not in BASE_TYPES:
+            raise HTTPException(status_code=400, detail=f"base_typeは{BASE_TYPES}のいずれかを指定してください")
         session = InterviewSession(
             creator_id=profile.id,
             fixed_index=0,
@@ -38,6 +53,7 @@ def start_interview(current_user=Depends(get_current_creator_or_admin), db: Sess
             pending_question=prompts.FIXED_QUESTIONS[0],
             qa_history=[],
             status="in_progress",
+            base_type=data.base_type,
         )
         db.add(session)
         db.commit()
@@ -47,10 +63,8 @@ def start_interview(current_user=Depends(get_current_creator_or_admin), db: Sess
         "status": "in_progress",
         "question": session.pending_question,
         "progress": {"current": session.fixed_index + 1, "total": len(prompts.FIXED_QUESTIONS)},
+        "base_type": session.base_type,
     }
-
-
-from pydantic import BaseModel
 
 
 class InterviewAnswerRequest(BaseModel):
@@ -134,13 +148,16 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
     try:
         text = generate_text(
             prompts.PROFILE_GENERATION_SYSTEM,
-            prompts.build_profile_generation_messages(session.qa_history or []),
+            prompts.build_profile_generation_messages(session.qa_history or [], session.base_type),
             max_tokens=1500,
             json_mode=True,
         )
         generated = extract_json(text)
     except LLMError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    if session.base_type:
+        generated["base_type"] = session.base_type
 
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
     if not personality:

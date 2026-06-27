@@ -102,7 +102,7 @@ export default function CreatorAnalyticsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" title="質問分析ダッシュボード" />
+      <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="質問分析ダッシュボード" />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {pending.length > 0 && (
           <div className="card flex flex-col gap-3" style={{ borderColor: "var(--accent)" }}>

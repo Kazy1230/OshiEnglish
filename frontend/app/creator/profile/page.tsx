@@ -81,7 +81,7 @@ export default function CreatorProfilePage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" title="人格プロファイル" />
+      <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="人格プロファイル" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {profile && !editing && (

@@ -17,6 +17,9 @@ from app.models.course_day import CourseDay
 from app.models.course import Course
 from app.models.customer import Customer
 from app.models.notification import Notification
+from app.models.question import Question
+from app.models.day_log import DayLog
+from app.models.creator_profile import CreatorProfile
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,10 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
     learner_day = db.query(LearnerCourseDay).filter(
         LearnerCourseDay.learner_profile_id == learner_profile.id, LearnerCourseDay.day_number == day_number,
     ).first()
-    today_tasks = learner_day.adjusted_tasks if learner_day else []
+    today_tasks = (
+        (learner_day.adjusted_tasks or []) + [{**t, "carryover": True} for t in (learner_day.carryover_tasks or [])]
+        if learner_day else []
+    )
     summaries = db.query(DailySummary).filter(
         DailySummary.user_id == setting.user_id, DailySummary.course_id == course.id,
         DailySummary.day_number >= max(1, day_number - 3), DailySummary.day_number < day_number,
@@ -105,6 +111,114 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
     if user.email:
         subject = "【ManaVillage】今日の声かけです" if slot == "morning" else "【ManaVillage】今日の学習報告はいかがでしたか？"
         send_email(user.email, subject, f"<p>{message}</p>")
+
+
+def _last_activity_at(db: Session, user_id: int, course_id: int, learner_profile: LearnerProfile) -> datetime:
+    """学習者が最後にチャットを開いた（質問を送った）日時。なければDay1診断完了日時を起点とする。"""
+    last_question = db.query(Question.created_at).filter(
+        Question.user_id == user_id, Question.course_id == course_id,
+    ).order_by(Question.created_at.desc()).first()
+    started = learner_profile.created_at
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    if not last_question:
+        return started
+    last_at = last_question[0]
+    if last_at.tzinfo is None:
+        last_at = last_at.replace(tzinfo=timezone.utc)
+    return max(last_at, started)
+
+
+def _already_sent_reminder_today(db: Session, user_id: int, course_id: int, today: datetime) -> bool:
+    jst_midnight = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    utc_cutoff = jst_midnight.astimezone(timezone.utc).replace(tzinfo=None)
+    todays_notifications = db.query(Notification).filter(
+        Notification.user_id == user_id,
+        Notification.type == "inactivity_reminder",
+        Notification.created_at >= utc_cutoff,
+    ).all()
+    return any((n.payload or {}).get("course_id") == course_id for n in todays_notifications)
+
+
+def _notify_creator_of_inactive_learner(db: Session, course: Course, learner_user: Customer, days_inactive: int):
+    """4日以上未開封の場合、Tier B講師に直接連絡を促すメールを送る（ベストエフォート）。"""
+    if not course.character or not course.character.creator_id:
+        return
+    creator_profile = db.query(CreatorProfile).filter(CreatorProfile.id == course.character.creator_id).first()
+    if not creator_profile:
+        return
+    creator_user = db.query(Customer).filter(Customer.id == creator_profile.user_id).first()
+    if not creator_user or not creator_user.email:
+        return
+    send_email(
+        creator_user.email,
+        f"【ManaVillage】学習者が{days_inactive}日間チャットを開いていません",
+        f"<p>「{course.title}」の学習者（{learner_user.email}）が{days_inactive}日間チャットを開いていません。"
+        f"管理画面から直接メッセージを送ることをご検討ください。</p>",
+    )
+
+
+def check_inactive_reminders():
+    """改善提案書5節: チャット未開封日数に応じた3段階リマインドメールを送信する（1日1コースあたり1通まで）。"""
+    db = SessionLocal()
+    try:
+        now = datetime.now(JST)
+        learner_profiles = db.query(LearnerProfile).all()
+        for learner_profile in learner_profiles:
+            course = db.query(Course).filter(Course.id == learner_profile.course_id).first()
+            if not course:
+                continue
+            completed_count = db.query(DayLog).filter(
+                DayLog.user_id == learner_profile.user_id, DayLog.course_id == course.id, DayLog.is_completed == True,  # noqa: E712
+            ).count()
+            if completed_count >= 30:
+                continue
+
+            last_activity = _last_activity_at(db, learner_profile.user_id, course.id, learner_profile)
+            days_inactive = (now.date() - last_activity.astimezone(JST).date()).days
+            if days_inactive < 1:
+                continue
+            if _already_sent_reminder_today(db, learner_profile.user_id, course.id, now):
+                continue
+
+            personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+            if not personality or not personality.profile:
+                continue
+            user = db.query(Customer).filter(Customer.id == learner_profile.user_id).first()
+            if not user or not user.email:
+                continue
+
+            tier = min(3, days_inactive)
+            try:
+                message = generate_text(
+                    prompts.build_reminder_message_system(personality.profile, tier),
+                    prompts.build_reminder_message_user(days_inactive),
+                    max_tokens=200,
+                    model=app_settings.DEEPSEEK_MODEL_LITE,
+                )
+            except LLMError:
+                logger.exception(f"[InactivityReminder] メッセージ生成に失敗しました: user_id={user.id}, course_id={course.id}")
+                continue
+
+            db.add(Notification(
+                user_id=user.id,
+                type="inactivity_reminder",
+                payload={"course_id": course.id, "days_inactive": days_inactive, "message": message},
+            ))
+            db.commit()
+
+            subject_tone = {1: "今日の学習はどう？", 2: "昨日できなかった分、今日一緒に取り戻そう", 3: f"{days_inactive}日ぶりだね"}[tier]
+            send_email(
+                user.email,
+                f"【ManaVillage】{subject_tone}",
+                f"<p>{message}</p>"
+                f'<p><a href="https://manavillage.app/courses/{course.id}/chat">チャット画面へ戻る</a></p>',
+            )
+
+            if days_inactive >= 4:
+                _notify_creator_of_inactive_learner(db, course, user, days_inactive)
+    finally:
+        db.close()
 
 
 def send_due_notifications():

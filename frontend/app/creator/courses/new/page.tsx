@@ -19,7 +19,6 @@ export default function NewCoursePage() {
   const [goal, setGoal] = useState("");
   const [targetLearner, setTargetLearner] = useState("");
   const [intensity, setIntensity] = useState("");
-  const [studyMaterials, setStudyMaterials] = useState("");
   const [pace, setPace] = useState("標準");
   const [tierAPrice, setTierAPrice] = useState("1480");
   const [tierBPrice, setTierBPrice] = useState("3980");
@@ -49,15 +48,14 @@ export default function NewCoursePage() {
         goal,
         target_learner: targetLearner,
         intensity,
-        study_materials: studyMaterials,
         pace,
         price: 0,
         is_free: false,
         tier_a_price: Number(tierAPrice),
         tier_b_price: enableTierB ? Number(tierBPrice) : null,
       });
-      toast("コースを作成しました。次に30日分のコンテンツを生成しましょう。", "success");
-      router.push(`/creator/courses/${course.id}/calendar`);
+      toast("コースを作成しました。次に使用する教材を設定しましょう。", "success");
+      router.push(`/creator/courses/${course.id}/textbooks`);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "作成に失敗しました", "error");
     } finally {
@@ -98,11 +96,6 @@ export default function NewCoursePage() {
             <input value={intensity} onChange={e => setIntensity(e.target.value)} required placeholder="例：1日30〜60分" />
           </div>
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>使用する教材 *</label>
-            <textarea rows={2} value={studyMaterials} onChange={e => setStudyMaterials(e.target.value)} required placeholder="例：公式問題集Vol.8、市販の単語アプリ" />
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>AIがこの教材を前提にタスク内容を組み立てます。</p>
-          </div>
-          <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>進行速度 *</label>
             <select value={pace} onChange={e => setPace(e.target.value)} required>
               <option value="ゆっくり">ゆっくり（無理なく着実に）</option>
@@ -128,10 +121,10 @@ export default function NewCoursePage() {
             )}
           </div>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            ※ 30日分の学習内容は次の画面でAIが自動生成します。生成には<a href="/creator/profile" style={{ color: "var(--accent)" }}>人格プロファイル</a>が必要です。
+            ※ 次の画面で使用する教材を設定し、30日分の学習内容をAIが自動生成します。生成には<a href="/creator/profile" style={{ color: "var(--accent)" }}>人格プロファイル</a>が必要です。
           </p>
           <button type="submit" className="btn-primary text-center" disabled={submitting || !character}>
-            {submitting ? "作成中…" : "作成して次へ"}
+            {submitting ? "作成中…" : "作成して次へ（教材を設定する）"}
           </button>
         </form>
       </main>

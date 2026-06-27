@@ -21,7 +21,10 @@ type Roadmap = {
   creator_message: string;
 };
 
-type Phase = "loading" | "welcome" | "questions" | "generating" | "result" | "detail" | "notif" | "today" | "done";
+type TextbookQuestion = { course_textbook_id: number; name: string; target_laps: number };
+type TextbookProgressAnswer = { status: "not_started" | "in_progress" | "completed"; lap_number?: number; percent?: number };
+
+type Phase = "loading" | "welcome" | "questions" | "textbook_progress" | "generating" | "result" | "detail" | "notif" | "today" | "done";
 
 export default function DiagnosisPage() {
   const params = useParams();
@@ -42,6 +45,10 @@ export default function DiagnosisPage() {
   const [studyHistory, setStudyHistory] = useState("");
   const [materials, setMaterials] = useState("");
   const [textDraft, setTextDraft] = useState("");
+
+  const [textbookQuestions, setTextbookQuestions] = useState<TextbookQuestion[]>([]);
+  const [tbIndex, setTbIndex] = useState(0);
+  const [textbookAnswers, setTextbookAnswers] = useState<Record<number, TextbookProgressAnswer>>({});
 
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
   const [morningTime, setMorningTime] = useState("07:00");
@@ -70,6 +77,7 @@ export default function DiagnosisPage() {
         ]);
         setWelcomeMessage(welcome.message);
         setQuestions(qs.questions);
+        setTextbookQuestions(qs.textbook_questions || []);
         setPhase("welcome");
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
@@ -99,12 +107,16 @@ export default function DiagnosisPage() {
         weak_areas: weakAreas,
         study_history: studyHistory || null,
         materials: materials || null,
+        textbook_progress: textbookQuestions.map(q => ({
+          course_textbook_id: q.course_textbook_id,
+          ...(textbookAnswers[q.course_textbook_id] ?? { status: "not_started" as const }),
+        })),
       });
       setRoadmap(data);
       setPhase("result");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "ロードマップの生成に失敗しました", "error");
-      setPhase("questions");
+      setPhase(textbookQuestions.length > 0 ? "textbook_progress" : "questions");
     }
   }
 
@@ -112,6 +124,21 @@ export default function DiagnosisPage() {
     if (qIndex < questions.length - 1) {
       setQIndex(qIndex + 1);
       setTextDraft("");
+    } else if (textbookQuestions.length > 0) {
+      setTbIndex(0);
+      setPhase("textbook_progress");
+    } else {
+      submitAll();
+    }
+  }
+
+  function setTextbookAnswer(courseTextbookId: number, answer: TextbookProgressAnswer) {
+    setTextbookAnswers(prev => ({ ...prev, [courseTextbookId]: answer }));
+  }
+
+  function nextTextbookQuestion() {
+    if (tbIndex < textbookQuestions.length - 1) {
+      setTbIndex(tbIndex + 1);
     } else {
       submitAll();
     }
@@ -179,6 +206,17 @@ export default function DiagnosisPage() {
             materials={materials} setMaterials={setMaterials}
             textDraft={textDraft} setTextDraft={setTextDraft}
             onNext={nextQuestion}
+          />
+        )}
+
+        {phase === "textbook_progress" && textbookQuestions.length > 0 && (
+          <TextbookProgressCard
+            question={textbookQuestions[tbIndex]}
+            index={tbIndex}
+            total={textbookQuestions.length}
+            answer={textbookAnswers[textbookQuestions[tbIndex].course_textbook_id]}
+            setAnswer={a => setTextbookAnswer(textbookQuestions[tbIndex].course_textbook_id, a)}
+            onNext={nextTextbookQuestion}
           />
         )}
 
@@ -384,6 +422,76 @@ function QuestionCard(props: {
           </button>
         )}
         <button onClick={handleNext} disabled={!canProceed()} className="btn-primary disabled:opacity-50">
+          次へ
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TextbookProgressCard({
+  question, index, total, answer, setAnswer, onNext,
+}: {
+  question: TextbookQuestion;
+  index: number;
+  total: number;
+  answer: TextbookProgressAnswer | undefined;
+  setAnswer: (a: TextbookProgressAnswer) => void;
+  onNext: () => void;
+}) {
+  const status = answer?.status ?? "not_started";
+  const lapNumber = answer?.lap_number ?? 1;
+  const percent = answer?.percent ?? 0;
+
+  function canProceed(): boolean {
+    return status === "not_started" || status === "completed" || (status === "in_progress" && lapNumber >= 1);
+  }
+
+  return (
+    <div className="card flex flex-col gap-4">
+      <p className="text-xs" style={{ color: "var(--muted)" }}>教材の進捗 {index + 1} / {total}</p>
+      <p className="text-sm font-bold" style={{ color: "var(--text)" }}>
+        このコースでは「{question.name}」を使います。今どのくらい進んでいますか？
+      </p>
+      <p className="text-xs" style={{ color: "var(--muted)" }}>完了条件：{question.target_laps}周</p>
+
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: "not_started", label: "未着手" },
+          { key: "in_progress", label: "途中" },
+          { key: "completed", label: `${question.target_laps}周済み` },
+        ] as const).map(opt => (
+          <button key={opt.key}
+            onClick={() => setAnswer({ status: opt.key, lap_number: lapNumber, percent })}
+            className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
+            style={{ borderColor: "var(--border)", background: status === opt.key ? "var(--primary)" : "var(--card)", color: status === opt.key ? "white" : "var(--text)" }}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {status === "in_progress" && (
+        <div className="flex flex-col gap-3">
+          {question.target_laps > 1 && (
+            <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--text)" }}>
+              今、何周目ですか？
+              <select value={lapNumber} onChange={e => setAnswer({ status, lap_number: Number(e.target.value), percent })}>
+                {Array.from({ length: question.target_laps }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n}周目</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--text)" }}>
+            その周の進捗（約何%）
+            <input type="number" min={0} max={100} value={percent}
+              onChange={e => setAnswer({ status, lap_number: lapNumber, percent: Number(e.target.value) })} />
+          </label>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <button onClick={onNext} disabled={!canProceed()} className="btn-primary disabled:opacity-50">
           次へ
         </button>
       </div>

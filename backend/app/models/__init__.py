@@ -25,3 +25,9 @@ from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
 from app.models.learner_review import LearnerReview
+from app.models.textbook import Textbook
+from app.models.course_textbook import CourseTextbook
+from app.models.textbook_day_assignment import TextbookDayAssignment
+from app.models.learner_textbook_progress import LearnerTextbookProgress
+from app.models.course_diagnosis_question import CourseDiagnosisQuestion
+from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer

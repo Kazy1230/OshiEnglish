@@ -29,6 +29,32 @@ const TASK_TYPE_OPTIONS = [
 ];
 
 type Material = { id: number; type: string; title: string; file_url: string };
+type QualityCheckItem = { key: string; label: string; score: number; max: number; level: "good" | "warning" | "critical"; feedback: string };
+type QualityCheckResult = { score: number; max_score: number; recommendation: "publish" | "review"; items: QualityCheckItem[] };
+type DiagnosisQuestion = { id: number; question_text: string; answer_type: "text" | "number" | "single" | "multi"; options: string[] | null; is_required: boolean };
+
+const ANSWER_TYPE_LABEL: Record<string, string> = { text: "テキスト入力", number: "数値入力", single: "単一選択", multi: "複数選択" };
+
+type QuestionTemplateItem = { question_text: string; answer_type: "text" | "number" | "single" | "multi"; options?: string[]; is_required: boolean };
+const QUESTION_TEMPLATES: Record<string, { label: string; questions: QuestionTemplateItem[] }> = {
+  toefl_itp: {
+    label: "TOEFL ITP推奨質問セット",
+    questions: [
+      { question_text: "現在のTOEFL ITPスコアは？（未受験なら0）", answer_type: "number", is_required: true },
+      { question_text: "受験予定日はいつですか？", answer_type: "text", is_required: false },
+      { question_text: "苦手なセクションは？", answer_type: "single", options: ["Section 1 リスニング", "Section 2 文法", "Section 3 リーディング"], is_required: true },
+      { question_text: "過去に受験経験はありますか？", answer_type: "single", options: ["あり", "なし"], is_required: true },
+      { question_text: "英語学習を始めてどのくらいですか？", answer_type: "single", options: ["半年未満", "半年〜1年", "1〜3年", "3年以上"], is_required: false },
+    ],
+  },
+  general: {
+    label: "汎用推奨質問セット",
+    questions: [
+      { question_text: "この学習で達成したい目標は？", answer_type: "text", is_required: true },
+      { question_text: "1日あたり確保できる学習時間は？", answer_type: "single", options: ["30分未満", "30分〜1時間", "1〜2時間", "2時間以上"], is_required: true },
+    ],
+  },
+};
 
 export default function CourseCalendarPage() {
   const params = useParams();
@@ -48,6 +74,16 @@ export default function CourseCalendarPage() {
 
   const [courseStatus, setCourseStatus] = useState<string>("draft");
   const [submitting, setSubmitting] = useState(false);
+  const [checkingQuality, setCheckingQuality] = useState(false);
+  const [qualityCheck, setQualityCheck] = useState<QualityCheckResult | null>(null);
+
+  const [diagnosisQuestions, setDiagnosisQuestions] = useState<DiagnosisQuestion[]>([]);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionType, setNewQuestionType] = useState<DiagnosisQuestion["answer_type"]>("text");
+  const [newQuestionOptions, setNewQuestionOptions] = useState("");
+  const [newQuestionRequired, setNewQuestionRequired] = useState(true);
+  const [savingQuestion, setSavingQuestion] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -61,6 +97,7 @@ export default function CourseCalendarPage() {
       reloadDays(),
       api.listCourseMaterials(courseId).then(setMaterials).catch(() => {}),
       api.getCourseDetail(courseId).then(c => setCourseStatus(c.status)).catch(() => {}),
+      api.listDiagnosisQuestions(courseId).then(setDiagnosisQuestions).catch(() => {}),
     ]).finally(() => setFetching(false));
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,11 +108,79 @@ export default function CourseCalendarPage() {
     try {
       await api.submitCourseForReview(courseId);
       setCourseStatus("review");
+      setQualityCheck(null);
       toast("公開申請しました。運営の承認後に公開されます。", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "公開申請に失敗しました", "error");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleOpenQualityCheck() {
+    setCheckingQuality(true);
+    try {
+      setQualityCheck(await api.getCourseQualityCheck(courseId));
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "品質チェックに失敗しました", "error");
+    } finally {
+      setCheckingQuality(false);
+    }
+  }
+
+  async function handleApplyTemplate(key: string) {
+    const template = QUESTION_TEMPLATES[key];
+    if (!template) return;
+    setApplyingTemplate(true);
+    try {
+      for (const q of template.questions) {
+        const added = await api.addDiagnosisQuestion(courseId, q);
+        setDiagnosisQuestions(prev => [...prev, added]);
+      }
+      toast(`「${template.label}」を追加しました`, "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "テンプレートの追加に失敗しました", "error");
+    } finally {
+      setApplyingTemplate(false);
+    }
+  }
+
+  async function handleAddQuestion(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newQuestionText.trim()) return;
+    const options = newQuestionOptions.split("\n").map(s => s.trim()).filter(Boolean);
+    if ((newQuestionType === "single" || newQuestionType === "multi") && options.length === 0) {
+      toast("単一選択・複数選択の場合は選択肢を入力してください", "error");
+      return;
+    }
+    setSavingQuestion(true);
+    try {
+      const added = await api.addDiagnosisQuestion(courseId, {
+        question_text: newQuestionText.trim(),
+        answer_type: newQuestionType,
+        options: options.length > 0 ? options : null,
+        is_required: newQuestionRequired,
+      });
+      setDiagnosisQuestions(prev => [...prev, added]);
+      setNewQuestionText("");
+      setNewQuestionOptions("");
+      setNewQuestionType("text");
+      setNewQuestionRequired(true);
+      toast("質問を追加しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "追加に失敗しました", "error");
+    } finally {
+      setSavingQuestion(false);
+    }
+  }
+
+  async function handleDeleteQuestion(id: number) {
+    if (!confirm("この質問を削除しますか？")) return;
+    try {
+      await api.deleteDiagnosisQuestion(id);
+      setDiagnosisQuestions(prev => prev.filter(q => q.id !== id));
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "削除に失敗しました", "error");
     }
   }
 
@@ -165,8 +270,8 @@ export default function CourseCalendarPage() {
             </span>
           </div>
           {courseStatus === "draft" && (
-            <button className="btn-primary" disabled={submitting || days.length === 0} onClick={handleSubmitForReview}>
-              {submitting ? "申請中…" : "公開申請する"}
+            <button className="btn-primary" disabled={checkingQuality || days.length === 0} onClick={handleOpenQualityCheck}>
+              {checkingQuality ? "チェック中…" : "公開申請する"}
             </button>
           )}
           {courseStatus === "review" && (
@@ -231,6 +336,65 @@ export default function CourseCalendarPage() {
                 <button type="submit" className="btn-ghost px-4">追加</button>
               </form>
             </div>
+
+            <div className="card flex flex-col gap-3">
+              <h2 className="font-bold" style={{ color: "var(--primary)" }}>Day1診断のカスタム質問</h2>
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                学習者がコース申込み時のDay1診断で答える、このコース独自の質問です。何を聞けばいいか迷ったら、下のテンプレートから追加できます。
+              </p>
+
+              <div className="flex gap-2 flex-wrap">
+                {Object.entries(QUESTION_TEMPLATES).map(([key, t]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="btn-ghost text-xs"
+                    disabled={applyingTemplate}
+                    onClick={() => handleApplyTemplate(key)}
+                  >
+                    ＋ {t.label}を追加
+                  </button>
+                ))}
+              </div>
+
+              {diagnosisQuestions.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {diagnosisQuestions.map(q => (
+                    <div key={q.id} className="flex items-start justify-between gap-2 text-sm p-2 rounded-lg" style={{ background: "var(--example-bg, #eee)" }}>
+                      <div>
+                        <p style={{ color: "var(--text)" }}>{q.question_text} {q.is_required && <span className="text-[10px] font-bold" style={{ color: "var(--accent)" }}>必須</span>}</p>
+                        <p className="text-xs" style={{ color: "var(--muted)" }}>
+                          {ANSWER_TYPE_LABEL[q.answer_type]}{q.options ? `（${q.options.join("／")}）` : ""}
+                        </p>
+                      </div>
+                      <button className="text-xs flex-shrink-0" style={{ color: "#c0392b" }} onClick={() => handleDeleteQuestion(q.id)}>削除</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form onSubmit={handleAddQuestion} className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                <input value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} placeholder="質問文" />
+                <div className="flex gap-2 flex-wrap items-center">
+                  <select value={newQuestionType} onChange={e => setNewQuestionType(e.target.value as DiagnosisQuestion["answer_type"])}>
+                    {Object.entries(ANSWER_TYPE_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                  </select>
+                  <label className="text-xs flex items-center gap-1" style={{ color: "var(--muted)" }}>
+                    <input type="checkbox" checked={newQuestionRequired} onChange={e => setNewQuestionRequired(e.target.checked)} />
+                    必須にする
+                  </label>
+                </div>
+                {(newQuestionType === "single" || newQuestionType === "multi") && (
+                  <textarea
+                    rows={3}
+                    value={newQuestionOptions}
+                    onChange={e => setNewQuestionOptions(e.target.value)}
+                    placeholder={"選択肢を1行に1つずつ入力してください"}
+                  />
+                )}
+                <button type="submit" className="btn-primary self-start" disabled={savingQuestion}>{savingQuestion ? "追加中…" : "質問を追加する"}</button>
+              </form>
+            </div>
           </>
         )}
       </main>
@@ -238,6 +402,82 @@ export default function CourseCalendarPage() {
       {selectedDay && (
         <DayEditPanel day={selectedDay} saving={saving} onClose={() => setSelectedDay(null)} onSave={handleSaveDay} />
       )}
+
+      {qualityCheck && (
+        <QualityCheckModal
+          result={qualityCheck}
+          submitting={submitting}
+          onPublishAnyway={handleSubmitForReview}
+          onImprove={() => setQualityCheck(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const LEVEL_META: Record<QualityCheckItem["level"], { icon: string; color: string }> = {
+  good: { icon: "✅", color: "#2f9e64" },
+  warning: { icon: "🟡", color: "#f5a623" },
+  critical: { icon: "🔴", color: "#e53e3e" },
+};
+
+function QualityCheckModal({
+  result, submitting, onPublishAnyway, onImprove,
+}: {
+  result: QualityCheckResult;
+  submitting: boolean;
+  onPublishAnyway: () => void;
+  onImprove: () => void;
+}) {
+  const needsImprovement = result.items.filter(i => i.level !== "good");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
+      <div className="card max-w-lg w-full max-h-[90vh] overflow-y-auto flex flex-col gap-4" style={{ background: "var(--card-bg, #fff)" }}>
+        <div>
+          <p className="font-black text-lg" style={{ color: "var(--primary)" }}>📊 コース品質チェック</p>
+          <p className="text-2xl font-black mt-1" style={{ color: "var(--accent)" }}>{result.score}点 / {result.max_score}点</p>
+          <p className="text-xs font-bold mt-1" style={{ color: result.recommendation === "publish" ? "#2f9e64" : "#f5a623" }}>
+            {result.recommendation === "publish" ? "推奨：このまま公開できます" : "推奨：いくつか改善してから公開しましょう"}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {result.items.map(item => (
+            <div key={item.key}>
+              <div className="flex items-center justify-between text-sm">
+                <span style={{ color: "var(--text)" }}>{LEVEL_META[item.level].icon} {item.label}</span>
+                <span className="font-bold" style={{ color: "var(--muted)" }}>{item.score}/{item.max}</span>
+              </div>
+              <div className="h-1.5 rounded-full mt-1" style={{ background: "var(--example-bg, #eee)" }}>
+                <div className="h-1.5 rounded-full" style={{ background: LEVEL_META[item.level].color, width: `${(item.score / item.max) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {needsImprovement.length > 0 && (
+          <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+            <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>改善提案</p>
+            {needsImprovement.map(item => (
+              <p key={item.key} className="text-sm" style={{ color: "var(--text)" }}>
+                {LEVEL_META[item.level].icon} <span className="font-bold">{item.label}</span>：{item.feedback}
+              </p>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          ※ この点数は目安です。コースの独自性まで評価できるものではありません。
+        </p>
+
+        <div className="flex gap-3">
+          <button className="btn-ghost flex-1" onClick={onImprove}>改善する</button>
+          <button className="btn-primary flex-1" disabled={submitting} onClick={onPublishAnyway}>
+            {submitting ? "申請中…" : "このまま公開する"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

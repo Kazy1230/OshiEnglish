@@ -1,12 +1,12 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.llm import generate_text, extract_json, LLMError
-from app.core.rate_limit import enforce_daily_message_limit
+from app.core.rate_limit import enforce_daily_character_limit, enforce_daily_message_limit
 from app.core import chat_prompts as prompts
 from app.core.config import settings
 from app.core.email import send_email
@@ -26,7 +26,8 @@ from app.models.daily_summary import DailySummary
 from app.models.day_log import DayLog
 from app.routers.courses import _is_accessible
 
-MAX_MESSAGE_LENGTH = 150
+# チャット入力は1メッセージ単位の文字数制限を撤廃し、1日の合計入力文字数で制限する（DAILY_CHARACTER_LIMIT文字/日）
+DAILY_CHARACTER_LIMIT = 2000
 
 # 同一トピックでこの回数以上質問が続いたらTier Bアップグレードを提案する（事業検証ポイント①、MVP後に実データで調整予定）
 FRUSTRATION_THRESHOLD = 3
@@ -128,12 +129,6 @@ def _notify_creator_of_pending_question(db: Session, course: Course, question_bo
 class AskRequest(BaseModel):
     body: str
 
-    @model_validator(mode="after")
-    def _validate_length(self):
-        if len(self.body) > MAX_MESSAGE_LENGTH:
-            raise ValueError(f"メッセージは{MAX_MESSAGE_LENGTH}文字以内で入力してください")
-        return self
-
 
 def _get_current_day_number(db: Session, user_id: int, course_id: int) -> int:
     """完了済み日次ログ数+1を「今日」とする（30日でキャップ）。"""
@@ -155,7 +150,9 @@ def _get_today_context(db: Session, user_id: int, course_id: int) -> tuple[int, 
             LearnerCourseDay.learner_profile_id == profile.id, LearnerCourseDay.day_number == day_number,
         ).first()
         if learner_day:
-            today_tasks = learner_day.adjusted_tasks or []
+            today_tasks = (learner_day.adjusted_tasks or []) + [
+                {**t, "carryover": True} for t in (learner_day.carryover_tasks or [])
+            ]
     summaries = db.query(DailySummary).filter(
         DailySummary.user_id == user_id, DailySummary.course_id == course_id,
         DailySummary.day_number >= max(1, day_number - 3), DailySummary.day_number < day_number,
@@ -220,7 +217,8 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     if prompts.check_injection(data.body):
         raise HTTPException(status_code=400, detail="このメッセージは送信できません")
 
-    enforce_daily_message_limit(current_user.id, course_id)
+    enforce_daily_message_limit(current_user.id, course_id, limit=30)
+    enforce_daily_character_limit(current_user.id, course_id, len(data.body), limit=DAILY_CHARACTER_LIMIT)
 
     tier = _get_tier(db, course, current_user)
     creator_id = course.character.creator_id if course.character else None

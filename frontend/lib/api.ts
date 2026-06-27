@@ -93,7 +93,8 @@ export const api = {
   generateCreatorIntro: () => apiFetch("/creators/me/generate-intro", { method: "POST" }),
 
   // AIインタビュー（人格収集）
-  startInterview: () => apiFetch("/interview/start", { method: "POST" }),
+  startInterview: (baseType?: string) =>
+    apiFetch("/interview/start", { method: "POST", body: JSON.stringify({ base_type: baseType ?? null }) }),
   submitInterviewAnswer: (answer: string) => apiFetch("/interview/answer", { method: "POST", body: JSON.stringify({ answer }) }),
   generatePersonalityProfile: () => apiFetch("/interview/generate-profile", { method: "POST" }),
   getPersonalityProfile: () => apiFetch("/interview/profile"),
@@ -111,6 +112,7 @@ export const api = {
   createCourse: (data: object) => apiFetch("/courses", { method: "POST", body: JSON.stringify(data) }),
   updateCourse: (id: number, data: object) => apiFetch(`/courses/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   submitCourseForReview: (id: number) => apiFetch(`/courses/${id}/submit-for-review`, { method: "POST" }),
+  getCourseQualityCheck: (id: number) => apiFetch(`/courses/${id}/quality-check`),
   getMyCreatedCourses: () => apiFetch("/courses/me/created"),
   listCourseEnrollments: (courseId: number) => apiFetch(`/courses/${courseId}/enrollments`),
   addCourseLesson: (courseId: number, data: object) =>
@@ -133,6 +135,25 @@ export const api = {
   addCourseMaterial: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/materials`, { method: "POST", body: JSON.stringify(data) }),
   deleteCourseMaterial: (materialId: number) => apiFetch(`/materials/${materialId}`, { method: "DELETE" }),
+
+  // Day1診断：カスタム質問
+  listDiagnosisQuestions: (courseId: number) => apiFetch(`/courses/${courseId}/diagnosis-questions`),
+  addDiagnosisQuestion: (courseId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/diagnosis-questions`, { method: "POST", body: JSON.stringify(data) }),
+  updateDiagnosisQuestion: (questionId: number, data: object) =>
+    apiFetch(`/diagnosis-questions/${questionId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteDiagnosisQuestion: (questionId: number) => apiFetch(`/diagnosis-questions/${questionId}`, { method: "DELETE" }),
+
+  // 教材ベースのコース作成：プリセット教材検索・コースへの紐付け・日程割り当て
+  searchTextbooks: (query?: string) => apiFetch(`/textbooks${query ? `?query=${encodeURIComponent(query)}` : ""}`),
+  listCourseTextbooks: (courseId: number) => apiFetch(`/courses/${courseId}/textbooks`),
+  addCourseTextbook: (courseId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/textbooks`, { method: "POST", body: JSON.stringify(data) }),
+  updateCourseTextbook: (courseTextbookId: number, data: object) =>
+    apiFetch(`/course-textbooks/${courseTextbookId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteCourseTextbook: (courseTextbookId: number) => apiFetch(`/course-textbooks/${courseTextbookId}`, { method: "DELETE" }),
+  setTextbookDayAssignments: (courseTextbookId: number, assignments: { toc_item: string; day_number: number | null }[]) =>
+    apiFetch(`/course-textbooks/${courseTextbookId}/day-assignments`, { method: "PUT", body: JSON.stringify({ assignments }) }),
 
   // マーケットプレイス：コース購入（Stripe Payment Intent）
   checkoutCourse: (courseId: number) =>
@@ -193,8 +214,11 @@ export const api = {
 
   // 30日伴走コース：日次学習ログ
   listDayLogs: (courseId: number) => apiFetch(`/courses/${courseId}/day-logs`),
-  completeDayLog: (courseId: number, dayNumber: number, memo?: string) =>
-    apiFetch(`/courses/${courseId}/day-logs/${dayNumber}/complete`, { method: "PUT", body: JSON.stringify({ memo: memo ?? null }) }),
+  completeDayLog: (courseId: number, dayNumber: number, memo?: string, completedTaskTypes?: string[]) =>
+    apiFetch(`/courses/${courseId}/day-logs/${dayNumber}/complete`, {
+      method: "PUT",
+      body: JSON.stringify({ memo: memo ?? null, completed_task_types: completedTaskTypes ?? null }),
+    }),
 
   // デイリー伴走チャット
   askChatQuestion: (courseId: number, body: string) =>

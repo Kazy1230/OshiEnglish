@@ -16,11 +16,16 @@ type ChatQuestion = {
   frustration_signal?: { topic: string; count: number } | null;
 };
 type Character = { id: number; name: string; avatar_url?: string | null };
-type AdjustedTask = { type: string; minutes: number };
+type AdjustedTask = { type: string; minutes: number; carryover?: boolean };
 type TodayDay = { day: number; theme?: string | null; is_rest_day: boolean };
-type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null };
+type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null };
 
-const MAX_MESSAGE_LENGTH = 150;
+const QUICK_ACTIONS: { id: string; label: string; type: "report" | "emotion" | "question" }[] = [
+  { id: "half_done", label: "📖 半分できた", type: "report" },
+  { id: "struggled", label: "😓 今日は難しかった", type: "emotion" },
+  { id: "question", label: "❓ 質問がある", type: "question" },
+];
+
 const TASK_TYPE_LABEL: Record<string, string> = {
   vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
 };
@@ -42,6 +47,7 @@ export default function CourseChatPage() {
   const [todayTasks, setTodayTasks] = useState<AdjustedTask[]>([]);
   const [reportedToday, setReportedToday] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [checkedTaskTypes, setCheckedTaskTypes] = useState<Set<string>>(new Set());
   const [progressError, setProgressError] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
@@ -76,7 +82,8 @@ export default function CourseChatPage() {
 
         const learnerDays = await api.listLearnerCourseDays(courseId).catch(() => [] as LearnerDay[]);
         const todayLearnerDay = learnerDays.find((d: LearnerDay) => d.day === currentDay) ?? null;
-        setTodayTasks(todayLearnerDay?.adjusted_tasks ?? []);
+        const carryover = (todayLearnerDay?.carryover_tasks ?? []).map(t => ({ ...t, carryover: true }));
+        setTodayTasks([...(todayLearnerDay?.adjusted_tasks ?? []), ...carryover]);
         setProgressError(hadProgressError);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
@@ -87,11 +94,20 @@ export default function CourseChatPage() {
     init();
   }, [courseId, router]);
 
+  function toggleTaskType(type: string) {
+    setCheckedTaskTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
+
   async function handleReportToday() {
     if (!today || reporting || reportedToday) return;
     setReporting(true);
     try {
-      await api.completeDayLog(courseId, today.day);
+      await api.completeDayLog(courseId, today.day, undefined, Array.from(checkedTaskTypes));
       setReportedToday(true);
       setCompletedDays(prev => prev + 1);
       toast("今日の学習を報告しました！", "success");
@@ -107,12 +123,9 @@ export default function CourseChatPage() {
     hasScrolledOnceRef.current = true;
   }, [questions, pendingBody]);
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!draft.trim() || sending) return;
+  async function sendMessage(body: string, restoreOnError: boolean) {
+    if (!body.trim() || sending) return;
     setSending(true);
-    const body = draft;
-    setDraft("");
     setPendingBody(body);
     try {
       const result: ChatQuestion = await api.askChatQuestion(courseId, body);
@@ -122,11 +135,29 @@ export default function CourseChatPage() {
       }
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "送信に失敗しました", "error");
-      setDraft(body);
+      if (restoreOnError) setDraft(body);
     } finally {
       setSending(false);
       setPendingBody(null);
     }
+  }
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft.trim() || sending) return;
+    const body = draft;
+    setDraft("");
+    await sendMessage(body, true);
+  }
+
+  const textInputRef = useRef<HTMLInputElement>(null);
+
+  function handleQuickAction(action: { label: string; type: "report" | "emotion" | "question" }) {
+    if (action.type === "question") {
+      textInputRef.current?.focus();
+      return;
+    }
+    sendMessage(action.label, false);
   }
 
   if (loading) return <Skeleton className="h-screen w-full" style={{ borderRadius: 0 }} />;
@@ -167,8 +198,25 @@ export default function CourseChatPage() {
         <div className="mx-4 sm:mx-6 mt-4 card flex flex-col gap-2 flex-shrink-0">
           <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>Day {today.day} の今日のタスク{today.theme ? `：${today.theme}` : ""}</p>
           {todayTasks.length > 0 && (
-            <ul className="text-sm list-disc pl-5" style={{ color: "var(--text)" }}>
-              {todayTasks.map((t, i) => <li key={i}>{TASK_TYPE_LABEL[t.type] ?? t.type}（{t.minutes}分）</li>)}
+            <ul className="text-sm flex flex-col gap-1" style={{ color: "var(--text)" }}>
+              {todayTasks.map((t, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={checkedTaskTypes.has(t.type)}
+                    onChange={() => toggleTaskType(t.type)}
+                    disabled={reportedToday}
+                  />
+                  <span>
+                    {TASK_TYPE_LABEL[t.type] ?? t.type}（{t.minutes}分）
+                    {t.carryover && (
+                      <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "var(--accent)", color: "white" }}>
+                        繰越
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
           <button
@@ -184,7 +232,7 @@ export default function CourseChatPage() {
       <main className="flex-1 min-h-0 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4 overflow-y-auto">
         {questions.length === 0 && (
           <p className="text-sm text-center mt-10" style={{ color: "var(--muted)" }}>
-            学習の相談・質問をいつでも送ってください。1日10回まで返信が届きます。
+            学習の相談・質問をいつでも送ってください。
           </p>
         )}
         {questions.map(q => (
@@ -232,21 +280,33 @@ export default function CourseChatPage() {
         </div>
       )}
 
-      <form onSubmit={handleSend} className="border-t px-4 sm:px-6 py-3 flex flex-col gap-1 flex-shrink-0" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-        <div className="flex gap-2">
-          <input
-            value={draft}
-            onChange={e => setDraft(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
-            maxLength={MAX_MESSAGE_LENGTH}
-            placeholder={`質問や相談を入力…（${MAX_MESSAGE_LENGTH}文字以内）`}
-            className="flex-1"
+      <div className="flex gap-2 px-4 sm:px-6 pt-2 flex-shrink-0 overflow-x-auto" style={{ background: "var(--bg)" }}>
+        {QUICK_ACTIONS.map(action => (
+          <button
+            key={action.id}
+            type="button"
+            onClick={() => handleQuickAction(action)}
             disabled={sending}
-          />
-          <button type="submit" disabled={sending || !draft.trim()} className="btn-primary disabled:opacity-50">
-            {sending ? "送信中…" : "送信"}
+            className="text-xs whitespace-nowrap px-3 py-1.5 rounded-full disabled:opacity-50"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            {action.label}
           </button>
-        </div>
-        <span className="text-xs self-end" style={{ color: "var(--muted)" }}>{draft.length}/{MAX_MESSAGE_LENGTH}</span>
+        ))}
+      </div>
+
+      <form onSubmit={handleSend} className="border-t px-4 sm:px-6 py-3 flex gap-2 flex-shrink-0" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+        <input
+          ref={textInputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          placeholder="質問や相談を入力…"
+          className="flex-1"
+          disabled={sending}
+        />
+        <button type="submit" disabled={sending || !draft.trim()} className="btn-primary disabled:opacity-50">
+          {sending ? "送信中…" : "送信"}
+        </button>
       </form>
     </div>
   );

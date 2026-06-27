@@ -44,3 +44,5 @@ class Course(Base):
     days = relationship("CourseDay", back_populates="course", order_by="CourseDay.day_number")
     materials = relationship("CourseMaterial", back_populates="course")
     subscriptions = relationship("CourseSubscription", back_populates="course")
+    textbooks = relationship("CourseTextbook", back_populates="course", cascade="all, delete-orphan")
+    diagnosis_questions = relationship("CourseDiagnosisQuestion", back_populates="course", cascade="all, delete-orphan", order_by="CourseDiagnosisQuestion.order")

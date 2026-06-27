@@ -29,6 +29,11 @@ from app.models.learner_profile import LearnerProfile
 from app.models.learner_roadmap import LearnerRoadmap
 from app.models.learner_course_day import LearnerCourseDay
 from app.models.notification_setting import NotificationSetting
+from app.models.course_textbook import CourseTextbook
+from app.models.textbook_day_assignment import TextbookDayAssignment
+from app.models.learner_textbook_progress import LearnerTextbookProgress
+from app.models.course_diagnosis_question import CourseDiagnosisQuestion
+from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 
 router = APIRouter(prefix="/admin", tags=["管理者機能"])
 
@@ -185,6 +190,17 @@ def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> N
     if lesson_ids:
         db.query(LessonProgress).filter(LessonProgress.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
     db.query(Lesson).filter(Lesson.course_id == course_id).delete(synchronize_session=False)
+
+    course_textbook_ids = [r[0] for r in db.query(CourseTextbook.id).filter(CourseTextbook.course_id == course_id).all()]
+    if course_textbook_ids:
+        db.query(TextbookDayAssignment).filter(TextbookDayAssignment.course_textbook_id.in_(course_textbook_ids)).delete(synchronize_session=False)
+        db.query(LearnerTextbookProgress).filter(LearnerTextbookProgress.course_textbook_id.in_(course_textbook_ids)).delete(synchronize_session=False)
+    db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).delete(synchronize_session=False)
+
+    diagnosis_question_ids = [r[0] for r in db.query(CourseDiagnosisQuestion.id).filter(CourseDiagnosisQuestion.course_id == course_id).all()]
+    if diagnosis_question_ids:
+        db.query(LearnerDiagnosisAnswer).filter(LearnerDiagnosisAnswer.question_id.in_(diagnosis_question_ids)).delete(synchronize_session=False)
+    db.query(CourseDiagnosisQuestion).filter(CourseDiagnosisQuestion.course_id == course_id).delete(synchronize_session=False)
 
     db.query(CourseDay).filter(CourseDay.course_id == course_id).delete(synchronize_session=False)
     db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete(synchronize_session=False)
