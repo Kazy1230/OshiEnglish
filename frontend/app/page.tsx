@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,18 +22,34 @@ type CourseCard = {
   character?: { name?: string | null; avatar_url?: string | null } | null;
 };
 
+const STEPS = [
+  {
+    title: "コースを選ぶ",
+    desc: "目標、価格、クリエイターの雰囲気を比べて、自分に合う伴走コースを探します。",
+  },
+  {
+    title: "Day1診断を受ける",
+    desc: "現在地、目標、学習時間、苦手分野を答えると30日プランが作られます。",
+  },
+  {
+    title: "毎日進める",
+    desc: "今日のタスクを確認し、チャットで報告や相談をしながら学習を続けます。",
+  },
+] as const;
+
 function priceLabel(c: CourseCard) {
   if (c.is_free) return "無料";
-  if (c.tier_a_price) return `¥${c.tier_a_price.toLocaleString()}/月〜`;
-  if (c.tier_b_price) return `¥${c.tier_b_price.toLocaleString()}/月〜`;
+  const prices = [c.tier_a_price, c.tier_b_price].filter((p): p is number => typeof p === "number" && p > 0);
+  if (prices.length > 0) return `月額 ¥${Math.min(...prices).toLocaleString()}〜`;
   return `¥${c.price.toLocaleString()}`;
 }
 
-const STEPS = [
-  { icon: "🎭", title: "クリエイターを選ぶ", desc: "得意分野・指導スタイルの合うメンターを見つけます" },
-  { icon: "🗺️", title: "30日プランを受け取る", desc: "クリエイターのメソッドに基づいた、あなた専用のロードマップ" },
-  { icon: "💬", title: "毎日、伴走してもらう", desc: "日々のタスクと対話で、目標達成までしっかり伴走します" },
-] as const;
+function tierLabel(c: CourseCard) {
+  if (c.tier_a_price && c.tier_b_price) return "Tier A / B";
+  if (c.tier_b_price) return "Tier B";
+  if (c.tier_a_price) return "Tier A";
+  return c.is_free ? "無料" : "買い切り";
+}
 
 export default function Home() {
   const router = useRouter();
@@ -40,6 +57,7 @@ export default function Home() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [checkingRole, setCheckingRole] = useState(true);
   const [courses, setCourses] = useState<CourseCard[]>([]);
+  const [allCourses, setAllCourses] = useState<CourseCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
@@ -58,17 +76,13 @@ export default function Home() {
     }).catch(() => setCheckingRole(false));
   }, [router]);
 
-  const [allCourses, setAllCourses] = useState<CourseCard[]>([]);
-
   useEffect(() => {
+    setLoading(true);
     api.listCourses(category || undefined).then(setCourses).finally(() => setLoading(false));
   }, [category]);
 
   useEffect(() => {
     api.listCourses().then(setAllCourses).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     api.getPublicStats().then(s => setAchieversCount(s.achievers_count)).catch(() => {});
   }, []);
 
@@ -81,302 +95,330 @@ export default function Home() {
     const kw = keyword.trim().toLowerCase();
     if (!kw) return courses;
     return courses.filter(c =>
-      c.title.toLowerCase().includes(kw) || (c.description ?? "").toLowerCase().includes(kw)
+      c.title.toLowerCase().includes(kw) ||
+      (c.description ?? "").toLowerCase().includes(kw) ||
+      (c.character?.name ?? "").toLowerCase().includes(kw)
     );
   }, [courses, keyword]);
 
-  const newest = filtered.slice(0, 6);
-
-  const [slide, setSlide] = useState(0);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    setSlide(0);
-  }, [newest.length]);
-
-  useEffect(() => {
-    if (paused || newest.length <= 1) return;
-    const timer = setInterval(() => {
-      setSlide(prev => (prev + 1) % newest.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [paused, newest.length]);
+  const featured = filtered[0] ?? null;
+  const courseGrid = featured ? filtered.slice(1, 7) : filtered.slice(0, 6);
 
   if (checkingRole) return null;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4 sticky top-0 z-20 shadow-soft" style={{ background: "var(--primary)" }}>
-        <h1 className="text-white font-black text-lg tracking-tight">
-          Mana<span style={{ color: "var(--accent)", filter: "brightness(1.6)" }}>Village</span>
-        </h1>
-        <div className="flex items-center gap-3">
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          {loggedIn ? (
-            <>
-              <Link href="/mypage" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">マイページ</Link>
-              <Link href="/creators" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">クリエイターを探す</Link>
-              <LogoutButton variant="onColor" />
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">ログイン</Link>
-              <Link href="/signup" className="text-white text-sm font-bold px-4 py-2 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "var(--accent)" }}>
-                新規登録
-              </Link>
-            </>
-          )}
+      <header className="sticky top-0 z-30 border-b" style={{ background: "color-mix(in srgb, var(--card) 92%, transparent)", borderColor: "var(--border)", backdropFilter: "blur(14px)" }}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          <Link href="/" className="font-black text-lg tracking-tight whitespace-nowrap" style={{ color: "var(--primary)" }}>
+            Mana<span style={{ color: "var(--accent)" }}>Village</span>
+          </Link>
+          <nav className="hidden sm:flex items-center gap-5 text-sm" style={{ color: "var(--muted)" }}>
+            <a href="#courses" className="hover:opacity-75">コース</a>
+            <a href="#how-it-works" className="hover:opacity-75">使い方</a>
+            <Link href="/creators" className="hover:opacity-75">クリエイター</Link>
+          </nav>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <DarkModeToggle mode={mode} onToggle={toggleMode} />
+            {loggedIn ? (
+              <>
+                <Link href="/mypage" className="hidden sm:inline text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
+                <LogoutButton />
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-bold" style={{ color: "var(--primary)" }}>ログイン</Link>
+                <Link href="/signup" className="btn-primary text-sm px-4 py-2">無料登録</Link>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* ヒーロー */}
-      <section className="gradient-hero relative overflow-hidden px-4 sm:px-6 pt-16 sm:pt-20 pb-24 sm:pb-28 text-center">
-        <div className="pointer-events-none absolute -top-16 -left-16 w-72 h-72 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />
-        <div className="pointer-events-none absolute -bottom-24 -right-10 w-96 h-96 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }} />
-        <div className="pointer-events-none absolute top-1/3 right-1/4 w-24 h-24 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }} />
-        <div className="relative">
-          <span className="pill mb-4" style={{ background: "rgba(255,255,255,0.16)", color: "white" }}>
-            🌱 30日間、好きなクリエイターと目標達成へ
-          </span>
-          <h2 className="text-white text-3xl sm:text-5xl font-black mb-4 leading-tight tracking-tight">
-            学びを習慣に変える、<br className="sm:hidden" />伴走型コーチング
-          </h2>
-          <p className="text-white/85 text-sm sm:text-lg mb-8 max-w-xl mx-auto leading-relaxed">
-            自分に合ったクリエイターを選んで、その人のメソッドで30日間、目標達成まで伴走してもらいましょう。
-          </p>
-          {!loggedIn ? (
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              <Link href="/signup" className="btn-cta">
-                新規登録してはじめる →
-              </Link>
-              <Link
-                href="/login"
-                className="text-white text-sm font-bold px-5 py-3 rounded-full transition-transform hover:-translate-y-0.5"
-                style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.5)" }}
-              >
-                ログイン
-              </Link>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center gap-3">
-              <Link href="/creators" className="btn-cta">クリエイターを探す →</Link>
-            </div>
-          )}
-
-          <div className="flex items-center justify-center gap-6 sm:gap-10 mt-10 text-white/90">
-            <div>
-              <p className="text-2xl sm:text-3xl font-black">30<span className="text-sm font-bold">日</span></p>
-              <p className="text-xs text-white/70 mt-0.5">伴走期間</p>
-            </div>
-            <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.25)" }} />
-            <div>
-              <p className="text-2xl sm:text-3xl font-black">毎日</p>
-              <p className="text-xs text-white/70 mt-0.5">伴走メッセージが届く</p>
-            </div>
-            <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.25)" }} />
-            <div>
-              <p className="text-2xl sm:text-3xl font-black">Tier A/B</p>
-              <p className="text-xs text-white/70 mt-0.5">クリエイター直接添削も選べる</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col gap-14">
-        {/* 検索バー：ヒーローに重ねる */}
-        <div className="-mt-12 relative z-10 flex flex-col gap-3">
-          <div
-            className="shadow-soft flex items-stretch rounded-full overflow-hidden focus-within:ring-2"
-            style={{ background: "var(--card)", border: "1px solid var(--border)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
-          >
-            <div className="flex-1 flex items-center gap-2 px-5 py-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
-                <circle cx="11" cy="11" r="7" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-              <input
-                value={keyword}
-                onChange={e => setKeyword(e.target.value)}
-                placeholder="コース名・キーワードで検索"
-                style={{ border: "none", background: "transparent", padding: 0, width: "100%" }}
-              />
-            </div>
-          </div>
-
-          {/* カテゴリ選択：ネイティブselectではなく横スクロールのチップ形式（タップしやすく、選択状態が一目で分かる） */}
-          {categories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 px-1" style={{ scrollbarWidth: "none" }}>
-              <button
-                type="button"
-                onClick={() => setCategory("")}
-                className="pill whitespace-nowrap flex-shrink-0 transition-colors"
-                style={{
-                  background: category === "" ? "var(--accent)" : "var(--card)",
-                  color: category === "" ? "white" : "var(--muted)",
-                  border: "1px solid " + (category === "" ? "var(--accent)" : "var(--border)"),
-                }}
-              >
-                すべて
-              </button>
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className="pill whitespace-nowrap flex-shrink-0 transition-colors"
-                  style={{
-                    background: category === cat ? "var(--accent)" : "var(--card)",
-                    color: category === cat ? "white" : "var(--muted)",
-                    border: "1px solid " + (category === cat ? "var(--accent)" : "var(--border)"),
-                  }}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 新着コース：カルーセル */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="w-1.5 h-5 rounded-full" style={{ background: "var(--accent)" }} />
-            <h3 className="font-black text-lg" style={{ color: "var(--primary)" }}>新着コース</h3>
-          </div>
-          {loading ? (
-            <div className="card animate-pulse flex flex-col sm:flex-row gap-4">
-              <div className="w-full sm:w-64 h-40 rounded-lg flex-shrink-0" style={{ background: "var(--border)" }} />
-              <div className="flex-1 flex flex-col gap-2 justify-center">
-                <div className="h-4 rounded w-1/3" style={{ background: "var(--border)" }} />
-                <div className="h-5 rounded w-2/3" style={{ background: "var(--border)" }} />
-                <div className="h-3 rounded w-full" style={{ background: "var(--border)" }} />
+      <main>
+        <section className="border-b" style={{ borderColor: "var(--border)" }}>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14 grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-12 items-center">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap gap-2">
+                <span className="pill" style={{ background: "color-mix(in srgb, var(--accent) 12%, var(--card))", color: "var(--accent)" }}>
+                  30日伴走コース
+                </span>
+                <span className="pill" style={{ background: "color-mix(in srgb, var(--primary) 10%, var(--card))", color: "var(--primary)" }}>
+                  AI + クリエイター
+                </span>
+              </div>
+              <div>
+                <h1 className="text-3xl sm:text-5xl font-black leading-tight" style={{ color: "var(--primary)" }}>
+                  ひとりで続かない学習に、毎日の伴走を。
+                </h1>
+                <p className="mt-4 text-base sm:text-lg leading-relaxed max-w-2xl" style={{ color: "var(--muted)" }}>
+                  ManaVillageは、クリエイターの学習メソッドとAI伴走で、目標達成までの30日間を支える学習マーケットプレイスです。
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a href="#courses" className="btn-cta text-center">コースを探す</a>
+                <Link href="/creator/apply" className="btn-ghost text-center" style={{ color: "var(--primary)" }}>
+                  クリエイターとして参加
+                </Link>
+              </div>
+              <div className="grid grid-cols-3 gap-3 max-w-xl">
+                <Stat value="30日" label="学習プラン" />
+                <Stat value="毎日" label="タスクと相談" />
+                <Stat value="A/B" label="選べるTier" />
               </div>
             </div>
-          ) : newest.length === 0 ? (
-            <p className="card text-center" style={{ color: "var(--muted)" }}>該当するコースが見つかりませんでした。</p>
-          ) : (
-            <div
-              className="relative overflow-hidden rounded-2xl shadow-soft"
-              onMouseEnter={() => setPaused(true)}
-              onMouseLeave={() => setPaused(false)}
-            >
-              <div
-                className="flex transition-transform duration-700 ease-in-out"
-                style={{ transform: `translateX(-${slide * 100}%)` }}
-              >
-                {newest.map(c => (
-                  <Link
-                    key={c.id}
-                    href={`/courses/${c.id}`}
-                    className="w-full flex-shrink-0 flex flex-col sm:flex-row gap-4 sm:gap-6 p-5 sm:p-6"
-                    style={{ background: "var(--card)" }}
-                  >
-                    <div className="relative w-full sm:w-64 flex-shrink-0">
-                      {c.thumbnail_url ? (
-                        <img src={c.thumbnail_url} alt="" className="w-full h-40 sm:h-44 object-cover rounded-lg" />
-                      ) : (
-                        <div className="w-full h-40 sm:h-44 rounded-lg flex items-center justify-center text-4xl gradient-hero">📘</div>
-                      )}
-                      {c.character?.name && (
-                        <div
-                          className="absolute -bottom-3 left-3 flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full shadow-soft"
-                          style={{ background: "var(--card)", border: "1px solid var(--border)" }}
-                        >
-                          {c.character.avatar_url ? (
-                            <img src={c.character.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
-                          ) : (
-                            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ background: "var(--example-bg, #eee)" }}>🎭</span>
-                          )}
-                          <span className="text-xs font-bold" style={{ color: "var(--primary)" }}>{c.character.name}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 flex flex-col gap-2 justify-center mt-3 sm:mt-0">
-                      <div className="flex items-center gap-2">
-                        {c.category && (
-                          <span className="pill" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>
-                            {c.category}
-                          </span>
-                        )}
-                        <span className="text-xs font-black" style={{ color: "var(--accent)" }}>{priceLabel(c)}</span>
-                      </div>
-                      <p className="font-black text-lg" style={{ color: "var(--primary)" }}>{c.title}</p>
-                      {c.description && <p className="text-sm line-clamp-2" style={{ color: "var(--muted)" }}>{c.description}</p>}
-                    </div>
-                  </Link>
-                ))}
-              </div>
 
-              {newest.length > 1 && (
-                <div className="flex items-center justify-center gap-2 py-3" style={{ background: "var(--card)" }}>
-                  {newest.map((c, i) => (
-                    <button
-                      key={c.id}
-                      aria-label={`${i + 1}番目のコースを表示`}
-                      onClick={() => setSlide(i)}
-                      className="rounded-full transition-all"
-                      style={{
-                        width: i === slide ? "20px" : "8px",
-                        height: "8px",
-                        background: i === slide ? "var(--accent)" : "var(--border)",
-                      }}
-                    />
-                  ))}
+            <div className="relative">
+              {featured ? (
+                <FeaturedCourse course={featured} />
+              ) : (
+                <div className="border rounded-lg p-6 sm:p-8 min-h-[320px] flex flex-col justify-between" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>コース準備中</p>
+                    <h2 className="text-2xl font-black mt-3" style={{ color: "var(--primary)" }}>公開コースがここに表示されます</h2>
+                    <p className="text-sm mt-3 leading-relaxed" style={{ color: "var(--muted)" }}>
+                      クリエイターのコースが公開されると、サムネイル、価格、伴走タイプが確認できます。
+                    </p>
+                  </div>
+                  <Link href="/creator/apply" className="btn-primary self-start">コースを作る</Link>
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* 社会的証明：実際の完走者数 */}
-        {achieversCount > 0 && (
-          <div className="card shadow-soft text-center flex flex-col items-center gap-1 py-6">
-            <p className="text-3xl sm:text-4xl font-black" style={{ color: "var(--accent)" }}>
-              {achieversCount.toLocaleString()}<span className="text-base font-bold ml-1">名以上</span>
-            </p>
-            <p className="text-sm" style={{ color: "var(--muted)" }}>が30日間の伴走コースを完走しています</p>
           </div>
-        )}
+        </section>
 
-        {/* 使い方3ステップ */}
-        <div>
-          <div className="text-center mb-8">
-            <span className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>HOW IT WORKS</span>
-            <h3 className="font-black text-xl sm:text-2xl mt-2" style={{ color: "var(--primary)" }}>はじめるのは、3ステップだけ</h3>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {STEPS.map((s, i) => (
-              <div key={s.title} className="card hover-lift relative text-center flex flex-col items-center gap-2">
-                <span
-                  className="absolute -top-3 -left-3 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white"
-                  style={{ background: "var(--accent)" }}
-                >
-                  {i + 1}
-                </span>
-                <span className="text-3xl">{s.icon}</span>
-                <p className="font-bold" style={{ color: "var(--primary)" }}>{s.title}</p>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{s.desc}</p>
+        <section id="courses" className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              <div>
+                <p className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>COURSES</p>
+                <h2 className="text-2xl sm:text-3xl font-black mt-1" style={{ color: "var(--primary)" }}>伴走コースを探す</h2>
+                <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
+                  {loading ? "コースを読み込んでいます。" : `${filtered.length}件のコースが見つかりました。`}
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="w-full md:w-[420px]">
+                <label className="sr-only" htmlFor="course-search">コースを検索</label>
+                <div className="flex items-center gap-2 px-4 py-3 rounded-lg border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                  <SearchIcon />
+                  <input
+                    id="course-search"
+                    value={keyword}
+                    onChange={e => setKeyword(e.target.value)}
+                    placeholder="コース名・説明・クリエイター名で検索"
+                    style={{ border: "none", background: "transparent", padding: 0, width: "100%" }}
+                  />
+                </div>
+              </div>
+            </div>
 
-        {/* クリエイターCTA */}
-        <div className="card shadow-soft flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 sm:p-8 relative overflow-hidden" style={{ borderLeft: "4px solid var(--accent)" }}>
-          <div className="flex items-start gap-4">
-            <span className="text-3xl flex-shrink-0">🌟</span>
-            <div>
-              <p className="font-black text-lg" style={{ color: "var(--primary)" }}>あなたも伴走コースを作りませんか？</p>
-              <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-                クリエイターとして申請し、あなたのメソッドで30日コースを作成して、学習者の目標達成に伴走できます。
-              </p>
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              <CategoryButton active={category === ""} onClick={() => setCategory("")}>すべて</CategoryButton>
+              {categories.map(cat => (
+                <CategoryButton key={cat} active={category === cat} onClick={() => setCategory(cat)}>
+                  {cat}
+                </CategoryButton>
+              ))}
+            </div>
+
+            {loading ? (
+              <CourseGridSkeleton />
+            ) : filtered.length === 0 ? (
+              <div className="border rounded-lg p-8 text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                <p className="font-bold" style={{ color: "var(--primary)" }}>条件に合うコースがありません</p>
+                <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>検索キーワードやカテゴリを変えて試してください。</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {(featured ? [featured, ...courseGrid] : courseGrid).map(course => (
+                  <CourseTile key={course.id} course={course} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section id="how-it-works" className="border-y" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 54%, var(--bg))" }}>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-6">
+              <div>
+                <p className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>HOW IT WORKS</p>
+                <h2 className="text-2xl sm:text-3xl font-black mt-1" style={{ color: "var(--primary)" }}>始め方はシンプルです</h2>
+              </div>
+              {achieversCount > 0 && (
+                <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>
+                  累計 {achieversCount.toLocaleString()} 名以上が30日コースを完走
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {STEPS.map((step, index) => (
+                <div key={step.title} className="border rounded-lg p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+                  <span className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black text-white" style={{ background: "var(--accent)" }}>
+                    {index + 1}
+                  </span>
+                  <h3 className="font-black mt-4" style={{ color: "var(--primary)" }}>{step.title}</h3>
+                  <p className="text-sm leading-relaxed mt-2" style={{ color: "var(--muted)" }}>{step.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
-          <Link href="/creator/apply" className="btn-cta whitespace-nowrap text-center flex-shrink-0">
-            クリエイター申請へ →
-          </Link>
-        </div>
+        </section>
+
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
+          <div className="border rounded-lg p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-5" style={{ background: "var(--primary)", borderColor: "var(--primary)" }}>
+            <div>
+              <p className="text-xs font-black tracking-widest text-white/70">FOR CREATORS</p>
+              <h2 className="text-2xl font-black mt-2 text-white">あなたのメソッドを、30日伴走コースに。</h2>
+              <p className="text-sm leading-relaxed mt-2 text-white/78 max-w-2xl">
+                AIインタビューで指導スタイルを整理し、教材と30日プランを組み合わせてコースを公開できます。
+              </p>
+            </div>
+            <Link href="/creator/apply" className="btn-cta text-center flex-shrink-0">クリエイター申請へ</Link>
+          </div>
+        </section>
       </main>
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="border rounded-lg px-3 py-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+      <p className="text-xl font-black" style={{ color: "var(--primary)" }}>{value}</p>
+      <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>{label}</p>
+    </div>
+  );
+}
+
+function FeaturedCourse({ course }: { course: CourseCard }) {
+  return (
+    <Link
+      href={`/courses/${course.id}`}
+      className="block border rounded-lg overflow-hidden hover-lift"
+      style={{ background: "var(--card)", borderColor: "var(--border)" }}
+    >
+      <CourseImage course={course} className="h-56 sm:h-64" />
+      <div className="p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <span className="pill" style={{ background: "color-mix(in srgb, var(--accent) 12%, var(--card))", color: "var(--accent)" }}>
+            注目コース
+          </span>
+          <span className="text-sm font-black" style={{ color: "var(--primary)" }}>{priceLabel(course)}</span>
+        </div>
+        <h2 className="text-xl sm:text-2xl font-black mt-4 line-clamp-2" style={{ color: "var(--primary)" }}>{course.title}</h2>
+        {course.description && (
+          <p className="text-sm leading-relaxed mt-2 line-clamp-2" style={{ color: "var(--muted)" }}>{course.description}</p>
+        )}
+        <CreatorRow course={course} />
+      </div>
+    </Link>
+  );
+}
+
+function CourseTile({ course }: { course: CourseCard }) {
+  return (
+    <Link
+      href={`/courses/${course.id}`}
+      className="border rounded-lg overflow-hidden hover-lift flex flex-col min-h-full"
+      style={{ background: "var(--card)", borderColor: "var(--border)" }}
+    >
+      <CourseImage course={course} className="h-40" />
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: "color-mix(in srgb, var(--primary) 8%, var(--card))", color: "var(--primary)" }}>
+            {tierLabel(course)}
+          </span>
+          <span className="text-xs font-black" style={{ color: "var(--accent)" }}>{priceLabel(course)}</span>
+        </div>
+        <div>
+          {course.category && <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>{course.category}</p>}
+          <h3 className="font-black line-clamp-2" style={{ color: "var(--primary)" }}>{course.title}</h3>
+          {course.description && (
+            <p className="text-sm leading-relaxed mt-2 line-clamp-2" style={{ color: "var(--muted)" }}>{course.description}</p>
+          )}
+        </div>
+        <div className="mt-auto">
+          <CreatorRow course={course} compact />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function CourseImage({ course, className }: { course: CourseCard; className: string }) {
+  if (course.thumbnail_url) {
+    return <img src={course.thumbnail_url} alt="" className={`w-full object-cover ${className}`} />;
+  }
+  return (
+    <div className={`w-full flex items-center justify-center ${className}`} style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--primary) 86%, white), color-mix(in srgb, var(--accent) 72%, white))" }}>
+      <div className="text-center px-6">
+        <p className="text-white text-sm font-black tracking-widest">MANA VILLAGE</p>
+        <p className="text-white/80 text-xs mt-2">30日伴走コース</p>
+      </div>
+    </div>
+  );
+}
+
+function CreatorRow({ course, compact = false }: { course: CourseCard; compact?: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 ${compact ? "mt-0" : "mt-5"}`}>
+      {course.character?.avatar_url ? (
+        <img src={course.character.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+      ) : (
+        <span className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white" style={{ background: "var(--accent)" }}>
+          M
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="text-xs" style={{ color: "var(--muted)" }}>担当クリエイター</p>
+        <p className="text-sm font-bold truncate" style={{ color: "var(--primary)" }}>
+          {course.character?.name || "ManaVillage"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CategoryButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="whitespace-nowrap flex-shrink-0 px-3 py-2 rounded-lg text-sm font-bold border transition-colors"
+      style={{
+        background: active ? "var(--primary)" : "var(--card)",
+        color: active ? "white" : "var(--muted)",
+        borderColor: active ? "var(--primary)" : "var(--border)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </svg>
+  );
+}
+
+function CourseGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="border rounded-lg overflow-hidden animate-pulse" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="h-40" style={{ background: "var(--border)" }} />
+          <div className="p-4 flex flex-col gap-3">
+            <div className="h-4 w-24 rounded" style={{ background: "var(--border)" }} />
+            <div className="h-5 w-4/5 rounded" style={{ background: "var(--border)" }} />
+            <div className="h-4 w-full rounded" style={{ background: "var(--border)" }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
