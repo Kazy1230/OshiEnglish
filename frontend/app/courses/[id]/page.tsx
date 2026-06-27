@@ -38,6 +38,8 @@ export default function CourseDetailPage() {
   const [completing, setCompleting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [changingTier, setChangingTier] = useState(false);
+  const [showContractDetail, setShowContractDetail] = useState(false);
+  const [showLessonDrawer, setShowLessonDrawer] = useState(false);
 
   function load() {
     return api.getCourseDetail(courseId).then(c => {
@@ -205,37 +207,39 @@ export default function CourseDetailPage() {
         )}
 
         {(course.tier_a_price || course.tier_b_price) ? (
-          <div className="card flex flex-col gap-4 sticky top-4 z-10">
+          <div className="card flex flex-col gap-3 sticky top-4 z-10">
             {unlocked ? (
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
-                  ✅ {course.my_subscription ? `Tier ${course.my_subscription.tier} 契約中` : "購入済み"}
-                </span>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                  <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>メンターに相談する</Link>
-                  {course.has_days && (
-                    <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>30日スケジュール</Link>
-                  )}
-                  <Link href={`/courses/${courseId}/reviews`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>週次・月次レビュー</Link>
-                  {course.my_subscription && (() => {
-                    const otherTier = course.my_subscription.tier === "A" ? "B" : "A";
-                    const otherTierPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
-                    return otherTierPrice ? (
-                      <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
-                        className="text-xs underline disabled:opacity-50" style={{ color: "var(--accent)" }}>
-                        Tier {otherTier}に変更する
+              <>
+                <button
+                  onClick={() => setShowContractDetail(v => !v)}
+                  className="flex items-center justify-between gap-2 w-full text-left"
+                >
+                  <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
+                    ✅ {course.my_subscription ? `Tier ${course.my_subscription.tier} 契約中` : "購入済み"}
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>{showContractDetail ? "契約情報を閉じる ▲" : "契約情報を見る ▼"}</span>
+                </button>
+                {showContractDetail && (
+                  <div className="flex items-center gap-3 flex-wrap pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                    {course.my_subscription && (() => {
+                      const otherTier = course.my_subscription.tier === "A" ? "B" : "A";
+                      const otherTierPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
+                      return otherTierPrice ? (
+                        <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
+                          className="text-xs underline disabled:opacity-50" style={{ color: "var(--accent)" }}>
+                          Tier {otherTier}に変更する
+                        </button>
+                      ) : null;
+                    })()}
+                    {course.my_subscription && (
+                      <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
+                        className="text-xs underline disabled:opacity-50" style={{ color: "var(--muted)" }}>
+                        解約する
                       </button>
-                    ) : null;
-                  })()}
-                  {course.my_subscription && (
-                    <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
-                      className="text-xs underline disabled:opacity-50" style={{ color: "var(--muted)" }}>
-                      解約する
-                    </button>
-                  )}
-                </div>
-              </div>
+                    )}
+                  </div>
+                )}
+              </>
             ) : course.my_subscription?.status === "incomplete" ? (
               <div className="flex flex-col gap-2">
                 <p className="text-sm" style={{ color: "var(--muted)" }}>決済処理中です。少し時間をおいて再度ご確認ください。</p>
@@ -276,23 +280,9 @@ export default function CourseDetailPage() {
               {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
             </p>
             {unlocked ? (
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
-                <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>メンターに相談する</Link>
-                {course.has_days && (
-                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>30日スケジュール</Link>
-                )}
-              </div>
+              <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
             ) : course.is_free ? (
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
-                <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1診断を始める</Link>
-                <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>メンターに相談する</Link>
-                {course.has_days && (
-                  <Link href={`/courses/${courseId}/schedule`} className="text-sm font-bold underline" style={{ color: "var(--accent)" }}>30日スケジュール</Link>
-                )}
-              </div>
+              <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
             ) : (
               <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">
                 {purchasing ? "準備中…" : "購入する"}
@@ -301,21 +291,48 @@ export default function CourseDetailPage() {
           </div>
         )}
 
+        {/* 伴走機能への導線をグルーピングして明示する */}
+        {(unlocked || course.is_free) && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary col-span-2 text-center">
+              Day1診断を始める
+            </Link>
+            <Link href={`/courses/${courseId}/chat`} className="btn-ghost flex flex-col items-center gap-1 py-3">
+              <span>💬</span><span className="text-xs">相談する</span>
+            </Link>
+            {course.has_days ? (
+              <Link href={`/courses/${courseId}/schedule`} className="btn-ghost flex flex-col items-center gap-1 py-3">
+                <span>🗓️</span><span className="text-xs">スケジュール</span>
+              </Link>
+            ) : (
+              <Link href={`/courses/${courseId}/reviews`} className="btn-ghost flex flex-col items-center gap-1 py-3">
+                <span>📈</span><span className="text-xs">レビュー</span>
+              </Link>
+            )}
+          </div>
+        )}
+
+        {/* モバイル：レッスン一覧へのフローティング誘導（メインコンテンツを画面いっぱいに使うため） */}
+        {course.lessons.length > 0 && (
+          <button
+            onClick={() => setShowLessonDrawer(true)}
+            className="sm:hidden btn-ghost text-sm flex items-center justify-between"
+          >
+            <span>📚 レッスン一覧（{course.lessons.length}）</span>
+            <span>▼</span>
+          </button>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-1 flex flex-col gap-2">
-            {course.lessons.map(l => (
-              <button key={l.id} onClick={() => setActiveLessonId(l.id)}
-                className="text-left text-sm px-3 py-2 rounded-lg transition-colors"
-                style={{
-                  background: activeLessonId === l.id ? "var(--primary)" : "var(--card)",
-                  color: activeLessonId === l.id ? "white" : "var(--text)",
-                  border: "1px solid var(--border)",
-                }}>
-                {l.order}. {l.title} {l.is_preview && <span className="text-xs">（無料公開）</span>}
-                {!unlocked && !l.is_preview && !course.is_free && " 🔒"}
-                {completedLessonIds.has(l.id) && " ✅"}
-              </button>
-            ))}
+          <div className="hidden sm:flex sm:col-span-1 flex-col gap-2">
+            <LessonList
+              lessons={course.lessons}
+              activeLessonId={activeLessonId}
+              completedLessonIds={completedLessonIds}
+              unlocked={unlocked}
+              isFree={course.is_free}
+              onSelect={setActiveLessonId}
+            />
           </div>
 
           <div className="sm:col-span-2 card flex flex-col gap-4">
@@ -353,6 +370,69 @@ export default function CourseDetailPage() {
       {checkout && (
         <CourseCheckoutModal courseId={courseId} clientSecret={checkout.clientSecret} onClose={() => setCheckout(null)} />
       )}
+
+      {/* モバイル：レッスン一覧のドロワー */}
+      {showLessonDrawer && (
+        <div className="sm:hidden fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowLessonDrawer(false)}>
+          <div
+            className="w-full max-h-[80vh] overflow-y-auto rounded-t-2xl p-4 flex flex-col gap-2"
+            style={{ background: "var(--card)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <p className="font-bold text-sm" style={{ color: "var(--primary)" }}>レッスン一覧</p>
+              <button onClick={() => setShowLessonDrawer(false)} className="text-sm" style={{ color: "var(--muted)" }}>閉じる ✕</button>
+            </div>
+            <LessonList
+              lessons={course.lessons}
+              activeLessonId={activeLessonId}
+              completedLessonIds={completedLessonIds}
+              unlocked={unlocked}
+              isFree={course.is_free}
+              onSelect={id => { setActiveLessonId(id); setShowLessonDrawer(false); }}
+            />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function LessonList({
+  lessons, activeLessonId, completedLessonIds, unlocked, isFree, onSelect,
+}: {
+  lessons: Lesson[];
+  activeLessonId: number | null;
+  completedLessonIds: Set<number>;
+  unlocked: boolean;
+  isFree: boolean;
+  onSelect: (id: number) => void;
+}) {
+  return (
+    <>
+      {lessons.map(l => {
+        const isLocked = !unlocked && !l.is_preview && !isFree;
+        const isActive = activeLessonId === l.id;
+        const isDone = completedLessonIds.has(l.id);
+        return (
+          <button key={l.id} onClick={() => onSelect(l.id)}
+            className="text-left text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2"
+            style={{
+              background: isActive ? "var(--primary)" : "var(--card)",
+              color: isActive ? "white" : isLocked ? "var(--muted)" : "var(--text)",
+              border: "1px solid var(--border)",
+              opacity: isLocked ? 0.55 : 1,
+            }}>
+            <span className="flex-shrink-0">
+              {isDone ? "✅" : isActive ? "▶️" : isLocked ? "🔒" : "○"}
+            </span>
+            <span className="flex-1">
+              {l.order}. {l.title} {l.is_preview && <span className="text-xs">（無料公開）</span>}
+            </span>
+            {isActive && !isDone && <span className="text-[10px] font-bold flex-shrink-0">進行中</span>}
+          </button>
+        );
+      })}
+    </>
   );
 }

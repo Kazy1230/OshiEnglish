@@ -43,6 +43,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
+  const [achieversCount, setAchieversCount] = useState(0);
 
   useEffect(() => {
     if (!getToken()) {
@@ -57,13 +58,23 @@ export default function Home() {
     }).catch(() => setCheckingRole(false));
   }, [router]);
 
+  const [allCourses, setAllCourses] = useState<CourseCard[]>([]);
+
   useEffect(() => {
     api.listCourses(category || undefined).then(setCourses).finally(() => setLoading(false));
   }, [category]);
 
+  useEffect(() => {
+    api.listCourses().then(setAllCourses).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.getPublicStats().then(s => setAchieversCount(s.achievers_count)).catch(() => {});
+  }, []);
+
   const categories = useMemo(
-    () => Array.from(new Set(courses.map(c => c.category).filter(Boolean))) as string[],
-    [courses]
+    () => Array.from(new Set(allCourses.map(c => c.category).filter(Boolean))) as string[],
+    [allCourses]
   );
 
   const filtered = useMemo(() => {
@@ -109,9 +120,9 @@ export default function Home() {
             </>
           ) : (
             <>
-              <Link href="/signup" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">新規登録</Link>
-              <Link href="/login" className="text-white text-sm font-bold px-4 py-2 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "rgba(255,255,255,0.18)" }}>
-                ログイン
+              <Link href="/login" className="text-white text-sm font-medium hover:opacity-80 transition-opacity">ログイン</Link>
+              <Link href="/signup" className="text-white text-sm font-bold px-4 py-2 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "var(--accent)" }}>
+                新規登録
               </Link>
             </>
           )}
@@ -138,7 +149,11 @@ export default function Home() {
               <Link href="/signup" className="btn-cta">
                 新規登録してはじめる →
               </Link>
-              <Link href="/login" className="text-white text-sm font-bold px-5 py-3 rounded-full transition-transform hover:-translate-y-0.5" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <Link
+                href="/login"
+                className="text-white text-sm font-bold px-5 py-3 rounded-full transition-transform hover:-translate-y-0.5"
+                style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.5)" }}
+              >
                 ログイン
               </Link>
             </div>
@@ -169,35 +184,57 @@ export default function Home() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col gap-14">
         {/* 検索バー：ヒーローに重ねる */}
-        <div
-          className="shadow-soft flex flex-col sm:flex-row sm:items-stretch rounded-full overflow-hidden focus-within:ring-2 -mt-12 relative z-10"
-          style={{ background: "var(--card)", border: "1px solid var(--border)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
-        >
-          <div className="flex-1 flex items-center gap-2 px-5 py-3">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
-            <input
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              placeholder="コース名・キーワードで検索"
-              style={{ border: "none", background: "transparent", padding: 0, width: "100%" }}
-            />
+        <div className="-mt-12 relative z-10 flex flex-col gap-3">
+          <div
+            className="shadow-soft flex items-stretch rounded-full overflow-hidden focus-within:ring-2"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", "--tw-ring-color": "var(--accent)" } as React.CSSProperties}
+          >
+            <div className="flex-1 flex items-center gap-2 px-5 py-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                value={keyword}
+                onChange={e => setKeyword(e.target.value)}
+                placeholder="コース名・キーワードで検索"
+                style={{ border: "none", background: "transparent", padding: 0, width: "100%" }}
+              />
+            </div>
           </div>
-          <div className="hidden sm:block w-px my-2" style={{ background: "var(--border)" }} />
-          <div className="sm:w-52 px-3 py-2 sm:py-0 flex items-center">
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              style={{ border: "none", background: "transparent", padding: "0.5rem 0.25rem", width: "100%" }}
-            >
-              <option value="">すべてのカテゴリ</option>
+
+          {/* カテゴリ選択：ネイティブselectではなく横スクロールのチップ形式（タップしやすく、選択状態が一目で分かる） */}
+          {categories.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 px-1" style={{ scrollbarWidth: "none" }}>
+              <button
+                type="button"
+                onClick={() => setCategory("")}
+                className="pill whitespace-nowrap flex-shrink-0 transition-colors"
+                style={{
+                  background: category === "" ? "var(--accent)" : "var(--card)",
+                  color: category === "" ? "white" : "var(--muted)",
+                  border: "1px solid " + (category === "" ? "var(--accent)" : "var(--border)"),
+                }}
+              >
+                すべて
+              </button>
               {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategory(cat)}
+                  className="pill whitespace-nowrap flex-shrink-0 transition-colors"
+                  style={{
+                    background: category === cat ? "var(--accent)" : "var(--card)",
+                    color: category === cat ? "white" : "var(--muted)",
+                    border: "1px solid " + (category === cat ? "var(--accent)" : "var(--border)"),
+                  }}
+                >
+                  {cat}
+                </button>
               ))}
-            </select>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* 新着コース：カルーセル */}
@@ -290,6 +327,16 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* 社会的証明：実際の完走者数 */}
+        {achieversCount > 0 && (
+          <div className="card shadow-soft text-center flex flex-col items-center gap-1 py-6">
+            <p className="text-3xl sm:text-4xl font-black" style={{ color: "var(--accent)" }}>
+              {achieversCount.toLocaleString()}<span className="text-base font-bold ml-1">名以上</span>
+            </p>
+            <p className="text-sm" style={{ color: "var(--muted)" }}>が30日間の伴走コースを完走しています</p>
+          </div>
+        )}
 
         {/* 使い方3ステップ */}
         <div>

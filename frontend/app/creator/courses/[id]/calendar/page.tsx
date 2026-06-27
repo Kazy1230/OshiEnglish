@@ -35,26 +35,31 @@ type DiagnosisQuestion = { id: number; question_text: string; answer_type: "text
 
 const ANSWER_TYPE_LABEL: Record<string, string> = { text: "テキスト入力", number: "数値入力", single: "単一選択", multi: "複数選択" };
 
-type QuestionTemplateItem = { question_text: string; answer_type: "text" | "number" | "single" | "multi"; options?: string[]; is_required: boolean };
+type QuestionTemplateItem = { question_text: string; answer_type: "text" | "number" | "single" | "multi"; options?: string[]; is_required: boolean; intent?: string };
 const QUESTION_TEMPLATES: Record<string, { label: string; questions: QuestionTemplateItem[] }> = {
   toefl_itp: {
     label: "TOEFL ITP推奨質問セット",
     questions: [
-      { question_text: "現在のTOEFL ITPスコアは？（未受験なら0）", answer_type: "number", is_required: true },
-      { question_text: "受験予定日はいつですか？", answer_type: "text", is_required: false },
-      { question_text: "苦手なセクションは？", answer_type: "single", options: ["Section 1 リスニング", "Section 2 文法", "Section 3 リーディング"], is_required: true },
-      { question_text: "過去に受験経験はありますか？", answer_type: "single", options: ["あり", "なし"], is_required: true },
-      { question_text: "英語学習を始めてどのくらいですか？", answer_type: "single", options: ["半年未満", "半年〜1年", "1〜3年", "3年以上"], is_required: false },
+      { question_text: "現在のTOEFL ITPスコアは？（未受験なら0）", answer_type: "number", is_required: true, intent: "現在地と目標のギャップを測り、Day1個人化プランの難易度調整に使われます。" },
+      { question_text: "受験予定日はいつですか？", answer_type: "text", is_required: false, intent: "30日プランの後半に模試・総仕上げを配置するタイミング調整に使われます。" },
+      { question_text: "苦手なセクションは？", answer_type: "single", options: ["Section 1 リスニング", "Section 2 文法", "Section 3 リーディング"], is_required: true, intent: "苦手分野に学習時間を多めに配分する個人化（Layer2）の根拠になります。" },
+      { question_text: "過去に受験経験はありますか？", answer_type: "single", options: ["あり", "なし"], is_required: true, intent: "未経験者には試験形式の説明を厚めにするなど、伴走メッセージの口調調整に使われます。" },
+      { question_text: "英語学習を始めてどのくらいですか？", answer_type: "single", options: ["半年未満", "半年〜1年", "1〜3年", "3年以上"], is_required: false, intent: "基礎からの説明が必要かどうかの判断材料になります。" },
     ],
   },
   general: {
     label: "汎用推奨質問セット",
     questions: [
-      { question_text: "この学習で達成したい目標は？", answer_type: "text", is_required: true },
-      { question_text: "1日あたり確保できる学習時間は？", answer_type: "single", options: ["30分未満", "30分〜1時間", "1〜2時間", "2時間以上"], is_required: true },
+      { question_text: "この学習で達成したい目標は？", answer_type: "text", is_required: true, intent: "学習者の動機を伴走メッセージの励まし方に反映するために使われます。" },
+      { question_text: "1日あたり確保できる学習時間は？", answer_type: "single", options: ["30分未満", "30分〜1時間", "1〜2時間", "2時間以上"], is_required: true, intent: "1日のタスク量（個人化プラン）の総時間を決める基準になります。" },
     ],
   },
 };
+
+// テンプレート以外で作成された質問にも、文言が一致すれば同じ意図ヒントを出す
+const QUESTION_INTENT_BY_TEXT: Record<string, string> = Object.fromEntries(
+  Object.values(QUESTION_TEMPLATES).flatMap(t => t.questions.map(q => [q.question_text, q.intent ?? ""])).filter(([, v]) => v)
+);
 
 export default function CourseCalendarPage() {
   const params = useParams();
@@ -133,7 +138,8 @@ export default function CourseCalendarPage() {
     if (!template) return;
     setApplyingTemplate(true);
     try {
-      for (const q of template.questions) {
+      for (const { intent, ...q } of template.questions) {
+        void intent;
         const added = await api.addDiagnosisQuestion(courseId, q);
         setDiagnosisQuestions(prev => [...prev, added]);
       }
@@ -249,6 +255,8 @@ export default function CourseCalendarPage() {
     }
   }
 
+  const restDayWarning = days.filter(d => d.is_rest_day).length > 4;
+
   if (loading || fetching) return <Skeleton />;
 
   return (
@@ -302,6 +310,7 @@ export default function CourseCalendarPage() {
                 凡例：<span style={{ color: "var(--primary)" }}>■</span> AI生成済み
                 <span style={{ color: "var(--accent)" }}>■</span> クリエイター編集済み
                 <span style={{ color: "var(--muted)" }}>■</span> 休息日
+                　🔴 タスク未設定　{restDayWarning && "🟡 休息日が多すぎる可能性"}
               </p>
               <button className="btn-ghost text-xs" disabled={generating} onClick={handleGenerate}>
                 {generating ? "再生成中…" : "↻ 全日を再生成する"}
@@ -309,16 +318,26 @@ export default function CourseCalendarPage() {
             </div>
 
             <div className="grid grid-cols-7 gap-2">
-              {days.map(d => (
-                <button key={d.day} onClick={() => setSelectedDay(d)}
-                  className="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold transition-shadow hover:shadow-md"
-                  style={{
-                    background: d.is_rest_day ? "var(--example-bg, #eee)" : d.is_edited_by_creator ? "var(--accent)" : "var(--primary)",
-                    color: d.is_rest_day ? "var(--muted)" : "white",
-                  }}>
-                  Day{d.day}
-                </button>
-              ))}
+              {days.map(d => {
+                const hasNoTasks = !d.is_rest_day && (!d.task_types || d.task_types.length === 0);
+                return (
+                  <button key={d.day} onClick={() => setSelectedDay(d)}
+                    className="aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 px-1 text-xs font-bold transition-shadow hover:shadow-md relative"
+                    style={{
+                      background: d.is_rest_day ? "var(--example-bg, #eee)" : d.is_edited_by_creator ? "var(--accent)" : "var(--primary)",
+                      color: d.is_rest_day ? "var(--muted)" : "white",
+                      outline: hasNoTasks ? "2px solid #e53e3e" : restDayWarning && d.is_rest_day ? "2px solid #f5a623" : "none",
+                    }}
+                    title={hasNoTasks ? "タスクが未設定です" : restDayWarning && d.is_rest_day ? "休息日が多すぎる可能性があります（品質チェック参照）" : undefined}
+                  >
+                    {(hasNoTasks || (restDayWarning && d.is_rest_day)) && (
+                      <span className="absolute -top-1 -right-1 text-[10px]">{hasNoTasks ? "🔴" : "🟡"}</span>
+                    )}
+                    <span>Day{d.day}</span>
+                    {d.theme && <span className="text-[9px] font-normal leading-tight line-clamp-2 opacity-90">{d.theme}</span>}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="card flex flex-col gap-3">
@@ -362,7 +381,12 @@ export default function CourseCalendarPage() {
                   {diagnosisQuestions.map(q => (
                     <div key={q.id} className="flex items-start justify-between gap-2 text-sm p-2 rounded-lg" style={{ background: "var(--example-bg, #eee)" }}>
                       <div>
-                        <p style={{ color: "var(--text)" }}>{q.question_text} {q.is_required && <span className="text-[10px] font-bold" style={{ color: "var(--accent)" }}>必須</span>}</p>
+                        <p style={{ color: "var(--text)" }}>
+                          {q.question_text} {q.is_required && <span className="text-[10px] font-bold" style={{ color: "var(--accent)" }}>必須</span>}
+                          {QUESTION_INTENT_BY_TEXT[q.question_text] && (
+                            <span className="ml-1 cursor-help" title={QUESTION_INTENT_BY_TEXT[q.question_text]}>ℹ️</span>
+                          )}
+                        </p>
                         <p className="text-xs" style={{ color: "var(--muted)" }}>
                           {ANSWER_TYPE_LABEL[q.answer_type]}{q.options ? `（${q.options.join("／")}）` : ""}
                         </p>
@@ -486,6 +510,7 @@ function DayEditPanel({ day, saving, onClose, onSave }: { day: Day; saving: bool
   const [theme, setTheme] = useState(day.theme ?? "");
   const [taskTypes, setTaskTypes] = useState<TaskType[]>(day.task_types ?? []);
   const [isRestDay, setIsRestDay] = useState(day.is_rest_day);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   function updateMinutes(type: string, minutes: number) {
     setTaskTypes(prev => prev.map(t => t.type === type ? { ...t, base_minutes: minutes } : t));
@@ -498,6 +523,18 @@ function DayEditPanel({ day, saving, onClose, onSave }: { day: Day; saving: bool
         : [...prev, { type: opt.type, label: opt.label, base_minutes: 15 }]
     );
   }
+
+  function moveTaskType(from: number, to: number) {
+    if (to < 0 || to >= taskTypes.length || from === to) return;
+    setTaskTypes(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
+  const totalMinutes = taskTypes.reduce((sum, t) => sum + (t.base_minutes || 0), 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
@@ -515,29 +552,58 @@ function DayEditPanel({ day, saving, onClose, onSave }: { day: Day; saving: bool
         </div>
         {!isRestDay && (
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タスク種別と標準学習時間</label>
-            <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タスク種別（含めるものを選択）</label>
+            <div className="flex gap-2 flex-wrap">
               {TASK_TYPE_OPTIONS.map(opt => {
                 const current = taskTypes.find(t => t.type === opt.type);
                 return (
-                  <div key={opt.type} className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 text-sm flex-1" style={{ color: "var(--text)" }}>
-                      <input type="checkbox" checked={!!current} onChange={() => toggleTaskType(opt)} />
-                      {opt.label}
-                    </label>
-                    {current && (
-                      <input
-                        type="number"
-                        min={5}
-                        max={120}
-                        value={current.base_minutes}
-                        onChange={e => updateMinutes(opt.type, Number(e.target.value))}
-                        className="w-20"
-                      />
-                    )}
-                  </div>
+                  <label key={opt.type} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full" style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+                    <input type="checkbox" checked={!!current} onChange={() => toggleTaskType(opt)} />
+                    {opt.label}
+                  </label>
                 );
               })}
+            </div>
+          </div>
+        )}
+        {!isRestDay && taskTypes.length > 0 && (
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+              学習順序と標準学習時間（ドラッグで並び替え）
+            </label>
+            <div className="flex flex-col gap-1.5">
+              {taskTypes.map((t, i) => (
+                <div
+                  key={t.type}
+                  draggable
+                  onDragStart={() => setDragIndex(i)}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => { if (dragIndex !== null) moveTaskType(dragIndex, i); setDragIndex(null); }}
+                  onDragEnd={() => setDragIndex(null)}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-move"
+                  style={{ background: "var(--example-bg, #eee)", opacity: dragIndex === i ? 0.4 : 1 }}
+                >
+                  <span style={{ color: "var(--muted)" }}>⠿</span>
+                  <span className="text-xs font-bold flex-1" style={{ color: "var(--text)" }}>{i + 1}. {t.label}</span>
+                  <button type="button" className="text-xs px-1" disabled={i === 0} onClick={() => moveTaskType(i, i - 1)} style={{ color: "var(--muted)", opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                  <button type="button" className="text-xs px-1" disabled={i === taskTypes.length - 1} onClick={() => moveTaskType(i, i + 1)} style={{ color: "var(--muted)", opacity: i === taskTypes.length - 1 ? 0.3 : 1 }}>↓</button>
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    value={t.base_minutes}
+                    onChange={e => updateMinutes(t.type, Number(e.target.value))}
+                    className="w-16"
+                  />
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>分</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between mt-2 px-3 py-2 rounded-lg text-sm font-bold" style={{ background: "var(--example-bg, #eee)" }}>
+              <span style={{ color: "var(--text)" }}>1日の合計学習時間</span>
+              <span style={{ color: totalMinutes > 90 ? "#c0392b" : "var(--primary)" }}>
+                {totalMinutes}分{totalMinutes > 90 && "（負荷が高すぎるかもしれません）"}
+              </span>
             </div>
           </div>
         )}

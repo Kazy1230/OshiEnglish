@@ -1,6 +1,7 @@
 import re
 from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, model_validator
 
@@ -288,6 +289,15 @@ def list_courses(category: Optional[str] = None, db: Session = Depends(get_db)):
         query = query.filter(Course.category == category)
     courses = query.order_by(Course.created_at.desc()).all()
     return [_serialize_course_card(c) for c in courses]
+
+
+@router.get("/stats/public")
+def get_public_stats(db: Session = Depends(get_db)):
+    """トップページの社会的証明セクション用。30日コースを完走した学習者の延べ人数(実数)。"""
+    achievers_count = db.query(DayLog.user_id, DayLog.course_id).filter(
+        DayLog.is_completed == True,  # noqa: E712
+    ).group_by(DayLog.user_id, DayLog.course_id).having(func.count(DayLog.id) >= 30).count()
+    return {"achievers_count": achievers_count}
 
 
 @router.get("/creators/{creator_id}/courses")

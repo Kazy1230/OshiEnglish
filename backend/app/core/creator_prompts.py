@@ -24,7 +24,10 @@ def build_self_intro_messages(personality_profile: dict, speciality: str | None,
 
 
 def coaching_tags_from_profile(personality_profile: dict) -> list[str]:
-    """人格プロファイルのcoaching_styleから短いタグを組み立てる（追加のLLM呼び出しは不要）。"""
+    """人格プロファイルのcoaching_styleから短いタグを組み立てる（追加のLLM呼び出しは不要）。
+
+    指導の「スタンス（性格・方針）」を表すタグ。クリエイター紹介ページではskill_tags_from_profileと対で表示する。
+    """
     coaching = (personality_profile or {}).get("coaching_style", {})
     tags = []
     if coaching.get("strictness"):
@@ -33,4 +36,21 @@ def coaching_tags_from_profile(personality_profile: dict) -> list[str]:
         tags.append(coaching["encouragement"])
     if coaching.get("feedback_method"):
         tags.append(coaching["feedback_method"])
+    return [t for t in tags if t]
+
+
+def skill_tags_from_profile(personality_profile: dict) -> list[str]:
+    """人格プロファイルのlearning_philosophy/thinking_styleから、指導の「スキル・特徴」を表すタグを組み立てる。
+
+    coaching_tags_from_profile（スタンス）と対になる、技術・専門性側のタグ（追加のLLM呼び出しは不要）。
+    """
+    philosophy = (personality_profile or {}).get("learning_philosophy", {})
+    thinking = (personality_profile or {}).get("thinking_style", {})
+    tags = []
+    if philosophy.get("core_value"):
+        tags.append(philosophy["core_value"])
+    if thinking.get("explanation_method"):
+        tags.append(thinking["explanation_method"])
+    if thinking.get("analogy_tendency"):
+        tags.append(thinking["analogy_tendency"])
     return [t for t in tags if t]

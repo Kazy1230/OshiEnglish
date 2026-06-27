@@ -107,6 +107,7 @@ export const api = {
 
   // マーケットプレイス：コース・レッスン
   listCourses: (category?: string) => apiFetch(`/courses${category ? `?category=${encodeURIComponent(category)}` : ""}`),
+  getPublicStats: () => apiFetch("/stats/public"),
   listCreatorCourses: (creatorId: number) => apiFetch(`/creators/${creatorId}/courses`),
   getCourseDetail: (id: number) => apiFetch(`/courses/${id}`),
   createCourse: (data: object) => apiFetch("/courses", { method: "POST", body: JSON.stringify(data) }),

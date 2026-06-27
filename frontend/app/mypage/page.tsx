@@ -60,7 +60,7 @@ export default function MyPage() {
               <div className="w-px h-9" style={{ background: "rgba(255,255,255,0.25)" }} />
               <div className="text-center">
                 <p className="text-white text-2xl font-black">{overallPercent}%</p>
-                <p className="text-white/70 text-xs mt-0.5">全体の進捗</p>
+                <p className="text-white/80 text-xs mt-0.5">全体の進捗</p>
               </div>
             </div>
           )}
@@ -85,7 +85,7 @@ export default function MyPage() {
               {courses.map(c => {
                 const percent = progressPercent(c);
                 return (
-                  <div key={c.course_id} className="card hover-lift shadow-soft flex flex-col gap-3 overflow-hidden">
+                  <div key={c.course_id} className={`card hover-lift shadow-soft flex flex-col gap-3 overflow-hidden ${percent >= 100 ? "achievement-card" : ""}`}>
                     <div className="relative -m-5 mb-0">
                       {c.thumbnail_url ? (
                         <img src={c.thumbnail_url} alt="" className="w-full h-28 object-cover" />
@@ -109,26 +109,35 @@ export default function MyPage() {
 
                     <div className="flex items-center justify-between gap-2 mt-3">
                       <p className="font-black" style={{ color: "var(--primary)" }}>{c.title}</p>
-                      <span className="pill whitespace-nowrap" style={{ background: percent >= 100 ? "#2f9e64" : "var(--accent)", color: "white" }}>
+                      <span className="pill whitespace-nowrap" style={{ background: percent >= 100 ? "#e8b923" : "var(--accent)", color: "white" }}>
                         {percent >= 100 ? "達成🎉" : "受講中"}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
                       <span>{c.completed_count}/{c.total_lessons} レッスン完了</span>
-                      <span className="font-bold" style={{ color: "var(--accent)" }}>{percent}%</span>
+                      <span className="font-bold" style={{ color: percent >= 100 ? "#e8b923" : "var(--accent)" }}>{percent}%</span>
                     </div>
                     <div className="h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
                       <div
                         className="h-2 rounded-full transition-all"
-                        style={{ background: "var(--accent)", width: `${percent}%` }}
+                        style={{ background: percent >= 100 ? "#e8b923" : "var(--accent)", width: `${percent}%` }}
                       />
                     </div>
+                    <p className="text-xs -mt-1" style={{ color: "var(--muted)" }}>
+                      {percent >= 100
+                        ? "全レッスン達成おめでとうございます！"
+                        : `あと${Math.max(0, c.total_lessons - c.completed_count)}レッスンで達成！`}
+                    </p>
 
-                    <div className="flex gap-2 flex-wrap">
-                      <Link href={`/courses/${c.course_id}/chat`} className="btn-primary flex-1 text-center">伴走チャットへ</Link>
-                      <Link href={`/courses/${c.course_id}/schedule`} className="btn-ghost flex-1 text-center">30日スケジュール</Link>
-                      <Link href={`/courses/${c.course_id}`} className="btn-ghost flex-1 text-center">コース詳細</Link>
+                    <div className="flex flex-col gap-2 mt-1">
+                      <Link href={`/courses/${c.course_id}/chat`} className="btn-primary w-full text-center py-3">
+                        伴走チャットを再開する
+                      </Link>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link href={`/courses/${c.course_id}/schedule`} className="btn-ghost text-xs py-2 text-center">30日スケジュール</Link>
+                        <Link href={`/courses/${c.course_id}`} className="btn-ghost text-xs py-2 text-center">コース詳細</Link>
+                      </div>
                     </div>
                   </div>
                 );

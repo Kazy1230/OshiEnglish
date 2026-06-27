@@ -266,6 +266,7 @@ def get_creator(creator_id: int, db: Session = Depends(get_db), current_user=Dep
     data["experience"] = profile.experience
     data["self_intro"] = profile.self_intro
     data["coaching_tags"] = creator_prompts.coaching_tags_from_profile(personality.profile) if personality and personality.profile else []
+    data["skill_tags"] = creator_prompts.skill_tags_from_profile(personality.profile) if personality and personality.profile else []
     data["total_learners"] = _count_total_learners(db, [c.id for c in courses])
     data["courses"] = [
         {

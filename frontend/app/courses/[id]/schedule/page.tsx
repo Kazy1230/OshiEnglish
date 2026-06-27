@@ -20,6 +20,18 @@ const TASK_TYPE_LABEL: Record<string, string> = {
   vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
 };
 
+const REST_DAY_TIPS = [
+  "お気に入りの音楽を聴いてリラックス！",
+  "今日学んだことを声に出して振り返ってみよう。",
+  "しっかり休んで、明日また気持ちよく再開しよう。",
+  "散歩や軽い運動で気分転換するのもおすすめです。",
+  "好きな海外ドラマや動画を字幕付きで観てみよう。",
+];
+
+function restDayTip(day: number): string {
+  return REST_DAY_TIPS[day % REST_DAY_TIPS.length];
+}
+
 export default function CourseSchedulePage() {
   const params = useParams();
   const router = useRouter();
@@ -65,6 +77,27 @@ export default function CourseSchedulePage() {
 
   const completedCount = Object.values(logs).filter(l => l.is_completed).length;
   const currentDay = Math.min(completedCount + 1, 30);
+  const today = days.find(d => d.day === currentDay) ?? null;
+  const todayTasks = learnerTasksByDay[currentDay] ?? [];
+  const todayLog = logs[currentDay] ?? null;
+
+  // ペース表示：completed_atの実績のみから算出する（架空の判定はしない）
+  const completedWithDates = Object.values(logs).filter(l => l.is_completed && l.completed_at);
+  let paceBadge: { text: string; tone: "good" | "neutral" } | null = null;
+  if (completedWithDates.length >= 2) {
+    const firstAt = new Date(Math.min(...completedWithDates.map(l => new Date(l.completed_at!).getTime())));
+    const daysSinceFirst = Math.max(1, (Date.now() - firstAt.getTime()) / 86400000);
+    const avgPace = daysSinceFirst / completedCount;
+    if (avgPace <= 1.1) {
+      paceBadge = { text: "🔥 いいペースで進んでいます！", tone: "good" };
+    } else if (avgPace >= 1.6) {
+      paceBadge = { text: "ゆっくりペースです。今日から少しずつ取り戻しましょう", tone: "neutral" };
+    }
+  }
+
+  // 7日ごとの週に分割（最終週は残り日数のみ）
+  const weeks: Day[][] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   return (
     <div>
@@ -82,6 +115,18 @@ export default function CourseSchedulePage() {
               <span className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedCount}/30日 完了</span>
             </div>
 
+            {paceBadge && (
+              <p
+                className="text-xs font-bold px-3 py-2 rounded-lg self-start"
+                style={{
+                  background: paceBadge.tone === "good" ? "var(--accent)" : "var(--example-bg, #eee)",
+                  color: paceBadge.tone === "good" ? "white" : "var(--muted)",
+                }}
+              >
+                {paceBadge.text}
+              </p>
+            )}
+
             <p className="text-xs" style={{ color: "var(--muted)" }}>
               凡例：<span style={{ color: "var(--accent)" }}>■</span> 完了済み
               <span style={{ color: "var(--primary)" }}>■</span> 本日
@@ -89,34 +134,72 @@ export default function CourseSchedulePage() {
               <span style={{ background: "var(--card)", border: "1px solid var(--border)" }}>　</span> 未到達
             </p>
 
-            <div className="grid grid-cols-7 gap-2">
-              {days.map(d => {
-                const log = logs[d.day];
-                const isCompleted = !!log?.is_completed;
-                const isToday = d.day === currentDay;
-                return (
-                  <button
-                    key={d.day}
-                    onClick={() => setSelectedDay(d)}
-                    className="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold transition-shadow hover:shadow-md"
-                    style={{
-                      background: isCompleted
-                        ? "var(--accent)"
-                        : isToday
-                        ? "var(--primary)"
-                        : d.is_rest_day
-                        ? "var(--example-bg, #eee)"
-                        : "var(--card)",
-                      color: isCompleted || isToday ? "white" : d.is_rest_day ? "var(--muted)" : "var(--text)",
-                      border: isCompleted || isToday || d.is_rest_day ? "none" : "1px solid var(--border)",
-                    }}
-                  >
-                    Day{d.day}
-                    {isCompleted && <span className="text-[10px]">✓</span>}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-4">
+              {weeks.map((week, wi) => (
+                <div key={wi} className="flex flex-col gap-1.5">
+                  <p className="text-[11px] font-bold" style={{ color: "var(--muted)" }}>第{wi + 1}週</p>
+                  <div className="grid grid-cols-7 gap-2">
+                    {week.map(d => {
+                      const log = logs[d.day];
+                      const isCompleted = !!log?.is_completed;
+                      const isToday = d.day === currentDay;
+                      return (
+                        <button
+                          key={d.day}
+                          onClick={() => setSelectedDay(d)}
+                          className="aspect-square flex flex-col items-center justify-center text-xs font-bold transition-all hover:shadow-md"
+                          style={{
+                            borderRadius: isCompleted ? "999px" : "10px",
+                            background: isCompleted
+                              ? "var(--accent)"
+                              : isToday
+                              ? "var(--primary)"
+                              : d.is_rest_day
+                              ? "var(--example-bg, #eee)"
+                              : "var(--card)",
+                            color: isCompleted || isToday ? "white" : d.is_rest_day ? "var(--muted)" : "var(--text)",
+                            border: isCompleted || isToday || d.is_rest_day ? "none" : "1px solid var(--border)",
+                            boxShadow: isCompleted ? "0 2px 8px rgba(0,0,0,0.18)" : undefined,
+                            transform: isCompleted ? "scale(1.04)" : undefined,
+                          }}
+                        >
+                          {isCompleted ? <span className="text-base leading-none">✓</span> : <span>Day{d.day}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
+
+            {/* 今日がDay何で、何をするべきかを即座に表示 */}
+            {today && (
+              <div className="card border-2" style={{ borderColor: "var(--accent)" }}>
+                <p className="text-xs font-bold mb-3" style={{ color: "var(--accent)" }}>🔥 今日のタスク（Day {currentDay}）</p>
+                {today.is_rest_day ? (
+                  <p className="text-sm" style={{ color: "var(--text)" }}>今日は休息日です。{restDayTip(currentDay)}</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {today.theme && <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{today.theme}</p>}
+                    {todayTasks.length > 0 ? (
+                      todayTasks.map((t, i) => (
+                        <div key={i} className="flex justify-between text-sm">
+                          <span style={{ color: "var(--text)" }}>{TASK_TYPE_LABEL[t.type] ?? t.type}</span>
+                          <span style={{ color: "var(--muted)" }}>{t.minutes}分</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。復習をしましょう！</p>
+                    )}
+                  </div>
+                )}
+                {!today.is_rest_day && !todayLog?.is_completed && (
+                  <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+                    <Link href={`/courses/${courseId}/chat`} className="btn-primary w-full text-center">伴走チャットで報告する →</Link>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </main>
@@ -149,7 +232,12 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { cours
           )}
         </div>
         {day.is_rest_day ? (
-          <p className="text-sm" style={{ color: "var(--muted)" }}>この日は休息日です。</p>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm" style={{ color: "var(--text)" }}>🌿 今日はチャージの日です。明日からまた頑張りましょう！</p>
+            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--example-bg, #eee)", color: "var(--muted)" }}>
+              💡 {restDayTip(day.day)}
+            </p>
+          </div>
         ) : (
           <>
             {day.theme && <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{day.theme}</p>}
