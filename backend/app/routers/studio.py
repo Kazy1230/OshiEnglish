@@ -78,6 +78,26 @@ def generate_character_concept(
     raise HTTPException(status_code=500, detail=str(last_error))
 
 
+class CharacterBioRequest(BaseModel):
+    name: str
+    tone_profile: dict = {}
+
+
+@router.post("/generate/bio")
+def generate_character_bio(
+    data: CharacterBioRequest,
+    current_user=Depends(get_current_creator_or_admin),
+):
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="キャラクター名を入力してください")
+    messages = prompts.build_bio_messages(data.name, data.tone_profile)
+    try:
+        text = generate_text(prompts.BIO_SYSTEM, messages, max_tokens=500)
+        return {"description": text.strip()}
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Step 1: コンテンツ相談 ────────────────────────────────────
 
 class ConsultRequest(BaseModel):

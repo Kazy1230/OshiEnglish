@@ -34,10 +34,7 @@ export default function EditCharacterPage() {
   const [previewResult, setPreviewResult] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  const [concept, setConcept] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
-  const [sampleLines, setSampleLines] = useState<string[]>([]);
 
   useEffect(() => {
     if (loading) return;
@@ -84,22 +81,16 @@ export default function EditCharacterPage() {
   }
 
   async function handleGenerate() {
-    if (!concept.trim()) { toast("キャラクターのイメージを入力してください", "error"); return; }
+    if (!name.trim()) { toast("名前を入力してください", "error"); return; }
     setGenerating(true);
     try {
-      const result = await api.generateCharacterConcept(concept);
-      setNameSuggestions(result.name_suggestions || []);
-      setSampleLines(result.sample_lines || []);
-      if ((result.name_suggestions || [])[0]) setName(result.name_suggestions[0]);
-      setDescription(concept);
-      setTone({
-        first_person: result.first_person || "",
-        speech_style: [result.tone, result.sentence_ending].filter(Boolean).join("。語尾の特徴: "),
-        personality: result.personality || "",
-        catchphrase: result.catchphrase || "",
-      });
-      setNgText((result.ng_words || []).join("、"));
-      toast("AIがキャラクター設定を提案しました。内容を確認・編集して保存してください", "success");
+      const tone_profile = {
+        ...tone,
+        ng_expressions: ngText ? ngText.split(/[、,]/).map(s => s.trim()).filter(Boolean) : [],
+      };
+      const result = await api.generateCharacterBio(name, tone_profile);
+      setDescription(result.description || "");
+      toast("自己紹介文を生成しました。内容を確認・編集して保存してください", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "生成に失敗しました。もう一度試してください", "error");
     } finally {
@@ -163,46 +154,12 @@ export default function EditCharacterPage() {
         </div>
 
         <div className="card flex flex-col gap-3">
-          <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>AIにキャラクター設定を提案してもらう（任意）</label>
-          <textarea
-            value={concept}
-            onChange={e => setConcept(e.target.value)}
-            placeholder="例: ツンデレな女性先輩キャラ。英語が得意で少し上から目線だが根は優しい"
-            rows={3}
-            className="w-full text-sm p-3 rounded-lg"
-            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }}
-          />
-          <button onClick={handleGenerate} disabled={generating} className="btn-primary self-start disabled:opacity-50">
-            {generating ? "生成中…" : "🤖 AIで提案する"}
-          </button>
-          {nameSuggestions.length > 0 && (
-            <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-              <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>名前案</p>
-              <div className="flex flex-wrap gap-2">
-                {nameSuggestions.map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setName(n)}
-                    className="px-3 py-1 rounded-full text-xs font-bold border-2"
-                    style={{ borderColor: "var(--accent)", color: name === n ? "white" : "var(--accent)", background: name === n ? "var(--accent)" : "transparent" }}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              {sampleLines.length > 0 && (
-                <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--muted)" }}>
-                  {sampleLines.map((l, i) => <li key={i}>「{l}」</li>)}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="card flex flex-col gap-3">
           <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>TONE_PROFILE</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="名前" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="説明" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          <button onClick={handleGenerate} disabled={generating} className="btn-primary self-start disabled:opacity-50">
+            {generating ? "生成中…" : "🤖 AIで提案する"}
+          </button>
           <input value={tone.first_person || ""} onChange={e => setTone(t => ({ ...t, first_person: e.target.value }))} placeholder="一人称" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <textarea value={tone.speech_style || ""} onChange={e => setTone(t => ({ ...t, speech_style: e.target.value }))} placeholder="口調・話し方" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <textarea value={tone.personality || ""} onChange={e => setTone(t => ({ ...t, personality: e.target.value }))} placeholder="性格・特徴" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
