@@ -49,7 +49,10 @@ services:
       dockerfile: Dockerfile.prod              # 本番用Dockerfile（--reloadなし）
     container_name: yt_backend
     env_file: .env
-    # 本番ではボリュームマウントしない（コードはビルド時に固定）
+    # 本番ではコードはマウントしない（ビルド時に固定）が、
+    # アップロード画像等の保存先(static/)だけは再デプロイで消えないよう専用ボリュームに永続化する
+    volumes:
+      - backend_static:/app/app/static
     depends_on:
       db:
         condition: service_healthy
@@ -88,3 +91,4 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  backend_static:
