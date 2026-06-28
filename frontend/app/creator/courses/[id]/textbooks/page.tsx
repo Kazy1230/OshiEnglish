@@ -21,6 +21,22 @@ type CourseTextbookEntry = {
   day_assignments: DayAssignment[];
 };
 
+type PlanItem = {
+  course_textbook_id: number;
+  type: string;
+  daily_words?: number | null;
+  review_words?: number | null;
+  target_laps?: number | null;
+  day_assignments?: DayAssignment[];
+};
+type TextbookPlanResponse = {
+  needs_clarification: boolean;
+  clarifying_questions: string[];
+  summary: string;
+  plans: PlanItem[];
+};
+type QAEntry = { question: string; answer: string };
+
 function buildStudyMaterialsSummary(textbooks: CourseTextbookEntry[]): string {
   return textbooks.map(t => {
     const total = t.day_assignments.length;
@@ -57,6 +73,13 @@ export default function CourseTextbooksPage() {
 
   const [adding, setAdding] = useState(false);
   const [proceeding, setProceeding] = useState(false);
+
+  const [planDescription, setPlanDescription] = useState("");
+  const [qaHistory, setQaHistory] = useState<QAEntry[]>([]);
+  const [qaAnswers, setQaAnswers] = useState<Record<number, string>>({});
+  const [plan, setPlan] = useState<TextbookPlanResponse | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [applyingPlan, setApplyingPlan] = useState(false);
 
   function reload() {
     return api.listCourseTextbooks(courseId).then(setTextbooks).catch(() => {});
@@ -149,6 +172,50 @@ export default function CourseTextbooksPage() {
     }
   }
 
+  async function handlePlan(history: QAEntry[]) {
+    if (!planDescription.trim()) {
+      toast("教材の使い方を入力してください", "error");
+      return;
+    }
+    setPlanning(true);
+    try {
+      const result = await api.planCourseTextbooks(courseId, planDescription, history);
+      setPlan(result);
+      setQaHistory(history);
+      setQaAnswers({});
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "AIへの相談に失敗しました", "error");
+    } finally {
+      setPlanning(false);
+    }
+  }
+
+  async function handleAnswerClarification() {
+    if (!plan) return;
+    const newHistory = [
+      ...qaHistory,
+      ...plan.clarifying_questions.map((q, i) => ({ question: q, answer: qaAnswers[i]?.trim() || "（特に指定なし）" })),
+    ];
+    await handlePlan(newHistory);
+  }
+
+  async function handleApplyPlan() {
+    if (!plan) return;
+    setApplyingPlan(true);
+    try {
+      const updated = await api.applyCourseTextbookPlan(courseId, plan.plans);
+      setTextbooks(updated);
+      setPlan(null);
+      setPlanDescription("");
+      setQaHistory([]);
+      toast("AIの計画をコースに反映しました。内容を確認・調整してください。", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "反映に失敗しました", "error");
+    } finally {
+      setApplyingPlan(false);
+    }
+  }
+
   async function handleProceed() {
     setProceeding(true);
     try {
@@ -213,8 +280,80 @@ export default function CourseTextbooksPage() {
           )}
         </div>
 
+        {textbooks.length > 0 && (
+          <div className="card flex flex-col gap-3" style={{ borderColor: "var(--accent)" }}>
+            <p className="font-bold text-sm" style={{ color: "var(--primary)" }}>② AIに教材の使い方を相談する</p>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              いつ・どのくらい・どの順番で教材を使うかを文章で説明してください。例：「Duo3.0を1日40例文進め、2週間で1周します。1日目は40例文、2日目以降は40例文＋前日の復習を行います」
+            </p>
+            <textarea
+              rows={4}
+              value={planDescription}
+              onChange={e => setPlanDescription(e.target.value)}
+              placeholder="教材の使い方を自由に説明してください"
+              disabled={planning || !!plan}
+            />
+            {!plan && (
+              <button type="button" className="btn-primary self-start text-sm" disabled={planning} onClick={() => handlePlan([])}>
+                {planning ? "AIが考えています…" : "🤖 AIに相談する"}
+              </button>
+            )}
+
+            {plan && (
+              <div className="flex flex-col gap-3 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                <div className="p-3 rounded-lg text-sm" style={{ background: "var(--example-bg, #eee)", color: "var(--text)" }}>
+                  <p className="font-bold text-xs mb-1" style={{ color: "var(--accent)" }}>AIによる計画の要約</p>
+                  {plan.summary}
+                </div>
+
+                {plan.needs_clarification && plan.clarifying_questions.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>🤔 AIから確認したいこと</p>
+                    {plan.clarifying_questions.map((q, i) => (
+                      <label key={i} className="flex flex-col gap-1 text-sm" style={{ color: "var(--text)" }}>
+                        {q}
+                        <input value={qaAnswers[i] ?? ""} onChange={e => setQaAnswers(prev => ({ ...prev, [i]: e.target.value }))} placeholder="回答を入力" />
+                      </label>
+                    ))}
+                    <button type="button" className="btn-ghost text-sm self-start" disabled={planning} onClick={handleAnswerClarification}>
+                      {planning ? "AIが考えています…" : "回答して認識を合わせる"}
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>暫定プラン内容</p>
+                  {plan.plans.map(p => {
+                    const tb = textbooks.find(t => t.id === p.course_textbook_id);
+                    const assignedCount = p.day_assignments?.filter(a => a.day_number != null).length ?? 0;
+                    return (
+                      <div key={p.course_textbook_id} className="text-xs p-2 rounded-lg" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+                        <span className="font-bold" style={{ color: "var(--text)" }}>{tb?.name ?? `教材#${p.course_textbook_id}`}</span>
+                        {p.type === "vocabulary"
+                          ? ` ・ 1日新規${p.daily_words ?? "?"}語・復習${p.review_words ?? "?"}語・目標${p.target_laps ?? "?"}周`
+                          : ` ・ ${p.day_assignments?.length ?? 0}項目中${assignedCount}項目を配分`}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex gap-2">
+                  {!plan.needs_clarification && (
+                    <button type="button" className="btn-cta text-sm" disabled={applyingPlan} onClick={handleApplyPlan}>
+                      {applyingPlan ? "反映中…" : "✅ この内容で確定してコースに反映"}
+                    </button>
+                  )}
+                  <button type="button" className="btn-ghost text-sm" onClick={() => { setPlan(null); setQaHistory([]); setQaAnswers({}); }}>
+                    やり直す
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
-          <p className="font-bold text-sm mb-2" style={{ color: "var(--primary)" }}>② 追加済みの教材と日程割り当て</p>
+          <p className="font-bold text-sm mb-2" style={{ color: "var(--primary)" }}>③ 教材ごとの設定（AIプラン適用後の確認・手動調整）</p>
           {textbooks.length === 0 ? (
             <div className="card">
               <p className="text-sm" style={{ color: "var(--muted)" }}>まだ教材が追加されていません。</p>

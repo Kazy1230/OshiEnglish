@@ -13,6 +13,7 @@ import { UsersTab } from "./tabs/UsersTab";
 import { CourseModerationTab } from "./tabs/CourseModerationTab";
 import { ReportsTab } from "./tabs/ReportsTab";
 import { TierBOverdueTab } from "./tabs/TierBOverdueTab";
+import { TextbooksTab } from "./tabs/TextbooksTab";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -52,6 +53,7 @@ export default function AdminPage() {
     { key: "course_moderation", label: "コース一覧", icon: "📚" },
     { key: "reports", label: "通報管理", icon: "🚨" },
     { key: "tier_b_overdue", label: "Tier B監視", icon: "⏰" },
+    { key: "textbooks", label: "教材プリセット", icon: "📚" },
   ];
 
   return (
@@ -101,6 +103,7 @@ export default function AdminPage() {
         {tab === "course_moderation" && <CourseModerationTab />}
         {tab === "reports" && <ReportsTab />}
         {tab === "tier_b_overdue" && <TierBOverdueTab />}
+        {tab === "textbooks" && <TextbooksTab />}
       </main>
     </div>
   );

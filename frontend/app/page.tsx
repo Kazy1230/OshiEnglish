@@ -123,7 +123,7 @@ export default function Home() {
             {loggedIn ? (
               <>
                 <Link href="/mypage" className="hidden sm:inline text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
-                <LogoutButton />
+                <LogoutButton variant="onSurface" />
               </>
             ) : (
               <>

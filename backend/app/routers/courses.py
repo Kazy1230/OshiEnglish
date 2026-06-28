@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -1019,6 +1020,91 @@ def set_day_assignments(course_textbook_id: int, data: DayAssignmentsUpdate, cur
     db.commit()
     db.refresh(course_textbook)
     return _serialize_course_textbook(course_textbook)
+
+
+class TextbookPlanQA(BaseModel):
+    question: str
+    answer: str
+
+
+class TextbookPlanRequest(BaseModel):
+    description: str
+    qa_history: List[TextbookPlanQA] = []
+
+
+@router.post("/courses/{course_id}/textbooks/plan")
+def plan_course_textbooks(course_id: int, data: TextbookPlanRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """クリエイターが自然言語で説明した教材の使い方を、AIが30日間の日程プランに変換する（保存はしない）。要(本人)"""
+    _get_owned_course(db, course_id, current_user)
+    course_textbooks = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()
+    if not course_textbooks:
+        raise HTTPException(status_code=400, detail="先に教材を追加してください")
+
+    textbooks_brief = []
+    for ct in course_textbooks:
+        toc = ct.textbook.toc if ct.textbook else ct.custom_toc
+        textbooks_brief.append({
+            "course_textbook_id": ct.id,
+            "name": ct.textbook.name if ct.textbook else ct.custom_name,
+            "type": ct.type,
+            "toc": [item.get("item") for item in (toc or [])],
+        })
+
+    from app.core import textbook_plan_prompts as plan_prompts
+    messages = plan_prompts.build_textbook_plan_messages(
+        textbooks_brief, data.description, [qa.model_dump() for qa in data.qa_history]
+    )
+    try:
+        raw = generate_text(plan_prompts.TEXTBOOK_PLAN_SYSTEM, messages, max_tokens=3000, json_mode=True)
+        from app.core.llm import extract_json
+        plan = extract_json(raw)
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=f"AIによる計画の生成に失敗しました: {e}")
+    except (ValueError, json.JSONDecodeError):
+        raise HTTPException(status_code=502, detail="AIの応答をJSONとして解析できませんでした")
+
+    return plan
+
+
+class TextbookPlanItem(BaseModel):
+    course_textbook_id: int
+    type: str
+    daily_words: Optional[int] = None
+    review_words: Optional[int] = None
+    target_laps: Optional[int] = None
+    day_assignments: Optional[List[DayAssignmentItem]] = None
+
+
+class TextbookPlanApplyRequest(BaseModel):
+    plans: List[TextbookPlanItem]
+
+
+@router.post("/courses/{course_id}/textbooks/plan/apply")
+def apply_course_textbook_plan(course_id: int, data: TextbookPlanApplyRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """AIが生成した教材プランを確定し、各教材の設定・日程割り当てに保存する。要(本人)"""
+    _get_owned_course(db, course_id, current_user)
+    course_textbooks = {ct.id: ct for ct in db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()}
+
+    for plan in data.plans:
+        ct = course_textbooks.get(plan.course_textbook_id)
+        if not ct:
+            continue
+        if plan.daily_words is not None:
+            ct.daily_words = plan.daily_words
+        if plan.review_words is not None:
+            ct.review_words = plan.review_words
+        if plan.target_laps is not None:
+            ct.target_laps = plan.target_laps
+        if plan.day_assignments is not None:
+            db.query(TextbookDayAssignment).filter(TextbookDayAssignment.course_textbook_id == ct.id).delete(synchronize_session=False)
+            for item in plan.day_assignments:
+                if item.day_number is not None and not (1 <= item.day_number <= 30):
+                    continue
+                db.add(TextbookDayAssignment(course_textbook_id=ct.id, toc_item=item.toc_item, day_number=item.day_number))
+    db.commit()
+
+    refreshed = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()
+    return [_serialize_course_textbook(t) for t in refreshed]
 
 
 # ----- 学習進捗(リテンション機能) -----

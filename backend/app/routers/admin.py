@@ -34,6 +34,7 @@ from app.models.textbook_day_assignment import TextbookDayAssignment
 from app.models.learner_textbook_progress import LearnerTextbookProgress
 from app.models.course_diagnosis_question import CourseDiagnosisQuestion
 from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
+from app.models.textbook import Textbook
 
 router = APIRouter(prefix="/admin", tags=["管理者機能"])
 
@@ -365,3 +366,98 @@ def list_tier_b_overdue(admin=Depends(get_current_admin), db: Session = Depends(
             "hours_elapsed": round(hours_elapsed, 1),
         })
     return result
+
+
+# ----- 教材プリセット管理 -----
+
+def _serialize_textbook(t: Textbook) -> dict:
+    return {
+        "id": t.id,
+        "name": t.name,
+        "publisher": t.publisher,
+        "type": t.type,
+        "target": t.target,
+        "toc": [item.get("item") for item in (t.toc or [])],
+        "is_preset": t.is_preset,
+    }
+
+
+@router.get("/textbooks")
+def admin_list_textbooks(admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """教材プリセット一覧（登録順）。要(管理者)"""
+    textbooks = db.query(Textbook).order_by(Textbook.id.desc()).all()
+    return [_serialize_textbook(t) for t in textbooks]
+
+
+class TextbookCreateRequest(BaseModel):
+    name: str
+    publisher: Optional[str] = None
+    type: str = "textbook"  # textbook / vocabulary
+    target: Optional[str] = None
+    toc: list[str] = []  # 目次の項目名リスト（例: ["Section 1 Listening 攻略+練習問題"]）
+
+
+@router.post("/textbooks", status_code=201)
+def admin_create_textbook(data: TextbookCreateRequest, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """教材プリセットを新規登録する。要(管理者)"""
+    if data.type not in ("textbook", "vocabulary"):
+        raise HTTPException(status_code=400, detail="typeはtextbookまたはvocabularyを指定してください")
+    textbook = Textbook(
+        name=data.name,
+        publisher=data.publisher,
+        type=data.type,
+        target=data.target,
+        toc=[{"item": item} for item in data.toc if item.strip()],
+        is_preset=True,
+    )
+    db.add(textbook)
+    db.commit()
+    db.refresh(textbook)
+    return _serialize_textbook(textbook)
+
+
+class TextbookUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    publisher: Optional[str] = None
+    type: Optional[str] = None
+    target: Optional[str] = None
+    toc: Optional[list[str]] = None
+
+
+@router.put("/textbooks/{textbook_id}")
+def admin_update_textbook(textbook_id: int, data: TextbookUpdateRequest, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """教材プリセットを編集する。要(管理者)"""
+    textbook = db.query(Textbook).filter(Textbook.id == textbook_id).first()
+    if not textbook:
+        raise HTTPException(status_code=404, detail="教材が見つかりません")
+    if data.type is not None and data.type not in ("textbook", "vocabulary"):
+        raise HTTPException(status_code=400, detail="typeはtextbookまたはvocabularyを指定してください")
+
+    if data.name is not None:
+        textbook.name = data.name
+    if data.publisher is not None:
+        textbook.publisher = data.publisher
+    if data.type is not None:
+        textbook.type = data.type
+    if data.target is not None:
+        textbook.target = data.target
+    if data.toc is not None:
+        textbook.toc = [{"item": item} for item in data.toc if item.strip()]
+
+    db.commit()
+    db.refresh(textbook)
+    return _serialize_textbook(textbook)
+
+
+@router.delete("/textbooks/{textbook_id}")
+def admin_delete_textbook(textbook_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """教材プリセットを削除する。既にコースで使用されている場合は削除できない。要(管理者)"""
+    textbook = db.query(Textbook).filter(Textbook.id == textbook_id).first()
+    if not textbook:
+        raise HTTPException(status_code=404, detail="教材が見つかりません")
+    in_use = db.query(CourseTextbook).filter(CourseTextbook.textbook_id == textbook_id).first() is not None
+    if in_use:
+        raise HTTPException(status_code=400, detail="この教材は既にコースで使用されているため削除できません")
+    db.delete(textbook)
+    db.commit()
+    return {"message": "削除しました"}
