@@ -93,8 +93,8 @@ export const api = {
   generateCreatorIntro: () => apiFetch("/creators/me/generate-intro", { method: "POST" }),
 
   // AIインタビュー（人格収集）
-  startInterview: (baseType?: string) =>
-    apiFetch("/interview/start", { method: "POST", body: JSON.stringify({ base_type: baseType ?? null }) }),
+  startInterview: (baseType?: string, gender?: string) =>
+    apiFetch("/interview/start", { method: "POST", body: JSON.stringify({ base_type: baseType ?? null, gender: gender ?? null }) }),
   submitInterviewAnswer: (answer: string) => apiFetch("/interview/answer", { method: "POST", body: JSON.stringify({ answer }) }),
   generatePersonalityProfile: () => apiFetch("/interview/generate-profile", { method: "POST" }),
   getPersonalityProfile: () => apiFetch("/interview/profile"),

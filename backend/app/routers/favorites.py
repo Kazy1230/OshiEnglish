@@ -46,9 +46,11 @@ def list_favorites(current_user=Depends(get_current_user), db: Session = Depends
         profile = db.query(CreatorProfile).filter(CreatorProfile.id == f.creator_id).first()
         if not profile:
             continue
+        # 学習者に見せる名前は、メールアドレス等が混ざりうるusernameより、まず人格(キャラクター)名を優先する
+        display_name = profile.character.name if profile.character else customer_display_name(profile.user)
         result.append({
             "creator_id": profile.id,
-            "display_name": customer_display_name(profile.user),
+            "display_name": display_name,
             "character": (
                 {"id": profile.character.id, "name": profile.character.name, "avatar_url": profile.character.image_url}
                 if profile.character else None

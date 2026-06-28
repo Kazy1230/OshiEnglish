@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { LogoutButton } from "@/components/LogoutButton";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { LogoutButton } from "@/components/LogoutButton";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 type CourseCard = {
   id: number;
@@ -82,8 +82,8 @@ export default function Home() {
   }, [category]);
 
   useEffect(() => {
-    api.listCourses().then(setAllCourses).catch(() => {});
-    api.getPublicStats().then(s => setAchieversCount(s.achievers_count)).catch(() => {});
+    api.listCourses().then(setAllCourses).catch(() => { });
+    api.getPublicStats().then(s => setAchieversCount(s.achievers_count)).catch(() => { });
   }, []);
 
   const categories = useMemo(
@@ -119,7 +119,7 @@ export default function Home() {
             <Link href="/creators" className="hover:opacity-75">クリエイター</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
-            <DarkModeToggle mode={mode} onToggle={toggleMode} />
+            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onSurface" />
             {loggedIn ? (
               <>
                 <Link href="/mypage" className="hidden sm:inline text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
@@ -144,15 +144,17 @@ export default function Home() {
                   30日伴走コース
                 </span>
                 <span className="pill" style={{ background: "color-mix(in srgb, var(--primary) 10%, var(--card))", color: "var(--primary)" }}>
-                  AI + クリエイター
+                  クリエイターメソッド
                 </span>
               </div>
               <div>
                 <h1 className="text-3xl sm:text-5xl font-black leading-tight" style={{ color: "var(--primary)" }}>
-                  ひとりで続かない学習に、毎日の伴走を。
+                  学ぶ人に、メンターを。
                 </h1>
                 <p className="mt-4 text-base sm:text-lg leading-relaxed max-w-2xl" style={{ color: "var(--muted)" }}>
-                  ManaVillageは、クリエイターの学習メソッドとAI伴走で、目標達成までの30日間を支える学習マーケットプレイスです。
+                  誰と挑戦するかで、未来は変わる。ひとりじゃない。
+                  <br />
+                  その一歩を、最後まで支えるために。
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -271,7 +273,7 @@ export default function Home() {
               <p className="text-xs font-black tracking-widest text-white/70">FOR CREATORS</p>
               <h2 className="text-2xl font-black mt-2 text-white">あなたのメソッドを、30日伴走コースに。</h2>
               <p className="text-sm leading-relaxed mt-2 text-white/78 max-w-2xl">
-                AIインタビューで指導スタイルを整理し、教材と30日プランを組み合わせてコースを公開できます。
+                インタビューで指導スタイルを整理し、教材と30日プランを組み合わせてコースを公開できます。
               </p>
             </div>
             <Link href="/creator/apply" className="btn-cta text-center flex-shrink-0">クリエイター申請へ</Link>

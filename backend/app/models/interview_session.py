@@ -14,6 +14,7 @@ class InterviewSession(Base):
     follow_up_count = Column(Integer, nullable=False, default=0)  # 深掘り質問の使用数（最大3）
     pending_question = Column(String(1000), nullable=True)  # 直近にAIが提示した質問文（回答待ち）
     base_type = Column(String(50), nullable=True)  # Step0で選んだ指導スタイルのプリセット（共感型/指導型/激励型/厳格型）
+    gender = Column(String(20), nullable=True)  # Step0で選んだキャラクターの性別（男性/女性/中性的）
     qa_history = Column(JSON, nullable=True)  # [{question, answer, is_followup}] の配列
     status = Column(String(20), nullable=False, default="in_progress")  # in_progress / completed
     created_at = Column(DateTime(timezone=True), server_default=func.now())

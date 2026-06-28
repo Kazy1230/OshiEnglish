@@ -71,6 +71,7 @@ def build_course_day_generation_messages(
     study_materials: str | None = None,
     pace: str | None = None,
     day_textbook_plan: dict[int, list[dict]] | None = None,
+    allowed_task_types: set[str] | None = None,
 ) -> list[dict]:
     plan_text = "指定なし（人格プロファイルとゴールに基づき自由に設計してください）"
     if day_textbook_plan:
@@ -86,6 +87,16 @@ def build_course_day_generation_messages(
             lines.append(f"  Day{day}: " + " / ".join(entry_descriptions))
         plan_text = "\n".join(lines)
 
+    if allowed_task_types:
+        allowed_text = "、".join(sorted(allowed_task_types))
+        allowed_instruction = (
+            f"\n\n【重要】task_typesのtypeは必ず次のいずれかのみを使用してください: {allowed_text}\n"
+            f"クリエイターが登録した教材に対応しない種別（例: リスニング教材を登録していないのにlistening）は"
+            f"一切出力しないでください。"
+        )
+    else:
+        allowed_instruction = ""
+
     content = (
         f"【人格プロファイル】\n{json.dumps(personality_profile, ensure_ascii=False, indent=2)}\n\n"
         f"【コース情報】\n"
@@ -98,8 +109,9 @@ def build_course_day_generation_messages(
         f"【日程割り当て（クリエイターが指定した、教材の各章をどの日にやるか）】\n{plan_text}\n\n"
         f"上記のコース情報で30日分のコース骨格を生成してください。"
         f"日程割り当てが指定されている日は必ずその教材項目に基づいてtheme・task_typesを作成し、"
-        f"指定が無い日は教材全体を使う前提で人格プロファイルとゴールに沿って自由に設計してください。"
+        f"指定が無い日は登録されている教材全体を使う前提で人格プロファイルとゴールに沿って自由に設計してください。"
         f"進行速度（ゆっくり/標準/速め等）を週ごとの難易度カーブと1日あたりのタスク量に反映してください。"
+        f"{allowed_instruction}"
     )
     return [{"role": "user", "content": content}]
 

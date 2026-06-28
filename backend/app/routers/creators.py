@@ -22,9 +22,11 @@ router = APIRouter(prefix="/creators", tags=["クリエイター"])
 
 
 def _serialize_creator_card(profile: CreatorProfile) -> dict:
+    # 学習者に見せる名前は、メールアドレス等が混ざりうるusernameより、まず人格(キャラクター)名を優先する
+    display_name = profile.character.name if profile.character else customer_display_name(profile.user)
     return {
         "id": profile.id,
-        "display_name": customer_display_name(profile.user),
+        "display_name": display_name,
         "bio": profile.bio,
         # 1クリエイター=1人格(キャラクター)
         "character": (
@@ -220,6 +222,7 @@ def list_creators(db: Session = Depends(get_db)):
         personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == p.id).first()
         data["total_learners"] = _count_total_learners(db, course_ids)
         data["coaching_tags"] = creator_prompts.coaching_tags_from_profile(personality.profile) if personality and personality.profile else []
+        data["sample_reply"] = personality.sample_reply if personality else None
         result.append(data)
     return result
 
@@ -274,6 +277,7 @@ def get_creator(creator_id: int, db: Session = Depends(get_db), current_user=Dep
     data["self_intro"] = profile.self_intro
     data["coaching_tags"] = creator_prompts.coaching_tags_from_profile(personality.profile) if personality and personality.profile else []
     data["skill_tags"] = creator_prompts.skill_tags_from_profile(personality.profile) if personality and personality.profile else []
+    data["sample_reply"] = personality.sample_reply if personality else None
     data["total_learners"] = _count_total_learners(db, [c.id for c in courses])
     data["courses"] = [
         {

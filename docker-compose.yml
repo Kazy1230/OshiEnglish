@@ -21,6 +21,10 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost/api
       - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
+      # WindowsホストのDocker環境ではbind mount経由のファイル変更通知(inotify)が届かないことがあるため、
+      # ポーリング監視を有効化してホットリロードの取りこぼしを防ぐ
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -55,7 +55,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen md:h-screen flex flex-col md:flex-row md:overflow-hidden" style={{ background: "var(--bg)" }}>
+    <div className="admin-theme min-h-screen md:h-screen flex flex-col md:flex-row md:overflow-hidden" style={{ background: "var(--bg)" }}>
       {/* モバイル用トップバー */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 shadow-md flex-shrink-0" style={{ background: "var(--primary)" }}>
         <button onClick={() => setMobileNavOpen(v => !v)} aria-label="メニューを開閉"

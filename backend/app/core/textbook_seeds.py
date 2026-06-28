@@ -48,7 +48,7 @@ TOEFL_ITP_PRESET_TEXTBOOKS = [
     {
         "name": "全問正解するTOEFL ITP TEST文法問題580問",
         "publisher": "語研",
-        "type": "vocabulary",
+        "type": "textbook",
         "target": "Section 2",
         "toc": (
             [

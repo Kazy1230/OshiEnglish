@@ -40,6 +40,14 @@ def _ensure_column(table: str, column: str, ddl: str):
             conn.commit()
 
 
+def _ensure_nullable(table: str, column: str, ddl: str):
+    """既存カラムをNOT NULL→NULL許容に変更する（型・既存制約は維持したままMODIFYする）。"""
+    if _table_exists(table) and _column_exists(table, column):
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER TABLE {table} MODIFY COLUMN {column} {ddl}"))
+            conn.commit()
+
+
 def _drop_foreign_keys_on_column(table: str, column: str):
     """指定カラムに紐づく外部キー制約を全て削除する（DROP COLUMN前に必要）。"""
     if not _table_exists(table):
@@ -194,6 +202,16 @@ _ensure_column("course_textbooks", "target_laps", "INT NOT NULL DEFAULT 1")
 _ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
 _ensure_column("day_logs", "completed_task_types", "JSON NULL")
 _ensure_column("interview_sessions", "base_type", "VARCHAR(50) NULL")
+_ensure_column("interview_sessions", "gender", "VARCHAR(20) NULL")
+_ensure_column("personality_profiles", "base_type", "VARCHAR(50) NULL")
+_ensure_column("personality_profiles", "gender", "VARCHAR(20) NULL")
+_ensure_column("personality_profiles", "sample_reply", "TEXT NULL")
+
+# --- Day1診断をクリエイターのカスタム質問のみに変更（固定7問を廃止） ---
+_ensure_nullable("learner_profiles", "target_score", "INT NULL")
+_ensure_nullable("learner_profiles", "exam_date", "VARCHAR(50) NULL")
+_ensure_nullable("learner_profiles", "daily_study_time", "VARCHAR(50) NULL")
+_ensure_nullable("learner_profiles", "weak_areas", "JSON NULL")
 
 
 def _migrate_legacy_characters_to_creator():

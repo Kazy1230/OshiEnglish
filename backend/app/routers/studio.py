@@ -67,11 +67,15 @@ def generate_character_concept(
     data: CharacterConceptRequest,
     current_user=Depends(get_current_creator_or_admin),
 ):
-    try:
-        text = generate_text(prompts.CHARACTER_CONCEPT_SYSTEM, prompts.build_character_concept_messages(data.character_concept), json_mode=True)
-        return extract_json(text)
-    except LLMError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    messages = prompts.build_character_concept_messages(data.character_concept)
+    last_error: LLMError | None = None
+    for _ in range(2):  # DeepSeekがjson_mode指定でも稀に壊れたJSONを返すため1回だけ自動リトライ
+        try:
+            text = generate_text(prompts.CHARACTER_CONCEPT_SYSTEM, messages, max_tokens=1500, json_mode=True)
+            return extract_json(text)
+        except LLMError as e:
+            last_error = e
+    raise HTTPException(status_code=500, detail=str(last_error))
 
 
 # ── Step 1: コンテンツ相談 ────────────────────────────────────

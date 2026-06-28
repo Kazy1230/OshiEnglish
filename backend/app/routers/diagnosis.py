@@ -1,7 +1,7 @@
 from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -55,7 +55,8 @@ def _serialize_roadmap(roadmap: LearnerRoadmap) -> dict:
 
 @router.get("/{course_id}/questions")
 def get_diagnosis_questions(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """診断チャットの固定7問（選択肢含む）、教材ごとの進捗質問、クリエイター独自のカスタム質問を返す。要(購入済み学習者)"""
+    """教材ごとの進捗質問、クリエイターがコース作成時に設定したカスタム質問を返す。要(購入済み学習者)
+    Day1診断はクリエイターが設定した質問のみで構成する（固定質問は廃止）。"""
     course = _get_purchased_course(db, course_id, current_user)
     textbook_questions = [
         {"course_textbook_id": ct.id, "name": ct.textbook.name if ct.textbook else ct.custom_name, "target_laps": ct.target_laps}
@@ -63,9 +64,9 @@ def get_diagnosis_questions(course_id: int, current_user=Depends(get_current_use
     ]
     custom_questions = [
         {"id": q.id, "question_text": q.question_text, "answer_type": q.answer_type, "options": q.options, "is_required": q.is_required}
-        for q in course.diagnosis_questions
+        for q in sorted(course.diagnosis_questions, key=lambda q: q.order)
     ]
-    return {"questions": prompts.FIXED_QUESTIONS, "textbook_questions": textbook_questions, "custom_questions": custom_questions}
+    return {"textbook_questions": textbook_questions, "custom_questions": custom_questions}
 
 
 @router.post("/{course_id}/welcome")
@@ -98,34 +99,14 @@ class CustomAnswerInput(BaseModel):
 
 
 class DiagnosisSubmitRequest(BaseModel):
-    current_score: Optional[int] = None
-    has_taken_before: bool = True  # False=未受験（current_scoreは無視される）
-    target_score: int
-    exam_date: str
-    daily_study_time: str
-    weak_areas: List[str]
-    study_history: Optional[str] = None
-    materials: Optional[str] = None
     textbook_progress: Optional[List[TextbookProgressInput]] = None
     custom_answers: Optional[List[CustomAnswerInput]] = None
-
-    @model_validator(mode="after")
-    def _validate(self):
-        if not self.has_taken_before:
-            self.current_score = None
-        if self.exam_date not in [o for q in prompts.FIXED_QUESTIONS if q["key"] == "exam_date" for o in q["options"]]:
-            raise ValueError("exam_date が選択肢にありません")
-        if self.daily_study_time not in [o for q in prompts.FIXED_QUESTIONS if q["key"] == "daily_study_time" for o in q["options"]]:
-            raise ValueError("daily_study_time が選択肢にありません")
-        valid_weak_areas = next(o["options"] for o in prompts.FIXED_QUESTIONS if o["key"] == "weak_areas")
-        if not self.weak_areas or any(w not in valid_weak_areas for w in self.weak_areas):
-            raise ValueError("weak_areas が選択肢にありません")
-        return self
 
 
 @router.post("/{course_id}/submit", status_code=201)
 def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """診断7問の回答を送信し、AIが30日ロードマップを生成して返す（事業検証ポイント②）。要(購入済み学習者)"""
+    """クリエイターが設定したカスタム質問の回答を送信し、AIが30日ロードマップを生成して返す（事業検証ポイント②）。
+    Day1診断はクリエイターのカスタム質問のみで構成する（固定7問は廃止）。要(購入済み学習者)"""
     if current_user.role == "creator":
         raise HTTPException(status_code=403, detail="クリエイターアカウントは学習者として診断を受けられません")
     course = _get_purchased_course(db, course_id, current_user)
@@ -154,24 +135,18 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
         raise HTTPException(status_code=409, detail="Day1診断は既に完了しています。再診断はできません。")
     profile = LearnerProfile(user_id=current_user.id, course_id=course_id)
     db.add(profile)
-
-    profile.current_score = data.current_score
-    profile.target_score = data.target_score
-    profile.exam_date = data.exam_date
-    profile.daily_study_time = data.daily_study_time
-    profile.weak_areas = data.weak_areas
-    profile.study_history = data.study_history
-    profile.materials = data.materials
     db.commit()
     db.refresh(profile)
 
     _save_textbook_progress(db, profile, data.textbook_progress or [])
     _save_custom_answers(db, profile, data.custom_answers or [])
 
+    custom_qa = _build_custom_qa_summary(db, course, profile)
+
     try:
         text = generate_text(
             prompts.ROADMAP_GENERATION_SYSTEM,
-            prompts.build_roadmap_generation_messages(profile, personality.profile, week_themes),
+            prompts.build_roadmap_generation_messages(custom_qa, personality.profile, week_themes),
             max_tokens=3000,
             json_mode=True,
         )
@@ -192,7 +167,7 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     db.commit()
     db.refresh(roadmap)
 
-    _generate_learner_course_days(db, profile, personality, course_days)
+    _generate_learner_course_days(db, profile, personality, course_days, custom_qa)
 
     return _serialize_roadmap(roadmap)
 
@@ -242,6 +217,21 @@ def _save_custom_answers(db: Session, profile: LearnerProfile, items: list[Custo
     db.commit()
 
 
+def _build_custom_qa_summary(db: Session, course: Course, profile: LearnerProfile) -> list[str]:
+    """クリエイターが設定したカスタム質問とその回答を「Q: ... → A: ...」の文章リストにする。
+    固定7問を廃止した代わりに、ロードマップ・タスク個人化生成のインプットはこれのみになる。"""
+    answers_by_question_id = {
+        a.question_id: a.answer
+        for a in db.query(LearnerDiagnosisAnswer).filter(LearnerDiagnosisAnswer.learner_profile_id == profile.id).all()
+    }
+    summary = []
+    for q in sorted(course.diagnosis_questions, key=lambda q: q.order):
+        answer = answers_by_question_id.get(q.id)
+        if answer:
+            summary.append(f"Q: {q.question_text} → A: {answer}")
+    return summary
+
+
 def _build_textbook_progress_summary(db: Session, profile: LearnerProfile) -> list[str]:
     """Layer2プロンプト用に、教材ごとの残りタスク量を人間が読める文章にする（議論サマリー13節の計算式）。"""
     progresses = db.query(LearnerTextbookProgress).filter(LearnerTextbookProgress.learner_profile_id == profile.id).all()
@@ -257,7 +247,7 @@ def _build_textbook_progress_summary(db: Session, profile: LearnerProfile) -> li
     return summary
 
 
-def _generate_learner_course_days(db: Session, profile: LearnerProfile, personality: PersonalityProfile, course_days: list[CourseDay]) -> None:
+def _generate_learner_course_days(db: Session, profile: LearnerProfile, personality: PersonalityProfile, course_days: list[CourseDay], custom_qa: list[str]) -> None:
     """Layer2: 学習者専用の30日タスク配分を生成し learner_course_days に保存する。
     生成に失敗した場合はLayer1のtask_typesをそのままコピーして処理を継続する（学習者を止めない）。"""
     db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id == profile.id).delete()
@@ -271,7 +261,7 @@ def _generate_learner_course_days(db: Session, profile: LearnerProfile, personal
     try:
         text = generate_text(
             personalize_prompts.PERSONALIZE_SYSTEM,
-            personalize_prompts.build_personalize_messages(profile, personality.profile, course_days_brief, textbook_progress_summary),
+            personalize_prompts.build_personalize_messages(custom_qa, personality.profile, course_days_brief, textbook_progress_summary),
             max_tokens=4000,
             json_mode=True,
         )

@@ -5,12 +5,12 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 
-type Question = {
-  key: string;
-  question: string;
-  type: "number_or_unattempted" | "number" | "choice" | "multi_choice" | "text";
-  options?: string[];
-  required?: boolean;
+type CustomQuestion = {
+  id: number;
+  question_text: string;
+  answer_type: "text" | "number" | "single" | "multi";
+  options?: string[] | null;
+  is_required: boolean;
 };
 
 type Roadmap = {
@@ -33,18 +33,10 @@ export default function DiagnosisPage() {
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [welcomeMessage, setWelcomeMessage] = useState("");
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<CustomQuestion[]>([]);
   const [qIndex, setQIndex] = useState(0);
-
-  const [currentScore, setCurrentScore] = useState("");
-  const [hasTakenBefore, setHasTakenBefore] = useState(true);
-  const [targetScore, setTargetScore] = useState("");
-  const [examDate, setExamDate] = useState("");
-  const [dailyStudyTime, setDailyStudyTime] = useState("");
-  const [weakAreas, setWeakAreas] = useState<string[]>([]);
-  const [studyHistory, setStudyHistory] = useState("");
-  const [materials, setMaterials] = useState("");
-  const [textDraft, setTextDraft] = useState("");
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [multiAnswers, setMultiAnswers] = useState<Record<number, string[]>>({});
 
   const [textbookQuestions, setTextbookQuestions] = useState<TextbookQuestion[]>([]);
   const [tbIndex, setTbIndex] = useState(0);
@@ -76,7 +68,7 @@ export default function DiagnosisPage() {
           api.getDiagnosisQuestions(courseId),
         ]);
         setWelcomeMessage(welcome.message);
-        setQuestions(qs.questions);
+        setQuestions(qs.custom_questions || []);
         setTextbookQuestions(qs.textbook_questions || []);
         setPhase("welcome");
       } catch (err: unknown) {
@@ -88,25 +80,39 @@ export default function DiagnosisPage() {
   }, [courseId, router]);
 
   function startQuestions() {
-    setPhase("questions");
+    if (questions.length > 0) {
+      setPhase("questions");
+    } else if (textbookQuestions.length > 0) {
+      setPhase("textbook_progress");
+    } else {
+      submitAll();
+    }
   }
 
-  function toggleWeakArea(opt: string) {
-    setWeakAreas(prev => prev.includes(opt) ? prev.filter(w => w !== opt) : [...prev, opt]);
+  function setAnswer(questionId: number, value: string) {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  }
+
+  function toggleMultiAnswer(questionId: number, opt: string) {
+    setMultiAnswers(prev => {
+      const current = prev[questionId] ?? [];
+      const next = current.includes(opt) ? current.filter(o => o !== opt) : [...current, opt];
+      return { ...prev, [questionId]: next };
+    });
   }
 
   async function submitAll() {
     setPhase("generating");
     try {
+      const customAnswers = questions
+        .map(q => {
+          const value = q.answer_type === "multi" ? (multiAnswers[q.id] ?? []).join("、") : (answers[q.id] ?? "");
+          return { question_id: q.id, answer: value };
+        })
+        .filter(a => a.answer.trim() !== "");
+
       const data = await api.submitDiagnosis(courseId, {
-        current_score: hasTakenBefore && currentScore ? Number(currentScore) : null,
-        has_taken_before: hasTakenBefore,
-        target_score: Number(targetScore),
-        exam_date: examDate,
-        daily_study_time: dailyStudyTime,
-        weak_areas: weakAreas,
-        study_history: studyHistory || null,
-        materials: materials || null,
+        custom_answers: customAnswers,
         textbook_progress: textbookQuestions.map(q => ({
           course_textbook_id: q.course_textbook_id,
           ...(textbookAnswers[q.course_textbook_id] ?? { status: "not_started" as const }),
@@ -116,14 +122,13 @@ export default function DiagnosisPage() {
       setPhase("result");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "ロードマップの生成に失敗しました", "error");
-      setPhase(textbookQuestions.length > 0 ? "textbook_progress" : "questions");
+      setPhase(questions.length > 0 ? "questions" : "textbook_progress");
     }
   }
 
   function nextQuestion() {
     if (qIndex < questions.length - 1) {
       setQIndex(qIndex + 1);
-      setTextDraft("");
     } else if (textbookQuestions.length > 0) {
       setTbIndex(0);
       setPhase("textbook_progress");
@@ -187,24 +192,21 @@ export default function DiagnosisPage() {
         {phase === "welcome" && (
           <div className="card flex flex-col gap-4">
             <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{welcomeMessage}</p>
-            <button onClick={startQuestions} className="btn-primary self-end">質問に答える</button>
+            <button onClick={startQuestions} className="btn-primary self-end">
+              {questions.length > 0 || textbookQuestions.length > 0 ? "質問に答える" : "始める"}
+            </button>
           </div>
         )}
 
         {phase === "questions" && questions.length > 0 && (
-          <QuestionCard
+          <CustomQuestionCard
             question={questions[qIndex]}
             index={qIndex}
             total={questions.length}
-            currentScore={currentScore} setCurrentScore={setCurrentScore}
-            hasTakenBefore={hasTakenBefore} setHasTakenBefore={setHasTakenBefore}
-            targetScore={targetScore} setTargetScore={setTargetScore}
-            examDate={examDate} setExamDate={setExamDate}
-            dailyStudyTime={dailyStudyTime} setDailyStudyTime={setDailyStudyTime}
-            weakAreas={weakAreas} toggleWeakArea={toggleWeakArea}
-            studyHistory={studyHistory} setStudyHistory={setStudyHistory}
-            materials={materials} setMaterials={setMaterials}
-            textDraft={textDraft} setTextDraft={setTextDraft}
+            value={answers[questions[qIndex].id] ?? ""}
+            setValue={v => setAnswer(questions[qIndex].id, v)}
+            multiValue={multiAnswers[questions[qIndex].id] ?? []}
+            toggleMultiValue={opt => toggleMultiAnswer(questions[qIndex].id, opt)}
             onNext={nextQuestion}
           />
         )}
@@ -322,68 +324,55 @@ export default function DiagnosisPage() {
   );
 }
 
-function QuestionCard(props: {
-  question: Question; index: number; total: number;
-  currentScore: string; setCurrentScore: (v: string) => void;
-  hasTakenBefore: boolean; setHasTakenBefore: (v: boolean) => void;
-  targetScore: string; setTargetScore: (v: string) => void;
-  examDate: string; setExamDate: (v: string) => void;
-  dailyStudyTime: string; setDailyStudyTime: (v: string) => void;
-  weakAreas: string[]; toggleWeakArea: (opt: string) => void;
-  studyHistory: string; setStudyHistory: (v: string) => void;
-  materials: string; setMaterials: (v: string) => void;
-  textDraft: string; setTextDraft: (v: string) => void;
+function CustomQuestionCard({
+  question, index, total, value, setValue, multiValue, toggleMultiValue, onNext,
+}: {
+  question: CustomQuestion;
+  index: number;
+  total: number;
+  value: string;
+  setValue: (v: string) => void;
+  multiValue: string[];
+  toggleMultiValue: (opt: string) => void;
   onNext: () => void;
 }) {
-  const { question: q, index, total } = props;
-
   function canProceed(): boolean {
-    switch (q.key) {
-      case "current_score": return !props.hasTakenBefore || props.currentScore.trim() !== "";
-      case "target_score": return props.targetScore.trim() !== "";
-      case "exam_date": return props.examDate !== "";
-      case "daily_study_time": return props.dailyStudyTime !== "";
-      case "weak_areas": return props.weakAreas.length > 0;
-      case "study_history": return props.textDraft.trim() !== "";
-      case "materials": return true;
-      default: return false;
-    }
-  }
-
-  function handleNext() {
-    if (q.key === "study_history") props.setStudyHistory(props.textDraft);
-    if (q.key === "materials") props.setMaterials(props.textDraft);
-    props.onNext();
+    if (!question.is_required) return true;
+    if (question.answer_type === "multi") return multiValue.length > 0;
+    return value.trim() !== "";
   }
 
   return (
     <div className="card flex flex-col gap-4">
       <p className="text-xs" style={{ color: "var(--muted)" }}>質問 {index + 1} / {total}</p>
-      <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{q.question}</p>
+      <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{question.question_text}</p>
 
-      {q.key === "current_score" && (
-        <div className="flex flex-col gap-2">
-          <input type="number" value={props.currentScore} disabled={!props.hasTakenBefore}
-            onChange={e => props.setCurrentScore(e.target.value)} placeholder="例: 580" className="disabled:opacity-50" />
-          <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text)" }}>
-            <input type="checkbox" checked={!props.hasTakenBefore}
-              onChange={e => props.setHasTakenBefore(!e.target.checked)} />
-            まだ受けたことがない
-          </label>
+      {question.answer_type === "text" && (
+        <textarea value={value} onChange={e => setValue(e.target.value)} className="min-h-[80px]" placeholder="回答を入力してください" />
+      )}
+
+      {question.answer_type === "number" && (
+        <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="数値を入力" />
+      )}
+
+      {question.answer_type === "single" && (
+        <div className="flex flex-wrap gap-2">
+          {(question.options || []).map(opt => (
+            <button key={opt} onClick={() => setValue(opt)}
+              className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
+              style={{ borderColor: "var(--border)", background: value === opt ? "var(--primary)" : "var(--card)", color: value === opt ? "white" : "var(--text)" }}>
+              {opt}
+            </button>
+          ))}
         </div>
       )}
 
-      {q.key === "target_score" && (
-        <input type="number" value={props.targetScore} onChange={e => props.setTargetScore(e.target.value)} placeholder="例: 800" />
-      )}
-
-      {(q.key === "exam_date" || q.key === "daily_study_time") && (
+      {question.answer_type === "multi" && (
         <div className="flex flex-wrap gap-2">
-          {q.options?.map(opt => {
-            const selected = q.key === "exam_date" ? props.examDate === opt : props.dailyStudyTime === opt;
+          {(question.options || []).map(opt => {
+            const selected = multiValue.includes(opt);
             return (
-              <button key={opt}
-                onClick={() => q.key === "exam_date" ? props.setExamDate(opt) : props.setDailyStudyTime(opt)}
+              <button key={opt} onClick={() => toggleMultiValue(opt)}
                 className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
                 style={{ borderColor: "var(--border)", background: selected ? "var(--primary)" : "var(--card)", color: selected ? "white" : "var(--text)" }}>
                 {opt}
@@ -391,37 +380,16 @@ function QuestionCard(props: {
             );
           })}
         </div>
-      )}
-
-      {q.key === "weak_areas" && (
-        <div className="flex flex-wrap gap-2">
-          {q.options?.map(opt => {
-            const selected = props.weakAreas.includes(opt);
-            return (
-              <button key={opt} onClick={() => props.toggleWeakArea(opt)}
-                className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
-                style={{ borderColor: "var(--border)", background: selected ? "var(--primary)" : "var(--card)", color: selected ? "white" : "var(--text)" }}>
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {(q.key === "study_history" || q.key === "materials") && (
-        <textarea value={props.textDraft} onChange={e => props.setTextDraft(e.target.value)}
-          placeholder={q.key === "materials" ? "例: 金フレ、公式問題集（任意）" : "これまでの学習内容を教えてください"}
-          className="min-h-[80px]" />
       )}
 
       <div className="flex justify-end gap-2">
-        {q.key === "materials" && (
-          <button onClick={() => { props.setMaterials(""); props.setTextDraft(""); props.onNext(); }}
+        {!question.is_required && (
+          <button onClick={() => { setValue(""); onNext(); }}
             className="px-4 py-2 rounded-lg text-sm font-bold border" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
             スキップ
           </button>
         )}
-        <button onClick={handleNext} disabled={!canProceed()} className="btn-primary disabled:opacity-50">
+        <button onClick={onNext} disabled={!canProceed()} className="btn-primary disabled:opacity-50">
           次へ
         </button>
       </div>

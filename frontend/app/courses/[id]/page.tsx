@@ -35,6 +35,10 @@ const TASK_TYPE_LABEL: Record<string, string> = {
   vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
 };
 
+const TASK_TYPE_ICON: Record<string, string> = {
+  vocabulary: "📖", listening: "🎧", grammar: "📐", reading: "📰", shadowing: "🗣️", practice: "✏️",
+};
+
 const REST_DAY_TIPS = [
   "お気に入りの音楽を聴いてリラックス！",
   "今日学んだことを声に出して振り返ってみよう。",
@@ -403,48 +407,91 @@ export default function CourseDetailPage() {
             ) : (
               <>
                 {today && (
-                  <div className="card border-2" style={{ borderColor: "var(--accent)" }}>
-                    <p className="text-xs font-bold mb-3" style={{ color: "var(--accent)" }}>🔥 今日のタスク（Day {currentDay}）</p>
-                    {today.is_rest_day ? (
-                      <p className="text-sm" style={{ color: "var(--text)" }}>今日は休息日です。{restDayTip(currentDay)}</p>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        {today.theme && <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{today.theme}</p>}
-                        {todayTasks.length > 0 ? (
-                          <ul className="flex flex-col gap-1.5">
-                            {todayTasks.map((t, i) => (
-                              <li key={i} className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={checkedTaskTypes.has(t.type)}
-                                  onChange={() => toggleTaskType(t.type)}
-                                  disabled={!!todayLog?.is_completed}
-                                />
-                                <span style={{ color: "var(--text)" }}>{TASK_TYPE_LABEL[t.type] ?? t.type}</span>
-                                <span style={{ color: "var(--muted)" }}>（{t.minutes}分）</span>
-                                {t.carryover && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "var(--accent)", color: "white" }}>繰越</span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。復習をしましょう！</p>
-                        )}
+                  <div className="card shadow-soft overflow-hidden p-0" style={{ borderColor: "var(--accent)" }}>
+                    <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🔥</span>
+                        <p className="text-sm font-black text-white">今日のタスク</p>
                       </div>
-                    )}
-                    {!today.is_rest_day && (
-                      <div className="mt-4 pt-4 border-t flex items-center gap-3" style={{ borderColor: "var(--border)" }}>
-                        <button
-                          onClick={() => handleReportToday(currentDay)}
-                          disabled={reporting || !!todayLog?.is_completed}
-                          className="btn-primary disabled:opacity-50"
-                        >
-                          {todayLog?.is_completed ? "✅ 報告済み" : reporting ? "報告中…" : "今日の学習を報告する"}
-                        </button>
-                        <Link href={`/courses/${courseId}/chat`} className="text-xs underline" style={{ color: "var(--accent)" }}>チャットで相談する →</Link>
-                      </div>
-                    )}
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.22)", color: "white" }}>
+                        Day {currentDay}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-4 p-5">
+                      {today.is_rest_day ? (
+                        <div className="flex items-center gap-3 py-2">
+                          <span className="text-2xl">🌿</span>
+                          <div>
+                            <p className="text-sm font-bold" style={{ color: "var(--text)" }}>今日は休息日です</p>
+                            <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{restDayTip(currentDay)}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {todayTasks.length > 0 ? (
+                            <ul className="flex flex-col gap-2">
+                              {(() => {
+                                // テーマ文字列「単語Ch1-4+模試2大5」のように複数項目が+で連結されている場合、
+                                // 各タスクに対応する項目をインデックスで割り当てる（件数が一致しない場合は全体をそのまま使う）
+                                const themeParts = today.theme ? today.theme.split("+").map(s => s.trim()) : [];
+                                const useThemeParts = themeParts.length === todayTasks.length;
+                                return todayTasks.map((t, i) => {
+                                  const isChecked = checkedTaskTypes.has(t.type);
+                                  const label = useThemeParts
+                                    ? themeParts[i]
+                                    : (today.theme || TASK_TYPE_LABEL[t.type] || t.type);
+                                  return (
+                                    <li key={i}>
+                                      <label
+                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
+                                        style={{
+                                          background: isChecked ? "color-mix(in srgb, var(--accent) 12%, var(--card))" : "var(--bg)",
+                                          border: `1px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
+                                        }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={() => toggleTaskType(t.type)}
+                                          disabled={!!todayLog?.is_completed}
+                                          className="flex-shrink-0"
+                                          style={{ width: "1rem", height: "1rem" }}
+                                        />
+                                        <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>
+                                          📌 {label}
+                                        </span>
+                                        {t.carryover && (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>繰越</span>
+                                        )}
+                                        <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--example-bg, #eee)", color: "var(--muted)" }}>
+                                          {t.minutes}分
+                                        </span>
+                                      </label>
+                                    </li>
+                                  );
+                                });
+                              })()}
+                            </ul>
+                          ) : (
+                            <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。復習をしましょう！</p>
+                          )}
+                        </>
+                      )}
+
+                      {!today.is_rest_day && (
+                        <div className="pt-3 flex flex-wrap items-center justify-between gap-3" style={{ borderTop: "1px solid var(--border)" }}>
+                          <button
+                            onClick={() => handleReportToday(currentDay)}
+                            disabled={reporting || !!todayLog?.is_completed}
+                            className="btn-primary disabled:opacity-50"
+                          >
+                            {todayLog?.is_completed ? "✅ 報告済み" : reporting ? "報告中…" : "今日の学習を報告する"}
+                          </button>
+                          <Link href={`/courses/${courseId}/chat`} className="text-xs font-bold underline" style={{ color: "var(--accent)" }}>チャットで相談する →</Link>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

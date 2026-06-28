@@ -11,6 +11,7 @@ type CreatorCard = {
   bio?: string | null;
   total_learners?: number;
   coaching_tags?: string[];
+  sample_reply?: string | null;
   character: { id: number; name: string; avatar_url?: string | null } | null;
 };
 
@@ -54,7 +55,7 @@ export default function CreatorsPage() {
 
                   {cr.bio && <p className="text-sm" style={{ color: "var(--text)" }}>{cr.bio}</p>}
 
-                  {cr.character && <SampleChatPreview characterName={cr.character.name} tags={cr.coaching_tags ?? []} compact />}
+                  {cr.character && <SampleChatPreview characterName={cr.character.name} avatarUrl={cr.character.avatar_url} sampleReply={cr.sample_reply} compact />}
                 </div>
               </Link>
             ))}

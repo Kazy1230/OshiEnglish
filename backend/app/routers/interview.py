@@ -25,10 +25,12 @@ def _get_own_creator_profile(db: Session, current_user) -> CreatorProfile:
 
 
 BASE_TYPES = ("共感型", "指導型", "激励型", "厳格型")
+GENDERS = ("男性", "女性", "中性的")
 
 
 class InterviewStartRequest(BaseModel):
     base_type: Optional[str] = None
+    gender: Optional[str] = None
 
 
 @router.post("/start")
@@ -46,6 +48,8 @@ def start_interview(data: InterviewStartRequest = InterviewStartRequest(), curre
     if not session:
         if data.base_type and data.base_type not in BASE_TYPES:
             raise HTTPException(status_code=400, detail=f"base_typeは{BASE_TYPES}のいずれかを指定してください")
+        if data.gender and data.gender not in GENDERS:
+            raise HTTPException(status_code=400, detail=f"genderは{GENDERS}のいずれかを指定してください")
         session = InterviewSession(
             creator_id=profile.id,
             fixed_index=0,
@@ -54,6 +58,7 @@ def start_interview(data: InterviewStartRequest = InterviewStartRequest(), curre
             qa_history=[],
             status="in_progress",
             base_type=data.base_type,
+            gender=data.gender,
         )
         db.add(session)
         db.commit()
@@ -148,16 +153,15 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
     try:
         text = generate_text(
             prompts.PROFILE_GENERATION_SYSTEM,
-            prompts.build_profile_generation_messages(session.qa_history or [], session.base_type),
-            max_tokens=1500,
+            prompts.build_profile_generation_messages(session.qa_history or [], session.base_type, session.gender),
+            max_tokens=1800,
             json_mode=True,
         )
         generated = extract_json(text)
     except LLMError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    if session.base_type:
-        generated["base_type"] = session.base_type
+    sample_reply = generated.pop("sample_reply", None)
 
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
     if not personality:
@@ -165,6 +169,9 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
         db.add(personality)
     personality.interview_answers = session.qa_history
     personality.profile = generated
+    personality.base_type = session.base_type
+    personality.gender = session.gender
+    personality.sample_reply = sample_reply
 
     # 1クリエイター=1人格(キャラクター)。インタビュー完了時点でキャラクターが無ければ自動で作成する
     if not profile.character:
@@ -172,7 +179,13 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
 
     db.commit()
     db.refresh(personality)
-    return {"profile": personality.profile, "interview_answers": personality.interview_answers}
+    return {
+        "profile": personality.profile,
+        "interview_answers": personality.interview_answers,
+        "base_type": personality.base_type,
+        "gender": personality.gender,
+        "sample_reply": personality.sample_reply,
+    }
 
 
 @router.get("/profile")
@@ -181,7 +194,13 @@ def get_profile(current_user=Depends(get_current_creator_or_admin), db: Session 
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
     if not personality:
         raise HTTPException(status_code=404, detail="人格プロファイルがまだ生成されていません")
-    return {"profile": personality.profile, "interview_answers": personality.interview_answers}
+    return {
+        "profile": personality.profile,
+        "interview_answers": personality.interview_answers,
+        "base_type": personality.base_type,
+        "gender": personality.gender,
+        "sample_reply": personality.sample_reply,
+    }
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -198,4 +217,10 @@ def update_profile(data: ProfileUpdateRequest, current_user=Depends(get_current_
     personality.profile = data.profile
     db.commit()
     db.refresh(personality)
-    return {"profile": personality.profile, "interview_answers": personality.interview_answers}
+    return {
+        "profile": personality.profile,
+        "interview_answers": personality.interview_answers,
+        "base_type": personality.base_type,
+        "gender": personality.gender,
+        "sample_reply": personality.sample_reply,
+    }

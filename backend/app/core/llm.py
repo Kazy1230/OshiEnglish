@@ -115,17 +115,31 @@ def extract_json(text: str) -> dict:
 
     ```json ... ``` のようなMarkdownコードフェンスで囲まれて返ってくる場合があるため、
     まずフェンスを除去し、それでも失敗する場合は最初の{から最後の}までを抜き出して再試行する。
+    さらに、AIが稀に出力する末尾カンマ（trailing comma）は構文エラーになるため、
+    {,] や [,] の直前のカンマを除去してから最後にもう一度だけ試す。
     """
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE).strip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
+
+    def _try(candidate: str) -> dict | None:
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
+
+    result = _try(cleaned)
+    if result is not None:
+        return result
+
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start != -1 and end != -1 and end > start:
-        try:
-            return json.loads(cleaned[start:end + 1])
-        except json.JSONDecodeError:
-            pass
+        candidate = cleaned[start:end + 1]
+        result = _try(candidate)
+        if result is not None:
+            return result
+        no_trailing_commas = re.sub(r",\s*([}\]])", r"\1", candidate)
+        result = _try(no_trailing_commas)
+        if result is not None:
+            return result
+
     raise LLMError("AIの応答をJSONとして解析できませんでした")

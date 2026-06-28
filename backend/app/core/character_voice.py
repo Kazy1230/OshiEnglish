@@ -36,5 +36,12 @@ def render_tone_profile(tone_profile: dict | None) -> str:
 
 
 def customer_display_name(customer) -> str:
-    """ユーザーの表示名を返す（customers.usernameはログインIDのため、表示用の別名は未導入）。"""
-    return customer.username
+    """ユーザーの表示名を返す（customers.usernameはログインIDのため、表示用の別名は未導入）。
+
+    usernameにメールアドレスが使われているアカウントが存在するため、画面に表示してよい名前として
+    そのまま返さない。メールアドレス形式の場合は@より前の部分のみを返し、フルアドレスの漏出を防ぐ。
+    """
+    username = customer.username
+    if "@" in username:
+        return username.split("@", 1)[0]
+    return username

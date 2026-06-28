@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f8f7f2;
+  --bg: #f3f5f8;
   --card: #ffffff;
-  --primary: #2e4057;
-  --accent: #048a81;
-  --text: #333333;
-  --muted: #888888;
-  --border: #e0ddd5;
+  --primary: #233347;
+  --accent: #0a7e76;
+  --text: #1c2128;
+  --muted: #5c6573;
+  --border: #d8dce3;
 }
 
 /* ダークモード（<html class="dark"> が付与されたときに上書き） */
@@ -19,6 +19,26 @@
   --text: #e7e8ec;
   --muted: #9a9ea8;
   --border: #34373f;
+}
+
+/* 管理者画面専用テーマ（サイト全体とは異なる配色で識別性を上げる） */
+.admin-theme {
+  --bg: #eef0f7;
+  --card: #ffffff;
+  --primary: #4338ca;
+  --accent: #c2620a;
+  --text: #201c34;
+  --muted: #635f73;
+  --border: #dadce8;
+}
+:root.dark .admin-theme {
+  --bg: #14121f;
+  --card: #1f1b30;
+  --primary: #8b91f5;
+  --accent: #f0a93f;
+  --text: #ece9f5;
+  --muted: #a8a4ba;
+  --border: #332c4d;
 }
 
 body {

@@ -1,10 +1,10 @@
 "use client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationBell } from "@/components/NotificationBell";
+import { useDarkMode } from "@/lib/darkMode";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type Role = "learner" | "creator";
 
@@ -48,7 +48,6 @@ export function AppHeader({
         {backHref && (
           <Link href={backHref} className="text-white/80 text-sm hover:text-white whitespace-nowrap">← {backLabel}</Link>
         )}
-        {title && <span className="text-white/90 text-sm font-bold whitespace-nowrap">{title}</span>}
         {role && (
           <nav className="flex items-center gap-3 flex-wrap">
             {NAV_ITEMS[role].map(item => {
@@ -58,8 +57,12 @@ export function AppHeader({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="text-sm whitespace-nowrap relative"
-                  style={{ color: active ? "white" : "rgba(255,255,255,0.8)", fontWeight: active ? 700 : 400 }}
+                  className="text-sm whitespace-nowrap relative px-3 py-1 rounded-full"
+                  style={{
+                    color: "white",
+                    fontWeight: active ? 700 : 400,
+                    background: active ? "#a855f7" : "transparent",
+                  }}
                 >
                   {item.label}
                   {badge > 0 && (

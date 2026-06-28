@@ -93,7 +93,9 @@ export default function CreatorProfilePage() {
           </p>
         ) : (
           <>
-            {Object.entries(editing && draft ? draft : profile).map(([category, fields]) => (
+            {Object.entries(editing && draft ? draft : profile)
+              .filter(([category]) => category in CATEGORY_LABELS)
+              .map(([category, fields]) => (
               <div key={category} className="card flex flex-col gap-3">
                 <h2 className="font-bold" style={{ color: "var(--primary)" }}>{CATEGORY_LABELS[category] ?? category}</h2>
                 {Object.entries(fields as Record<string, string>).map(([key, value]) => (

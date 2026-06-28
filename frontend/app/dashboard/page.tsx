@@ -61,7 +61,7 @@ export default function DashboardPage() {
   const tiles: { href: string; icon: string; label: string; locked?: boolean }[] = [
     { href: "/creator/courses/new", icon: "📅", label: "30日伴走コースを作る", locked: !isApproved },
     { href: "/studio", icon: "🎬", label: "AIコンテンツ生成スタジオ", locked: !isApproved },
-    { href: "/creator/interview", icon: "🧠", label: "AIインタビュー" },
+    ...(character ? [] : [{ href: "/creator/interview", icon: "🧠", label: "AIインタビュー" }]),
     { href: "/creator/profile", icon: "👤", label: "人格プロファイルを編集" },
     { href: "/creator/analytics", icon: "📊", label: "質問分析ダッシュボード", locked: !isApproved },
     { href: "/creator/revenue", icon: "💰", label: "収益" },

@@ -469,7 +469,7 @@ def update_course(course_id: int, data: CourseUpdate, current_user=Depends(get_c
         setattr(course, key, val)
     if course.is_free:
         course.price = 0
-    elif course.price < 100:
+    elif course.price < 100 and course.tier_a_price is None and course.tier_b_price is None:
         raise HTTPException(status_code=400, detail="有料コースの価格は100円以上を指定してください")
 
     db.commit()
@@ -667,13 +667,38 @@ def reorder_lessons(course_id: int, data: ReorderRequest, current_user=Depends(g
 
 # ----- 30日伴走コース：Layer1骨格自動生成・日単位編集 -----
 
-def _build_day_textbook_plan(db: Session, course_id: int) -> dict[int, list[dict]]:
+_SKILL_KEYWORDS = [
+    ("listening", ["リスニング", "Listening", "聴解"]),
+    ("grammar", ["文法", "Grammar", "Structure", "文構造"]),
+    ("reading", ["リーディング", "Reading", "読解"]),
+    ("shadowing", ["シャドーイング", "Shadowing"]),
+]
+
+
+def _infer_skill_type(ct: "CourseTextbook", name: str | None) -> str:
+    """登録された教材の種別(vocabulary/textbook)と名称・対象範囲から、実際に対応するタスク種別を推測する。
+    教材データはtype列がvocabulary/textbookの2値しか持たないため、生成AIに渡す許可リストを
+    正確に絞るためのキーワードマッチング。一致しない場合は汎用演習として"practice"を返す。"""
+    if ct.type == "vocabulary":
+        return "vocabulary"
+    haystack = " ".join(filter(None, [name, ct.textbook.target if ct.textbook else None]))
+    for skill, keywords in _SKILL_KEYWORDS:
+        if any(kw in haystack for kw in keywords):
+            return skill
+    return "practice"
+
+
+def _build_day_textbook_plan(db: Session, course_id: int) -> tuple[dict[int, list[dict]], set[str]]:
     """course_textbooks + textbook_day_assignmentsから、day_number(1〜30)ごとの教材項目割り当てを組み立てる。
-    day_numberがNULL（「やらない」）の項目は含めない。"""
+    day_numberがNULL（「やらない」）の項目は含めない。
+    あわせて、登録されている教材から実際に対応可能なタスク種別の集合を返す
+    （リスニング教材を登録していないのにlistningタスクが出力される、といった不整合を防ぐため）。"""
     course_textbooks = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()
     plan: dict[int, list[dict]] = {}
+    allowed_types: set[str] = set()
     for ct in course_textbooks:
         name = ct.textbook.name if ct.textbook else ct.custom_name
+        allowed_types.add(_infer_skill_type(ct, name))
         for assignment in ct.day_assignments:
             if assignment.day_number is None:
                 continue
@@ -684,7 +709,7 @@ def _build_day_textbook_plan(db: Session, course_id: int) -> dict[int, list[dict
                 "daily_words": ct.daily_words,
                 "review_words": ct.review_words,
             })
-    return plan
+    return plan, allowed_types
 
 
 def _run_course_days_generation(course_id: int):
@@ -698,14 +723,14 @@ def _run_course_days_generation(course_id: int):
         if not course:
             return
         personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
-        day_textbook_plan = _build_day_textbook_plan(db, course.id)
+        day_textbook_plan, allowed_task_types = _build_day_textbook_plan(db, course.id)
 
         try:
             text = generate_text(
                 gen_prompts.COURSE_DAY_GENERATION_SYSTEM,
                 gen_prompts.build_course_day_generation_messages(
                     personality.profile, course.title, course.goal, course.target_learner, course.intensity,
-                    course.study_materials, course.pace, day_textbook_plan,
+                    course.study_materials, course.pace, day_textbook_plan, allowed_task_types,
                 ),
                 max_tokens=4000,
                 json_mode=True,
@@ -721,12 +746,17 @@ def _run_course_days_generation(course_id: int):
 
         for day_data in days_data:
             day_number = day_data.get("day")
+            task_types = day_data.get("task_types") or []
+            if allowed_task_types:
+                # LLMが指示を無視して未登録の教材種別（例: リスニング教材未登録なのにlistening）を
+                # 出力した場合に備え、登録済み教材に対応する種別だけに絞る
+                task_types = [t for t in task_types if t.get("type") in allowed_task_types]
             db.add(CourseDay(
                 course_id=course.id,
                 day_number=day_number,
                 week_number=day_data.get("week") or ((day_number - 1) // 7 + 1),
                 theme=day_data.get("theme"),
-                task_types=day_data.get("task_types"),
+                task_types=task_types,
                 is_rest_day=bool(day_data.get("is_rest_day", False)),
             ))
         course.days_generation_status = "completed"
