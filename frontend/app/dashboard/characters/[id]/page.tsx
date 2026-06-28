@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { useRoleGuard } from "@/lib/useRoleGuard";
-import { Skeleton } from "@/components/Skeleton";
-import { api } from "@/lib/api";
-import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
+import { Skeleton } from "@/components/Skeleton";
+import { toast } from "@/components/Toast";
+import { api } from "@/lib/api";
+import { useRoleGuard } from "@/lib/useRoleGuard";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type ToneProfile = {
   first_person?: string;
@@ -81,16 +80,18 @@ export default function EditCharacterPage() {
   }
 
   async function handleGenerate() {
-    if (!name.trim()) { toast("名前を入力してください", "error"); return; }
+    if (!description.trim()) { toast("説明(自己紹介)を入力してください", "error"); return; }
     setGenerating(true);
     try {
-      const tone_profile = {
-        ...tone,
-        ng_expressions: ngText ? ngText.split(/[、,]/).map(s => s.trim()).filter(Boolean) : [],
-      };
-      const result = await api.generateCharacterBio(name, tone_profile);
-      setDescription(result.description || "");
-      toast("自己紹介文を生成しました。内容を確認・編集して保存してください", "success");
+      const result = await api.generateCharacterConcept(description);
+      setTone({
+        first_person: result.first_person || "",
+        speech_style: [result.tone, result.sentence_ending].filter(Boolean).join("。語尾の特徴: "),
+        personality: result.personality || "",
+        catchphrase: result.catchphrase || "",
+      });
+      setNgText((result.ng_words || []).join("、"));
+      toast("トーン設定を生成しました。内容を確認・編集して保存してください", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "生成に失敗しました。もう一度試してください", "error");
     } finally {

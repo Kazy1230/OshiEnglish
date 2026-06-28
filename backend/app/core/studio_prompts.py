@@ -103,17 +103,3 @@ def build_preview_system(character) -> str:
 
 def build_preview_messages(sample_text: str) -> list[dict]:
     return [{"role": "user", "content": sample_text}]
-
-
-BIO_SYSTEM = """あなたはアニメ・ライトノベル風キャラクターのプロフィール文を書く専門家です。
-与えられたキャラクター設定に基づき、学習者に向けた自己紹介文を作成してください。
-キャラクターの一人称・口調・性格・口癖を反映し、3〜4文程度で書いてください。
-出力は自己紹介文のみとし、前置きや説明、引用符は不要です。"""
-
-
-def build_bio_messages(name: str, tone_profile: dict) -> list[dict]:
-    from app.core.character_voice import render_tone_profile
-
-    tone_block = render_tone_profile(tone_profile) or "(口調設定は未登録)"
-    content = f"名前: {name}\n{tone_block}"
-    return [{"role": "user", "content": content}]
