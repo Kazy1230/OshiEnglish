@@ -78,6 +78,30 @@ def generate_character_concept(
     raise HTTPException(status_code=500, detail=str(last_error))
 
 
+class ToneProfileRequest(BaseModel):
+    name: str
+    description: str = ""
+    tone_profile: dict = {}
+
+
+@router.post("/generate/tone-profile")
+def generate_tone_profile(
+    data: ToneProfileRequest,
+    current_user=Depends(get_current_creator_or_admin),
+):
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="キャラクター名を入力してください")
+    messages = prompts.build_tone_profile_messages(data.name, data.description, data.tone_profile)
+    last_error: LLMError | None = None
+    for _ in range(2):
+        try:
+            text = generate_text(prompts.TONE_PROFILE_SYSTEM, messages, max_tokens=800, json_mode=True)
+            return extract_json(text)
+        except LLMError as e:
+            last_error = e
+    raise HTTPException(status_code=500, detail=str(last_error))
+
+
 # ── Step 1: コンテンツ相談 ────────────────────────────────────
 
 class ConsultRequest(BaseModel):

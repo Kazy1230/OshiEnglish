@@ -191,6 +191,8 @@ export const api = {
   // AIコンテンツ生成スタジオ：Step0/Step1（非ストリーミング）・下書き管理
   generateCharacterConcept: (characterConcept: string) =>
     apiFetch("/studio/generate/character", { method: "POST", body: JSON.stringify({ character_concept: characterConcept }) }),
+  generateToneProfile: (name: string, description: string, toneProfile: Record<string, unknown>) =>
+    apiFetch("/studio/generate/tone-profile", { method: "POST", body: JSON.stringify({ name, description, tone_profile: toneProfile }) }),
   studioConsult: (theme: string) =>
     apiFetch("/studio/consult", { method: "POST", body: JSON.stringify({ theme }) }),
   listDrafts: () => apiFetch("/studio/drafts"),

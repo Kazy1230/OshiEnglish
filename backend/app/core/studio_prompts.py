@@ -22,6 +22,33 @@ def build_character_concept_messages(character_concept: str) -> list[dict]:
     return [{"role": "user", "content": f"キャラクターのイメージ: {character_concept}"}]
 
 
+TONE_PROFILE_SYSTEM = """あなたはアニメ・ライトノベル風キャラクターの設定デザイナーです。
+すでに名前や説明が決まっているキャラクターについて、英語学習コンテンツで使う口調設定を提案してください。
+既に決まっている項目があれば、その内容と矛盾しないように残りの項目を補ってください。
+以下のJSON形式のみで返答してください。
+
+{
+  "first_person": "一人称(例: 私、僕、俺、あたし)",
+  "tone": "口調の説明(例: 少し上から目線だが丁寧。敬語は使わない)",
+  "personality": "性格の説明(例: ツンデレ。本当は親切だが素直に表現できない)",
+  "sentence_ending": "語尾の特徴(例: 〜でしょ、〜じゃない、〜だけど？)",
+  "catchphrase": "口癖(例: 「別に教えてあげてもいいけど」「感謝しなさいよ」)",
+  "ng_words": ["使ってはいけない表現1", "使ってはいけない表現2"]
+}"""
+
+
+def build_tone_profile_messages(name: str, description: str, tone_profile: dict) -> list[dict]:
+    from app.core.character_voice import render_tone_profile
+
+    lines = [f"名前: {name}"]
+    if description.strip():
+        lines.append(f"説明: {description}")
+    tone_block = render_tone_profile(tone_profile)
+    if tone_block:
+        lines.append(f"既存の口調設定:\n{tone_block}")
+    return [{"role": "user", "content": "\n".join(lines)}]
+
+
 CONSULT_SYSTEM = """あなたは英語教育コンテンツの企画アドバイザーです。
 講師が入力したテーマをもとに、英語学習者向けコンテンツの企画案を提案してください。
 以下のJSON形式のみで返答してください。

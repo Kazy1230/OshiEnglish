@@ -80,10 +80,10 @@ export default function EditCharacterPage() {
   }
 
   async function handleGenerate() {
-    if (!description.trim()) { toast("説明(自己紹介)を入力してください", "error"); return; }
+    if (!name.trim()) { toast("名前を入力してください", "error"); return; }
     setGenerating(true);
     try {
-      const result = await api.generateCharacterConcept(description);
+      const result = await api.generateToneProfile(name, description, tone);
       setTone({
         first_person: result.first_person || "",
         speech_style: [result.tone, result.sentence_ending].filter(Boolean).join("。語尾の特徴: "),
@@ -157,7 +157,6 @@ export default function EditCharacterPage() {
         <div className="card flex flex-col gap-3">
           <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>TONE_PROFILE</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="名前" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="説明" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <button onClick={handleGenerate} disabled={generating} className="btn-primary self-start disabled:opacity-50">
             {generating ? "生成中…" : "🤖 AIで提案する"}
           </button>
