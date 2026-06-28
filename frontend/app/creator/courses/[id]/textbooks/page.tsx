@@ -60,7 +60,8 @@ export default function CourseTextbooksPage() {
 
   const [textbooks, setTextbooks] = useState<CourseTextbookEntry[]>([]);
   const [fetching, setFetching] = useState(true);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [savedSummary, setSavedSummary] = useState<string>("");
 
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -87,7 +88,10 @@ export default function CourseTextbooksPage() {
 
   useEffect(() => {
     if (loading) return;
-    reload().finally(() => setFetching(false));
+    Promise.all([
+      reload(),
+      api.getCourseDetail(courseId).then(c => setSavedSummary(c.study_materials ?? "")).catch(() => {}),
+    ]).finally(() => setFetching(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
@@ -201,10 +205,22 @@ export default function CourseTextbooksPage() {
 
   async function handleApplyPlan() {
     if (!plan) return;
+    const overwriteTargets = plan.plans.filter(p => {
+      const tb = textbooks.find(t => t.id === p.course_textbook_id);
+      return p.day_assignments && tb && tb.day_assignments.some(a => a.day_number != null);
+    });
+    if (overwriteTargets.length > 0) {
+      const names = overwriteTargets.map(p => textbooks.find(t => t.id === p.course_textbook_id)?.name ?? `教材#${p.course_textbook_id}`).join("、");
+      if (!confirm(`「${names}」には既に手動で設定した日程割り当てがあります。AIプランを適用すると上書きされます。よろしいですか？`)) return;
+    }
     setApplyingPlan(true);
     try {
       const updated = await api.applyCourseTextbookPlan(courseId, plan.plans);
       setTextbooks(updated);
+      setExpandedIds(new Set(plan.plans.map(p => p.course_textbook_id)));
+      const summary = buildStudyMaterialsSummary(updated);
+      await api.updateCourse(courseId, { study_materials: summary });
+      setSavedSummary(summary);
       setPlan(null);
       setPlanDescription("");
       setQaHistory([]);
@@ -219,7 +235,9 @@ export default function CourseTextbooksPage() {
   async function handleProceed() {
     setProceeding(true);
     try {
-      await api.updateCourse(courseId, { study_materials: buildStudyMaterialsSummary(textbooks) });
+      const summary = buildStudyMaterialsSummary(textbooks);
+      await api.updateCourse(courseId, { study_materials: summary });
+      setSavedSummary(summary);
       router.push(`/creator/courses/${courseId}/calendar`);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
@@ -247,15 +265,22 @@ export default function CourseTextbooksPage() {
           </form>
           {results.length > 0 && (
             <div className="flex flex-col gap-2">
-              {results.map(t => (
-                <div key={t.id} className="flex items-center justify-between gap-2 text-sm p-2 rounded-lg" style={{ background: "var(--example-bg, #eee)" }}>
-                  <div>
-                    <p className="font-bold" style={{ color: "var(--primary)" }}>{t.name}</p>
-                    <p className="text-xs" style={{ color: "var(--muted)" }}>{t.publisher} ・ {t.target} ・ 全{t.toc?.length ?? 0}項目</p>
+              {results.map(t => {
+                const alreadyAdded = textbooks.some(tb => tb.textbook_id === t.id);
+                return (
+                  <div key={t.id} className="flex items-center justify-between gap-2 text-sm p-2 rounded-lg" style={{ background: "var(--example-bg, #eee)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--primary)" }}>{t.name}</p>
+                      <p className="text-xs" style={{ color: "var(--muted)" }}>{t.publisher} ・ {t.target} ・ 全{t.toc?.length ?? 0}項目</p>
+                    </div>
+                    {alreadyAdded ? (
+                      <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>追加済み</span>
+                    ) : (
+                      <button className="btn-primary text-xs flex-shrink-0" disabled={adding} onClick={() => handleAddPreset(t)}>追加</button>
+                    )}
                   </div>
-                  <button className="btn-primary text-xs flex-shrink-0" disabled={adding} onClick={() => handleAddPreset(t)}>追加</button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -364,8 +389,12 @@ export default function CourseTextbooksPage() {
                 <CourseTextbookCard
                   key={t.id}
                   textbook={t}
-                  expanded={expandedId === t.id}
-                  onToggle={() => setExpandedId(prev => prev === t.id ? null : t.id)}
+                  expanded={expandedIds.has(t.id)}
+                  onToggle={() => setExpandedIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
+                    return next;
+                  })}
                   onDelete={() => handleDelete(t.id)}
                   onSaveAssignments={assignments => handleSaveAssignments(t, assignments)}
                   onSaveSettings={(d, r, laps) => handleSaveSettings(t, d, r, laps)}
@@ -375,7 +404,12 @@ export default function CourseTextbooksPage() {
           )}
         </div>
 
-        <button className="btn-cta text-center" disabled={proceeding} onClick={handleProceed}>
+        {textbooks.length === 0 ? (
+          <p className="text-xs text-center" style={{ color: "#c0392b" }}>教材を1つ以上追加してから進んでください。</p>
+        ) : buildStudyMaterialsSummary(textbooks) !== savedSummary && (
+          <p className="text-xs text-center" style={{ color: "var(--accent)" }}>⚠ 教材の設定に未保存の変更があります。「進む」を押すと保存されます。</p>
+        )}
+        <button className="btn-cta text-center disabled:opacity-50" disabled={proceeding || textbooks.length === 0} onClick={handleProceed}>
           {proceeding ? "保存中…" : "コース生成へ進む →"}
         </button>
       </main>
@@ -459,7 +493,7 @@ function CourseTextbookCard({
 
           {assignments.length > 0 && (
             <button type="button" className="btn-ghost text-xs self-start" onClick={handleAutoAssign}>
-              🤖 AIに自動割り当てしてもらう（全{assignments.length}項目を30日に均等配分）
+              📊 均等に自動割り当て（全{assignments.length}項目を30日に均等配分。AIに相談したい場合は上の②を使ってください）
             </button>
           )}
           {assignments.length > 0 && (

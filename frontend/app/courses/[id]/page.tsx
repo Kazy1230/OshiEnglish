@@ -58,7 +58,7 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const [checkout, setCheckout] = useState<{ clientSecret: string } | null>(null);
+  const [checkout, setCheckout] = useState<{ clientSecret: string; isSubscription: boolean } | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<number | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<number>>(new Set());
   const [completing, setCompleting] = useState(false);
@@ -128,7 +128,7 @@ export default function CourseDetailPage() {
         router.push(`/purchase-complete?course_id=${courseId}`);
         return;
       }
-      setCheckout({ clientSecret: res.client_secret });
+      setCheckout({ clientSecret: res.client_secret, isSubscription: false });
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");
     } finally {
@@ -173,7 +173,7 @@ export default function CourseDetailPage() {
         router.push(`/purchase-complete?course_id=${courseId}`);
         return;
       }
-      setCheckout({ clientSecret: res.client_secret });
+      setCheckout({ clientSecret: res.client_secret, isSubscription: true });
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");
     } finally {
@@ -381,6 +381,15 @@ export default function CourseDetailPage() {
       )}
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+        {course.is_suspended && (
+          <div className="card border-2 flex flex-col gap-1" style={{ borderColor: "#e53e3e", background: "color-mix(in srgb, #e53e3e 8%, var(--card))" }}>
+            <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>⚠️ このコースは現在停止されています</p>
+            <p className="text-sm" style={{ color: "var(--text)" }}>
+              {course.suspension_reason || "運営により一時的に停止されています。詳しくはサポートにお問い合わせください。"}
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:items-start">
           <div className="sm:col-span-2">{infoCard}</div>
           <div className="sm:col-span-1">{contractCard}</div>
@@ -477,6 +486,12 @@ export default function CourseDetailPage() {
                             <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。復習をしましょう！</p>
                           )}
                         </>
+                      )}
+
+                      {!today.is_rest_day && currentDay === 30 && (
+                        <p className="text-xs" style={{ color: "var(--muted)" }}>
+                          最終日のため、未完了タスクは翌日に繰り越せません。今日中の完了を目指しましょう。
+                        </p>
                       )}
 
                       {!today.is_rest_day && (
@@ -605,7 +620,7 @@ export default function CourseDetailPage() {
       </main>
 
       {checkout && (
-        <CourseCheckoutModal courseId={courseId} clientSecret={checkout.clientSecret} onClose={() => setCheckout(null)} />
+        <CourseCheckoutModal courseId={courseId} clientSecret={checkout.clientSecret} isSubscription={checkout.isSubscription} onClose={() => setCheckout(null)} />
       )}
 
       {showLessonDrawer && (

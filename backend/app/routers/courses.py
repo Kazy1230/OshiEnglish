@@ -186,6 +186,7 @@ class CourseCreate(BaseModel):
             raise ValueError("有料コースの価格は100円以上を指定してください")
         if self.is_free:
             self.price = 0
+            self.tier_a_price = None  # 無料コースはTier Aを提供できない（Tier Bのみ対応可能）
         if self.tier_a_price is not None and not (980 <= self.tier_a_price <= 1980):
             raise ValueError("Tier Aの価格は980〜1980円/月で指定してください")
         if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 5000):
@@ -470,6 +471,7 @@ def update_course(course_id: int, data: CourseUpdate, current_user=Depends(get_c
         setattr(course, key, val)
     if course.is_free:
         course.price = 0
+        course.tier_a_price = None  # 無料コースはTier Aを提供できない（Tier Bのみ対応可能）
     elif course.price < 100 and course.tier_a_price is None and course.tier_b_price is None:
         raise HTTPException(status_code=400, detail="有料コースの価格は100円以上を指定してください")
 
@@ -588,6 +590,10 @@ def submit_course_for_review(course_id: int, current_user=Depends(get_current_us
         raise HTTPException(status_code=400, detail="公開申請できるのはdraft状態のコースのみです")
     if len(course.lessons) == 0 and len(course.days) == 0:
         raise HTTPException(status_code=400, detail="レッスンまたは30日分のコンテンツが1件以上ないと公開申請できません")
+    if len(course.days) > 0:
+        textbook_count = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).count()
+        if textbook_count == 0:
+            raise HTTPException(status_code=400, detail="30日コースには使用教材が1件以上必要です。教材設定画面で追加してください")
     if current_user.role != "admin":
         profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
         if not profile or profile.status != "active":
@@ -944,6 +950,14 @@ def add_course_textbook(course_id: int, data: CourseTextbookCreate, current_user
     course = _get_owned_course(db, course_id, current_user)
     if data.textbook_id and not db.query(Textbook).filter(Textbook.id == data.textbook_id).first():
         raise HTTPException(status_code=404, detail="教材が見つかりません")
+    if data.textbook_id and db.query(CourseTextbook).filter(
+        CourseTextbook.course_id == course_id, CourseTextbook.textbook_id == data.textbook_id
+    ).first():
+        raise HTTPException(status_code=400, detail="この教材は既にこのコースに追加されています")
+    if data.custom_name and db.query(CourseTextbook).filter(
+        CourseTextbook.course_id == course_id, CourseTextbook.custom_name == data.custom_name
+    ).first():
+        raise HTTPException(status_code=400, detail="同じ名前の教材が既にこのコースに追加されています")
 
     course_textbook = CourseTextbook(
         course_id=course.id,
@@ -1143,6 +1157,7 @@ def list_my_purchased_courses(current_user=Depends(get_current_user), db: Sessio
             "title": course.title,
             "total_lessons": total,
             "completed_count": completed_count,
+            "is_day_based": bool(course.days),
             "thumbnail_url": course.thumbnail_url,
             "character": (
                 {"name": course.character.name, "avatar_url": course.character.image_url}
@@ -1355,6 +1370,33 @@ def add_diagnosis_question(course_id: int, data: DiagnosisQuestionCreate, curren
     db.commit()
     db.refresh(question)
     return _serialize_diagnosis_question(question)
+
+
+class DiagnosisQuestionBulkCreate(BaseModel):
+    questions: List[DiagnosisQuestionCreate]
+
+
+@router.post("/courses/{course_id}/diagnosis-questions/bulk", status_code=status.HTTP_201_CREATED)
+def add_diagnosis_questions_bulk(course_id: int, data: DiagnosisQuestionBulkCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Day1診断のカスタム質問をまとめて追加する（テンプレート適用用）。1件でも不正なら全件失敗にする。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    next_order = max((q.order for q in course.diagnosis_questions), default=-1) + 1
+    created = []
+    for i, q in enumerate(data.questions):
+        question = CourseDiagnosisQuestion(
+            course_id=course.id,
+            question_text=q.question_text,
+            answer_type=q.answer_type,
+            options=q.options,
+            is_required=q.is_required,
+            order=next_order + i,
+        )
+        db.add(question)
+        created.append(question)
+    db.commit()
+    for q in created:
+        db.refresh(q)
+    return [_serialize_diagnosis_question(q) for q in created]
 
 
 @router.put("/diagnosis-questions/{question_id}")

@@ -78,6 +78,7 @@ export default function CourseCalendarPage() {
   const [materialUrl, setMaterialUrl] = useState("");
 
   const [courseStatus, setCourseStatus] = useState<string>("draft");
+  const [courseCategory, setCourseCategory] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checkingQuality, setCheckingQuality] = useState(false);
   const [qualityCheck, setQualityCheck] = useState<QualityCheckResult | null>(null);
@@ -101,7 +102,7 @@ export default function CourseCalendarPage() {
     Promise.all([
       reloadDays(),
       api.listCourseMaterials(courseId).then(setMaterials).catch(() => {}),
-      api.getCourseDetail(courseId).then(c => setCourseStatus(c.status)).catch(() => {}),
+      api.getCourseDetail(courseId).then(c => { setCourseStatus(c.status); setCourseCategory(c.category ?? null); }).catch(() => {}),
       api.listDiagnosisQuestions(courseId).then(setDiagnosisQuestions).catch(() => {}),
     ]).finally(() => setFetching(false));
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -138,11 +139,9 @@ export default function CourseCalendarPage() {
     if (!template) return;
     setApplyingTemplate(true);
     try {
-      for (const { intent, ...q } of template.questions) {
-        void intent;
-        const added = await api.addDiagnosisQuestion(courseId, q);
-        setDiagnosisQuestions(prev => [...prev, added]);
-      }
+      const questions = template.questions.map(({ intent, ...q }) => { void intent; return q; });
+      const added = await api.addDiagnosisQuestionsBulk(courseId, questions);
+      setDiagnosisQuestions(prev => [...prev, ...added]);
       toast(`「${template.label}」を追加しました`, "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "テンプレートの追加に失敗しました", "error");
@@ -363,17 +362,25 @@ export default function CourseCalendarPage() {
               </p>
 
               <div className="flex gap-2 flex-wrap">
-                {Object.entries(QUESTION_TEMPLATES).map(([key, t]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className="btn-ghost text-xs"
-                    disabled={applyingTemplate}
-                    onClick={() => handleApplyTemplate(key)}
-                  >
-                    ＋ {t.label}を追加
-                  </button>
-                ))}
+                {Object.entries(QUESTION_TEMPLATES)
+                  .sort(([keyA], [keyB]) => {
+                    const matches = (key: string) => key === "toefl_itp" && !!courseCategory?.toUpperCase().includes("TOEFL");
+                    return Number(matches(keyB)) - Number(matches(keyA));
+                  })
+                  .map(([key, t]) => {
+                    const recommended = key === "toefl_itp" && !!courseCategory?.toUpperCase().includes("TOEFL");
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className="btn-ghost text-xs"
+                        disabled={applyingTemplate}
+                        onClick={() => handleApplyTemplate(key)}
+                      >
+                        ＋ {t.label}を追加{recommended && " ⭐おすすめ"}
+                      </button>
+                    );
+                  })}
               </div>
 
               {diagnosisQuestions.length > 0 && (

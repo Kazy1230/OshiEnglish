@@ -1,6 +1,6 @@
-﻿# ManaVillage 詳細設計書 v1.1
+# ManaVillage 詳細設計書 v1.1
 
-> ステータス: ドラフト v1.1
+> ステータス: ドラフト v1.1（現行コードベースに準拠して更新）
 > 関連ドキュメント: ManaVillage 基本設計書 v1.1 / 要件定義書 v1.1
 
 ---
@@ -12,9 +12,9 @@
 | 項目 | 仕様 |
 |---|---|
 | アルゴリズム | HS256 |
-| Accessトークン有効期限 | 30分 |
-| Refreshトークン有効期限 | 30日 |
-| 保存場所(フロント) | HttpOnly Cookie(XSS対策。LocalStorageには保存しない) |
+| アクセストークン有効期限 | 60分（`ACCESS_TOKEN_EXPIRE_MINUTES`、Refreshトークンは存在しない） |
+| 保存場所(フロント) | フロントエンドのストレージ（Authorizationヘッダーで送信） |
+| ログインID | メールアドレス（`email`）。メール未設定の旧アカウントは`username`でも照合する |
 
 **JWTペイロード**
 ```json
@@ -25,19 +25,33 @@
 }
 ```
 
+**ログインのブルートフォース対策**（`backend/app/routers/auth.py`）
+- 認証失敗時に意図的に0.5秒スリープ（タイミング攻撃・ブルートフォース抑止）
+- ユーザーの存在有無を区別しない汎用エラーメッセージ
+- 同一アカウントの連続ログイン失敗が10回（`LOGIN_MAX_ATTEMPTS`）に達すると30分間（`LOGIN_LOCKOUT_MINUTES`）ロック（時間経過で自動解除）
+- 同一IPからのログイン試行をRedisベースのレート制限で制御（`enforce_rate_limit`、20回/時間）
+
+**管理者の二段階認証（2FA）**
+- `role == "admin"` かつメールアドレス設定済みの場合、ログイン成功後にメールで6桁の認証コード（有効期限10分）を送信し、`POST /auth/verify-2fa` で検証してからアクセストークンを発行する
+- メールアドレス未設定の管理者アカウントは2FAをスキップする（ログにその旨を記録）
+
 ### 1.2 パスワードリセットフロー
 
 ```
 POST /auth/forgot-password
-  → Redisにリセットトークン(UUID v4)を保存(有効期限30分)
-  → リセットURL: https://manavillage.online/reset-password?token={token}
+  → DBにリセットトークン(URL-safeトークン)を保存(有効期限60分, RESET_TOKEN_EXPIRE_MINUTES)
+  → リセットURL: {FRONTEND_URL}/reset-password?token={token}
   → メールアドレスが存在しない場合も同じレスポンスを返す(メール存在の漏洩防止)
+  → Resend経由でメール送信
 
 POST /auth/reset-password
-  → Redisでトークン検証
+  → DBでトークンと有効期限を検証
   → パスワードをbcryptでハッシュ化して更新
-  → 使用済みトークンをRedisから即時削除
+  → 使用済みトークンをDBから即時削除（reset_token, reset_token_expiresをNULLに）
+  → パスワード変更完了通知メールを送信
 ```
+
+パスワード変更（`POST /auth/change-password`）・リセット完了後はいずれも、不正な変更の早期検知のため本人へ通知メールを送信する。
 
 ---
 
@@ -45,602 +59,399 @@ POST /auth/reset-password
 
 > ここがManaVillageの最重要実装。事業の成否を分ける2点を中核に設計する。
 > - **事業検証ポイント①**: Tier Bへのアップグレードトリガー設計
-> - **事業検証ポイント②**: Day1の「驚き」を生む30日ロードマップ生成精度
+> - **事業検証ポイント②**: Day1の「驚き」を生むパーソナライズ30日ロードマップ生成精度
+
+すべてのAI生成処理は **DeepSeek API（OpenAI互換 Chat Completions）** 経由で行う（`backend/app/core/llm.py`）。Anthropic Claudeは使用していない。
 
 ---
 
 ### 2.1 AIインタビュー(人格収集)プロンプト
 
-クリエイターの人格を引き出すためのインタビュープロンプト。1クリエイター=1人格のため、このインタビュー完了時に人格プロファイルと人格(キャラクター)レコードが1組だけ自動生成される（`POST /interview/generate-profile`）。
+クリエイターの人格を引き出すためのインタビュープロンプト。1クリエイター=1人格のため、このインタビュー完了時に人格プロファイルと人格(キャラクター)レコードが1組だけ自動生成される（`POST /interview/generate-profile`、実装: `backend/app/routers/interview.py`、プロンプト: `backend/app/core/personality_prompts.py`）。
 
-**固定質問プロンプト**
+進行は`InterviewSession`テーブル（`backend/app/models/interview_session.py`）でブラウザを閉じても再開できるよう保存される。Step0でクリエイターは指導スタイルのプリセット（`base_type`: 共感型/指導型/激励型/厳格型）とキャラクターの性別（`gender`: 男性/女性/中性的）を選択できる（任意）。
+
+**固定質問（学習者のセリフ形式のロールプレイ）**
+
+「あなたの指導哲学は？」のような抽象的な質問では建前の回答になりやすいため、学習者本人のセリフとして質問を投げかけ、実際にその場で返すであろう生のセリフをそのまま引き出す方式にしている。
+
 ```
-system:
-あなたは優秀なコーチングデザイナーです。
-英語学習コーチのクリエイターから、その人固有の指導哲学・コミュニケーションスタイル・
-判断基準を引き出すインタビューを行います。
+Q1: 「○○先生、最近全然リスニングが伸びなくて…正直心が折れそうです。」
+Q2: 「英語、ほぼ初心者です。とりあえず最初の1週間、何から始めればいいですか？」
+Q3: 「単語も文法もリスニングも全部中途半端で、何を優先すればいいか分かりません。先生はどう考えますか？」
+Q4: 「3ヶ月続けてるのに全然伸びている気がしません…私のやり方、何か間違ってますか？」
+Q5: 「先生のコースに申し込もうか迷ってるんですけど、他の先生と何が違うんですか？」
+```
 
-以下の質問を1問ずつ行い、回答に応じて深掘り質問を追加してください。
-深掘りは回答が短い・抽象的・一般論に見える場合のみ追加します(最大3問まで)。
+各回答後、AIが「返答が短い・抽象的・建前っぽい」と判定した場合のみ深掘り質問を生成する（`FOLLOW_UP_DECISION_SYSTEM`、最大3問・`MAX_FOLLOW_UPS`）。深掘りも学習者がさらに食い下がってきたセリフの形で行う。
 
-【固定質問】
-Q1: 「英語学習者が挫折しそうになったとき、どのように声をかけますか？
-      できるだけ実際に使うセリフで教えてください。」
-Q2: 「TOEIC初心者に最初の1週間で何をさせますか？その理由も教えてください。」
-Q3: 「単語・文法・リスニング・読解のうち、最も重視するものはどれですか？
-      なぜそれを最優先にするのですか？」
-Q4: 「あなたの指導を受けた学習者が成果を出せないとき、
-      原因はどこにあると思いますか？」
-Q5: 「あなたの指導で一番大切にしていることを一言で表すとしたら何ですか？」
+**人格プロファイル抽出（`PROFILE_GENERATION_SYSTEM`）**
 
-回答から以下の人格プロファイルをJSON形式で抽出してください:
+全インタビュー履歴（固定質問＋深掘り）から、以下のJSON形式で人格プロファイルを抽出する。`base_type`・`gender`が設定されている場合は、回答内容を優先しつつ薄い項目をそのヒントで補完する。
+
+```json
 {
   "communication": { "tone", "first_person", "sentence_ending", "catchphrase" },
   "coaching_style": { "strictness", "encouragement", "feedback_method" },
   "learning_philosophy": { "core_value", "priority", "judgment_criteria" },
-  "thinking_style": { "analogy_tendency", "explanation_method", "problem_solving" }
+  "thinking_style": { "analogy_tendency", "explanation_method", "problem_solving" },
+  "sample_reply": "クリエイター紹介ページのサンプルチャットに使う、固定の学習者セリフへの返信（1回生成・保存方式）"
 }
 ```
 
+生成された`profile`・`interview_answers`・`base_type`・`gender`・`sample_reply`は`PersonalityProfile`テーブル（`backend/app/models/personality_profile.py`）に保存される。クリエイターは`PUT /interview/profile`で生成結果を手動修正できる。
+
 ---
 
-### 2.2 【事業検証ポイント②】30日ロードマップ生成プロンプト
+### 2.2 【事業検証ポイント②】コース生成とパーソナライズ30日ロードマップ生成（3層アーキテクチャ）
 
-**最重要プロンプト。Day1の「驚き」を生む精緻さと具体性がここで決まる。**
+**最重要プロンプト群。Day1の「驚き」を生む精緻さと具体性がここで決まる。**
+
+コース生成は1回のAI呼び出しで終わらせず、以下の3層に分離されている（`backend/app/core/course_generation_prompts.py`, `personalize_prompts.py`, `chat_prompts.py`）。
+
+| 層 | 内容 | 実行タイミング | 実装ファイル |
+|---|---|---|---|
+| Layer1: コース骨格 | 全学習者共通の30日分の「テーマ」と「タスクの型」（メッセージ文は持たない） | クリエイターがコース公開時に1回生成 | `course_generation_prompts.py` |
+| Layer2: 個人化タスク配分 | 学習者のDay1診断回答に基づくタスク配分の調整 | 学習者のDay1診断完了時に1回生成 | `personalize_prompts.py` |
+| Layer3: 日次メッセージ | 朝/夜の声かけメッセージ、チャット回答 | 都度動的に生成（プリ生成はしない） | `chat_prompts.py` |
+
+旧設計（週単位13回のAI呼び出し、12〜13分）から、Layer1は1回のAI呼び出しで30日分をまとめて生成する方式に変更し、生成時間を約15秒に短縮している。
+
+**Layer1: コース骨格生成プロンプト（`COURSE_DAY_GENERATION_SYSTEM`）**
 
 ```
 system:
-あなたは英語学習の専門コーチです。
-以下の学習者の診断データとクリエイターの人格プロファイルをもとに、
-その学習者専用の30日ロードマップを生成してください。
+あなたは英語学習コースの設計専門家です。
+クリエイターの人格プロファイルとコース基本情報をもとに、30日分のコース骨格をJSON配列で生成してください。
+メッセージ文は生成しません。タスクの「型」（種別と標準学習時間）のみを生成してください。
 
-【生成の3原則】
-1. 具体性: 「リスニングを強化する」ではなく「Part 3のディクテーションを毎日10分」のように
-           教材名・時間・具体的な行動まで落とす
-2. 制約への言及: 学習時間・苦手分野・使用教材などの制約を計画の中で明示的に活かす
-3. 予測スコアの提示: 「このペースで続ければWeek6に○○点ライン突破の見込み」という
-                    中間予測を必ず含める
-
-【出力形式】
+出力形式:
 {
-  "level_analysis": {
-    "current_score": "580点",
-    "target_score": "800点",
-    "gap": "+220点",
-    "trial_date": "約30日後",
-    "strengths": ["読解"],
-    "weaknesses": ["リスニング", "語彙"],
-    "predicted_milestone": "Week6時点で推定650点突破の見込み"
-  },
-  "roadmap_reason": "読解はすでに得意なため、スコア伸長余地の大きいリスニングと語彙に重点配分しています。学習時間30分/日という制約のもと、無理なく継続できる量に調整しました。",
-  "weekly_plan": [
+  "days": [
     {
-      "weeks": "1〜2",
-      "theme": "学習習慣の確立・現状把握",
-      "milestone": "毎日30分の継続",
-      "focus_reason": "まず継続を最優先。量より習慣を作る期間"
+      "day": 1, "week": 1,
+      "theme": "その日の学習テーマ（15文字以内）",
+      "task_types": [{"type": "vocabulary", "label": "単語学習", "base_minutes": 15}],
+      "is_rest_day": false
     }
-    // ...Week 13まで
-  ],
-  "day1_tasks": [
-    "診断チャットへの回答(完了済み)",
-    "{使用教材名}のPart 1 Set 1を解く",
-    "単語アプリで20語学習"
-  ],
+  ]
+}
+```
+
+task_typesのtypeは `vocabulary` / `listening` / `grammar` / `reading` / `shadowing` / `practice` のいずれか。週の流れはWeek1=基礎、Week2=強化、Week3=実践、Week4=仕上げ。休息日は7日ごとに1日程度（`is_rest_day=true`）。クリエイターが教材ごとの章割り当て（`日程割り当て`）を指定した場合は、その日のテーマ・タスクを必ずその割り当てに基づいて作成する。クリエイターが登録した教材種別に対応しないタスク種別（例: リスニング教材未登録なのに`listening`）は出力しない（`allowed_task_types`制約）。
+
+**Layer2: 個人化タスク配分プロンプト（`PERSONALIZE_SYSTEM`）**
+
+Day1診断はクリエイターが設定したカスタム質問（`CourseDiagnosisQuestion`/`LearnerDiagnosisAnswer`）と教材ごとの進捗（`LearnerTextbookProgress`）のみで構成する。固定7問形式は廃止済み。
+
+```
+system:
+あなたは英語学習の個別コーチです。
+以下の学習者の回答（クリエイターが設定した診断質問への回答）とコース骨格をもとに、その学習者専用の30日タスク配分を生成してください。
+
+調整ルール:
+1. 回答内に1日の学習時間や弱点分野の言及があれば優先的に反映する
+2. 苦手・弱点として言及された分野のタスク種別は配分を増やす
+3. 得意・既習として言及された分野は配分を減らして苦手に回す
+4. 増減は1タスクあたり最大15分まで
+5. 休息日はadjusted_tasksを空配列にする
+6. 「教材ごとの残りタスク量」が指定されている場合、既に進んでいる教材のタスクは減らし、残りが多い教材を優先的に増やす
+
+出力形式:
+{"days": [{"day": 1, "adjusted_tasks": [{"type": "vocabulary", "minutes": 15}], "personalize_reason": "リスニング弱点のため+10分"}]}
+```
+
+生成に失敗した場合はLayer1の標準タスクをそのままコピーして処理を継続する（学習者を止めないフォールバック）。
+
+**ロードマップ生成（Day1診断完了時、`POST /diagnosis/{course_id}/submit`、`backend/app/routers/diagnosis.py`）**
+
+クリエイターのカスタム質問への回答（`custom_qa`）・人格プロファイル・コースの週単位テーマ（Layer1から抽出）を入力に、`LearnerRoadmap`テーブルへ以下を生成・保存する。
+
+```json
+{
+  "level_analysis": { "current_score": "...", "target_score": "...", "gap": "...", "predicted_milestone": "..." },
+  "roadmap_reason": "なぜこのロードマップになったのかの説明",
+  "weekly_plan": [{ "weeks": "1〜2", "theme": "...", "milestone": "...", "focus_reason": "..." }],
+  "day1_tasks": ["..."],
   "creator_message": "人格プロファイルを適用したメッセージ"
 }
-
-【診断データ】
-現在スコア: {current_score}
-目標スコア: {target_score}
-試験予定: {exam_date}
-1日の学習時間: {daily_study_time}
-苦手分野: {weak_areas}
-学習歴: {study_history}
-使用教材: {materials}  ← Q7の回答。具体的な教材名があれば必ずタスクに組み込む
-
-【クリエイターの人格プロファイル】
-{personality_profile}
-
-【クリエイターが設定した30日コース構造(週単位テーマ)】
-{course_week_themes}
 ```
 
-**チューニングポイント**
-
-| チューニング項目 | 内容 | 測定指標 |
-|---|---|---|
-| 予測スコアの精度 | Week6時点の予測が外れすぎると信頼を失う。保守的な予測値にする | Day30時点の実スコアとの乖離 |
-| 使用教材の反映率 | Q7で教材名を入力した学習者のDay1タスクに教材名が入っているか | Q7入力率 × タスクへの反映率 |
-| ロードマップ根拠の明示 | `roadmap_reason`が汎用的すぎないか | 学習者の計画開始率 |
-| 制約への言及 | 学習時間15分の学習者と2時間の学習者でタスク量が明確に違うか | タスク完了率 |
+診断完了後、同じ回答データを使ってLayer2（学習者専用タスク配分）も連続して生成し、`LearnerCourseDay`に保存する。Day1診断は1コースにつき1回のみ（再診断不可、二重送信は409エラー）。
 
 ---
 
-### 2.3 日次伴走チャットプロンプト
+### 2.3 日次伴走チャット（質問・相談）プロンプト
 
-学習者との毎日の会話を担うプロンプト。Tier Aの中核。
+学習者との毎日の会話を担う処理。実装は`backend/app/routers/chat.py`、プロンプトは`backend/app/core/chat_prompts.py`。
 
-```
-system:
-あなたは以下のクリエイターの人格を持つ英語学習コーチのAIです。
-学習者との会話を通じて、学習の継続と目標達成をサポートしてください。
+**フロー（`POST /chat/{course_id}/ask`）**
 
-【クリエイターの人格プロファイル】
-{personality_profile}
+1. プロンプトインジェクション対策（`check_injection`）: 「以下の指示を無視」「システムプロンプト」「ignore previous」等の典型パターンを検出した場合は400エラーで拒否する
+2. レート制限: 1日30回（`enforce_daily_message_limit`）、1日合計2000文字（`DAILY_CHARACTER_LIMIT`、`enforce_daily_character_limit`）をRedisで制御。1メッセージ単位の文字数制限は撤廃済み
+3. 質問の分類（`CLASSIFY_SYSTEM`、低コストモデルで実行）: `category_name`（学習コンテンツ軸のカテゴリ名）と`message_type`（`emotion`/`content`/`report`）をJSON形式で判定。既存カテゴリに一致しない場合は`status='pending'`の新規カテゴリ候補として作成し、クリエイターが`PUT /chat/creator/categories/{id}/approve`で承認するまでコンテンツ紐付け・フラストレーション検知の対象にしない
+4. Tier Bは1日1回までAI下書き経由で講師に質問が届く（`_today_questions_used_by_tier_b`）。2回目以降の質問はTier Aと同じ自動AI回答フローになる
+5. 回答生成: 人格プロファイル＋カテゴリに紐付けられたコンテンツ（動画/記事/PDF, `CategoryContent`）＋当日のタスク＋直近3日分の要約（`DailySummary`）を踏まえて回答本文を生成する（`build_answer_system`/`build_answer_messages`）
 
-【学習者の情報】
-名前: {learner_name}
-現在スコア: {current_score} → 目標: {target_score}
-今日はDay {day_number} / 30
-今週のテーマ: {week_theme}
-今日のタスク: {today_tasks}
-苦手分野: {weak_areas}
-これまでの学習ログ: {recent_day_logs}  ← 直近7日分
+**回答スタイル（`ANSWER_STYLE_BY_TYPE`）**
 
-【会話のガイドライン】
-- 学習報告には必ず具体的な労いを返す(「頑張った」ではなく何が良かったかを具体的に)
-- 質問には人格プロファイルの口調・説明スタイルで答える
-- モチベーション系の相談には共感→原因の整理→小さな行動提案の順で返す
-- 同じトピックで3回以上質問が続いた場合は下記のフラストレーション検知フラグを立てる
+| message_type | スタイル |
+|---|---|
+| emotion | 気持ちに共感 → 原因を一緒に整理 → 今日からできる小さな行動を1つ提案 |
+| content | 結論を最初に → 理由説明 → 具体例1つ → 次のアクション |
+| report | 取り組みを労い、明日への橋渡しになる一言で締める |
 
-【重要】フラストレーション検知:
-学習者が同じトピックについて3回以上質問した、または以下のフレーズが含まれる場合、
-レスポンスの末尾に JSON タグを追加する:
-<frustration_signal topic="{topic}" count="{count}">
-
-このシグナルをフロントエンドが検知してTier Bアップグレードのサジェストを表示する。
-```
+学習者が「おやすみ」「今日終わり」「完了です」等のフレーズ（`DAILY_CLOSE_SIGNALS`）を送ると、当日のチャットログをAIで3文・100トークン以内に圧縮して`DailySummary`に保存する（`is_daily_close_signal`）。
 
 ---
 
-### 2.4 【事業検証ポイント①】Tier Bアップグレードトリガー設計
+### 2.4 【事業検証ポイント①】Tier Bアップグレードトリガー設計（フラストレーション検知）
 
 **AIの回答に満足できない学習者を「解約前」に捕捉し、Tier Bへ誘導する。**
 
-#### フラストレーション検知ロジック
+#### フラストレーション検知ロジック（`_detect_frustration`、`backend/app/routers/chat.py`）
+
+リアルタイムなタグ検知ではなく、**直近7日間で同一カテゴリへの質問が3回以上（`FRUSTRATION_THRESHOLD`）続いたかどうか**をDBクエリで判定する方式。承認待ち(`pending`)・却下済み(`rejected`)のカテゴリはクリエイターが内容を把握していないため対象外。Tier A学習者のみが対象（Tier Bは既に講師に質問できるため対象外）。
 
 ```python
-def detect_frustration(messages: list, course_id: int, user_id: int) -> FrustrationSignal | None:
-    """
-    直近のチャット履歴から同一トピックの繰り返し質問を検知する
-    """
-    # 直近10メッセージから学習者のメッセージを抽出
-    learner_messages = [m for m in messages[-10:] if m.sender == "learner"]
-
-    # AIがタグを返していた場合はそのシグナルを使用
-    ai_messages = [m for m in messages[-10:] if m.sender == "ai"]
-    for msg in ai_messages:
-        if "<frustration_signal" in msg.body:
-            return parse_frustration_signal(msg.body)
-
+def _detect_frustration(db, user_id, course_id, category):
+    if not category or category.status != "approved":
+        return None
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    count = db.query(Question).filter(
+        Question.user_id == user_id, Question.course_id == course_id,
+        Question.category_id == category.id, Question.created_at >= since,
+    ).count()
+    if count >= FRUSTRATION_THRESHOLD:
+        return {"topic": category.name, "count": count}
     return None
 ```
 
-#### Tier Bアップグレード表示のトリガー条件
-
-| 条件 | 表示するCTA |
-|---|---|
-| 同一トピックで3回以上質問 | 「○○先生に直接聞いてみませんか?」 |
-| 否定的感情フレーズの検出(「わからない」「やっぱり無理」等) | 「困ったときは先生に頼ってOKです」 |
-| AIの回答後に「でも...」「それでも...」と続く | 「先生なら別の角度から教えられるかも」 |
-
-#### フロントエンドの表示仕様
-
-```typescript
-// チャットメッセージ受信後にシグナルを検知
-const checkFrustrationSignal = (aiMessage: string) => {
-  const match = aiMessage.match(/<frustration_signal topic="(.+)" count="(\d+)">/);
-  if (match && parseInt(match[2]) >= 3) {
-    showTierBUpgradeSuggestion(match[1]); // トピック名をCTAに表示
-  }
-};
-
-// Tier BアップグレードCTA
-const TierBUpgradeCTA = ({ topic }: { topic: string }) => (
-  <div className="upgrade-cta">
-    <p>「{topic}」について、先生に直接聞いてみませんか？</p>
-    <p className="sub">Tier Bなら先生が明日までに回答します。</p>
-    <button onClick={() => router.push(`/courses/${courseId}/upgrade`)}>
-      先生に聞く → Tier Bを見る
-    </button>
-    <button onClick={dismissCTA}>今はいい</button>
-  </div>
-);
-```
+検知結果は`/chat/{course_id}/ask`のレスポンスに`frustration_signal: {topic, count}`として含まれ、フロントエンドがこれを見てTier Bアップグレードの提案UIを表示する。
 
 #### 測定すべきKPI
 
-| KPI | 目標値 | 測定方法 |
-|---|---|---|
-| フラストレーション検知率 | 全チャットセッションの○%でシグナル発生 | questions.statusの分析 |
-| CTA表示→Tier Bページ遷移率 | ○% | フロントエンドのイベントログ |
-| CTA表示→アップグレード成立率 | ○% | subscriptions.tierの変化 |
-| CTA非表示時の解約率 vs 表示時の解約率 | CTA表示時の解約率が低いことを確認 | A/Bテストで検証 |
+| KPI | 測定方法 |
+|---|---|
+| フラストレーション検知率 | 全チャットセッションの何%でシグナル発生するか（`questions`テーブルの分析） |
+| CTA表示→Tier Bページ遷移率 | フロントエンドのイベントログ |
+| CTA表示→アップグレード成立率 | `course_subscriptions.tier`の変化 |
+| CTA非表示時の解約率 vs 表示時の解約率 | A/Bテストで検証 |
 
-※ 目標値はMVP後の実データで設定する
+※ `FRUSTRATION_THRESHOLD`（3回）・対象期間（7日間）は仮設定。MVP後の実データで調整する。
 
 ---
 
 ## 2.5 モデル選定・コスト最適化設計
 
-### モデル使い分け方針
+すべてのAI生成はDeepSeek API（`backend/app/core/llm.py`、エンドポイント`https://api.deepseek.com/chat/completions`、OpenAI互換）経由で行う。Anthropic Claudeのモデル（Sonnet/Haiku）は使用していない。
 
-| 処理 | 使用モデル | 理由 |
+### モデル設定（`backend/app/core/config.py`）
+
+| 設定キー | デフォルト値 | 用途 |
 |---|---|---|
-| 30日ロードマップ生成 | **Sonnet 4.6** | Day1の「驚き」を生む最重要プロンプト。品質最優先 |
-| AIインタビュー(人格収集) | **Sonnet 4.6** | クリエイターの人格を正確に抽出する必要がある |
-| 日次チャット(複雑な相談・質問) | **Sonnet 4.6** | 学習内容の質問・感情系の相談は品質が継続率に直結 |
-| 週次・月次レビュー生成 | **Sonnet 4.6** | フィードバックの品質が解約率に直結 |
-| Tier B AI下書き生成 | **Sonnet 4.6** | 講師の代理回答なので品質が重要 |
-| 日次チャット(学習報告・定型応答) | **Haiku 4.5** | 「お疲れ様！」などの短い労いはHaikuで十分 |
-| フラストレーション検知 | **Haiku 4.5** | テキスト分類タスクなのでHaikuで十分かつ安価 |
-| Push通知メッセージ | **Batch API + Sonnet 4.6** | コース作成時に一括生成。リアルタイムAPI不要 |
+| `DEEPSEEK_API_KEY` | (空) | DeepSeek APIキー |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | 品質を優先する処理（コース骨格生成・人格プロファイル抽出・ロードマップ生成・Tier B下書き・Sonnet相当にエスカレーションした回答） |
+| `DEEPSEEK_MODEL_LITE` | `deepseek-chat` | 低コストで十分な処理（質問分類・日次要約・朝夜メッセージ・定型応答） |
 
-### 応答タイプの自動判別フロー
+DeepSeekにはAnthropicのSonnet/Haikuのような明確な上位/下位モデルの区別がないため、現状`DEEPSEEK_MODEL`と`DEEPSEEK_MODEL_LITE`は同じ`deepseek-chat`を指している（将来的に`deepseek-reasoner`等へ分離する余地を残した設計）。
 
-発想を逆転させ、**デフォルトをHaiku**とし、Sonnetが本当に必要な条件に当てはまる場合のみ昇格させる。文字数・キーワードリストへの一致ではなく「Sonnetが必要な条件」で判定することで、「おしゃー」「なるほど」「すごい！」「ありがとう」などあらゆる雑談・感想・報告がHaikuで処理される。
+### 応答モデルの自動判別（`select_answer_model`、`backend/app/core/chat_prompts.py`）
 
 ```python
-def get_model_for_chat(message: str) -> str:
-    """
-    デフォルトHaiku。以下の条件に該当する場合のみSonnetに昇格。
-    """
+NEEDS_SONNET_PATTERN = re.compile(
+    r"解約|クレーム|苦情|辞めたい|やめたい|返金|サポートに電話|キャンセルしたい|訴え|弁護士",
+    re.IGNORECASE,
+)
 
-    NEEDS_SONNET = [
-        # 疑問文(学習内容への質問)
-        lambda m: any(k in m for k in ["？", "ですか", "ますか", "のか", "かな", "教えて"]),
-        # 学習内容に関するキーワード
-        lambda m: any(k in m for k in [
-            "文法", "意味", "使い方", "違い", "なぜ", "どうして", "どうやって",
-            "わからない", "理解", "説明", "例文", "覚え方"
-        ]),
-        # モチベーション・感情系の相談
-        lambda m: any(k in m for k in [
-            "やめたい", "つらい", "無理", "不安", "自信", "続けられ",
-            "モチベ", "やる気", "しんどい", "疲れた"
-        ]),
-    ]
+def needs_escalation(question_body: str) -> bool:
+    return bool(NEEDS_SONNET_PATTERN.search(question_body)) or len(question_body) > 300
 
-    if any(check(message) for check in NEEDS_SONNET):
-        return "claude-sonnet-4-6"
-
-    # 上記に該当しないすべてのメッセージはHaiku
-    # 例: 「おしゃー」「なるほど」「やった！」「ありがとう」
-    #     「今日30分勉強した」「おやすみ」「明日また頑張る」
-    return "claude-haiku-4-5-20251001"
+def select_answer_model(message_type, question_body, haiku_model, sonnet_model) -> str:
+    if message_type == "report" and not needs_escalation(question_body):
+        return haiku_model
+    return sonnet_model
 ```
 
-**コスト影響**: 日常の雑談・報告・感想の大半がHaikuになるため、チャットのAPI単価が大幅に下がる。Sonnetが呼ばれるのは質問・相談・モチベーション系に絞られる。
+`message_type == "report"`（状況報告・雑談）かつ解約・クレーム等の機微なキーワードを含まず300文字以下の場合のみ低コストモデルを使う。それ以外（`emotion`/`content`、または長文・機微な相談）は品質優先モデルにエスカレーションする。
 
-### Prompt Cachingの適用
+### Prompt Cachingの適用方針
 
-システムプロンプト(人格プロファイル)は全チャットで同一のため、Prompt Cachingを必ず適用する。
+人格プロファイル部分（チャット全体で不変）とメッセージ種別ごとの回答スタイル（可変）を別々のcontent blockに分け、人格プロファイル側に`cache_control: {"type": "ephemeral"}`を付与する設計にしている（`build_answer_system`）。ただしDeepSeek APIはAnthropic形式のcache_control指定を解釈しないため、`llm.py`の`_flatten_system_prompt`がブロックを単純に文字列結合してDeepSeekへ送る（DeepSeek側は自動でコンテキストキャッシュを行うため、明示的な制御は不要）。
 
-```python
-# APIコール時にキャッシュコントロールを指定
-messages_payload = {
-    "model": model,
-    "system": [
-        {
-            "type": "text",
-            "text": personality_system_prompt,  # 人格プロファイル ~1,500トークン
-            "cache_control": {"type": "ephemeral"}  # 5分間キャッシュ
-        }
-    ],
-    "messages": conversation_history
-}
-```
+### 通知メッセージ生成（プリ生成ではなく都度生成）
 
-**効果**: 同一セッション内の2回目以降のチャットで、システムプロンプト部分のコストが90%削減される。
+朝・夜の通知メッセージは、コース公開時の一括プリ生成ではなく、送信対象になった都度AIで生成する方式（`backend/app/core/daily_notifications.py` `send_due_notifications`）。Day番号は学習者の診断完了日時（`LearnerProfile.created_at`、JST基準）からの経過日数で算出する。今日のタスク（Layer2）・直近3日分の要約を踏まえて生成し、`Notification`テーブルに保存、メールアドレス設定済みならResend経由でも送信する。同日同コースへの重複送信は`Notification`の既存レコードチェックで防止する。
 
-### Push通知のプリ生成(コース公開時に一括処理)
+### チャット送信回数・文字数制限
 
-朝・夜の通知メッセージを毎回AI生成すると月$0.50/ユーザーのコストがかかる。コース公開時に30日分を一括生成して`course_days`テーブルに保存することで、通知送信時のAPIコストをゼロにする。
+- 1日30回（`enforce_daily_message_limit`、画面には表示しない裏側のガード）
+- 1日合計2000文字（`enforce_daily_character_limit`、`DAILY_CHARACTER_LIMIT`）
 
-```python
-async def pre_generate_notifications(course_id: int, personality_profile: dict):
-    """
-    コース公開時に30日分の通知メッセージをBatch APIで一括生成
-    course_days.ai_message_morning / ai_message_evening に保存
-    """
-    batch_requests = []
-
-    for day_number in range(1, 91):
-        day_info = get_course_day(course_id, day_number)
-
-        # 朝の通知
-        batch_requests.append({
-            "custom_id": f"morning_{course_id}_{day_number}",
-            "params": {
-                "model": "claude-sonnet-4-6",
-                "max_tokens": 200,
-                "system": build_personality_prompt(personality_profile),
-                "messages": [{
-                    "role": "user",
-                    "content": f"Day{day_number}の朝の声かけメッセージを生成してください。"
-                               f"今日のテーマ: {day_info.theme}"
-                               f"今日のタスク: {day_info.tasks}"
-                }]
-            }
-        })
-
-        # 夜のリマインド
-        batch_requests.append({
-            "custom_id": f"evening_{course_id}_{day_number}",
-            "params": {
-                "model": "claude-sonnet-4-6",
-                "max_tokens": 150,
-                "messages": [...]
-            }
-        })
-
-    # Batch APIで一括送信(50%オフ・非同期・24時間以内に完了)
-    batch_result = await anthropic.messages.batches.create(requests=batch_requests)
-
-    # 結果をcourse_daysに保存
-    await save_generated_messages(course_id, batch_result)
-```
-
-**コスト比較**:
-- 変更前: $0.50/ユーザー/月(毎回AI生成)
-- 変更後: コース1本あたり約$0.10の一時コスト → 以降は0円/ユーザー/月
-
-### 1日10メッセージ制限
-
-Tier A/Bともに、学習者1人あたり1日10メッセージを上限とする。チャットコストの青天井を防ぐ。
-
-```python
-DAILY_CHAT_LIMIT = 10
-LIMIT_MESSAGE = "今日はたくさん話したね。続きは明日！今日学んだことを復習して、明日また話しかけてね。"
-
-async def handle_chat(user_id: int, course_id: int, message: str, db: Session) -> ChatResponse:
-    # 当日のメッセージ数をRedisで高速チェック
-    today_key = f"chat_count:{user_id}:{course_id}:{date.today()}"
-    count = await redis.incr(today_key)
-    await redis.expire(today_key, 86400)  # 24時間で自動リセット
-
-    if count > DAILY_CHAT_LIMIT:
-        return ChatResponse(
-            body=LIMIT_MESSAGE,
-            sender="ai",
-            is_limit_reached=True
-        )
-
-    # 通常のチャット処理
-    model = get_model_for_chat(message)
-    return await generate_chat_response(user_id, course_id, message, model)
-```
-
-**フロントエンドの表示**:
-- 10件目のメッセージ送信後、制限メッセージを表示
-- 入力フィールドを非活性化し「明日また話そう」の表示に切り替える
-- 残りメッセージ数は表示しない(カウントダウンがプレッシャーになるため)
-
-### 最適化後のコスト試算
-
-| 処理 | 対策 | 月額コスト/ユーザー |
-|---|---|---|
-| 日次チャット(上限10件 + キャッシュ + モデル混在) | Sonnet/Haiku + Prompt Caching | ~$0.35 |
-| Push通知(30日分プリ生成) | Batch API → 以降ゼロ | ~$0(初回のみ) |
-| 週次・月次レビュー | Sonnet + Batch API | ~$0.03 |
-| **合計(Tier A)** | | **~$0.38(約55円)** |
-| Tier B追加(AI下書き) | Sonnet | +~$0.22 |
-| **合計(Tier B)** | | **~$0.60(約86円)** |
-
-980円(Tier A最低価格)に対してAPIコスト55円は約5.6%。十分な利益率を確保できる。
+いずれもRedisで管理し、Redis接続に失敗した場合は安全側に倒して制限せず通過させる。
 
 ---
 
-### 2.6 週次レビュー生成プロンプト
+### 2.6 週次・月次レビュー生成プロンプト
 
-```
-system:
-以下の学習ログをもとに、学習者への週次フィードバックを生成してください。
-クリエイターの人格プロファイルの口調で返してください。
+`backend/app/core/review_generation.py`の`generate_due_reviews()`が、学習者のDay番号（JST基準、Day1診断完了日からの経過日数）が7の倍数になった時点で週次レビュー、30の倍数になった時点で月次レビューを生成する。1学習者・1コースにつき1期間1回だけ生成されるよう、事前の存在チェックで重複生成を防ぐ。
 
-【分析データ】
-今週の学習日数: {completed_days} / 7日
-完了タスク数: {completed_tasks}
-未完了タスク数: {incomplete_tasks}
-チャットでの質問カテゴリ: {question_categories}
-最も苦手な分野(質問頻度): {top_weakness}
+**週次レビュー（`WEEKLY_REVIEW_SYSTEM`）**: 当該7日間の完了日数・未完了日数・質問カテゴリ・最頻出カテゴリ（苦手分野）を入力に生成し、`LearnerReview`（`review_type="weekly"`）に保存。メールアドレス設定済みなら通知メールも送信する。
 
-【出力形式】
-{
-  "weekly_summary": "今週の振り返り文(クリエイター口調)",
-  "achievement": "良かった点を具体的に",
-  "challenge": "来週の課題を1点に絞る",
-  "next_week_focus": "来週のテーマと重点タスク",
-  "encouragement": "クリエイター口調の励ましメッセージ"
-}
-```
+**月次レビュー（`MONTHLY_REVIEW_SYSTEM`）**: 当該30日間の統計に加えて、Day1ロードマップの`roadmap_reason`・`level_analysis`も踏まえて生成し、`LearnerReview`（`review_type="monthly"`）に保存する。
+
+学習者は`GET /diagnosis/{course_id}/reviews`でレビュー一覧を新しい順に取得できる。
 
 ---
 
 ### 2.7 Tier B AI下書き生成プロンプト
 
-講師が回答する前にAIが下書きを作成するプロンプト。
+講師が回答する前にAIが下書きを作成する処理（`backend/app/routers/chat.py` の `ask_question`、Tier Bかつ当日未使用の場合のみ実行）。下書き生成には品質優先モデル（`settings.DEEPSEEK_MODEL`）を常に使用する（講師の代理回答のため品質を優先）。
 
-```
-system:
-あなたは以下のクリエイターの人格を持つ英語学習コーチのAIです。
-学習者からの質問に対する回答の下書きを作成してください。
-講師がこの下書きを確認・編集して最終的な回答を送信します。
-
-【クリエイターの人格プロファイル】
-{personality_profile}
-
-【学習者の情報】
-{learner_context}
-
-【質問】
-{question_body}
-
-【このカテゴリに紐付けられたコンテンツ】
-{linked_contents}  ← 存在する場合は回答に含める
-
-下書きの末尾に「※ この下書きを編集して送信してください」と添える。
-```
+下書きは`Answer`テーブルに`answered_by="ai"`, `is_draft=True`で保存され、クリエイターにメール通知が送られる（`_notify_creator_of_pending_question`）。クリエイターは`GET /chat/creator/pending`で下書き付きの未回答質問一覧（24時間以上未対応のものは`is_overdue=true`で先頭に並ぶ）を確認し、`POST /chat/creator/questions/{question_id}/respond`で下書きをそのまま承認、または本文を編集して送信する。
 
 ---
 
-## 3. 決済フロー詳細(サブスク)
+## 3. 決済フロー詳細
+
+決済は**Stripe**を使用し、コース単位の「買い切り購入」と「月額サブスクリプション（Tier A / Tier B）」の2系統がある（`backend/app/routers/payments.py`）。`PAYMENTS_TEST_MODE=True`の場合はStripeを呼ばずに即時成功させる（決済機能を使わずワークフローのみ検証できる）。
+
+### 3.1 買い切り購入フロー（`POST /payments/checkout`）
 
 ```
-[フロントエンド]
-1. 学習者がコース詳細でティアを選択(Tier A / Tier B)
-2. POST /subscriptions にcourse_idとtierを送信
-
-[バックエンド]
-3. Stripe Price IDをtierから取得(環境変数で管理)
-4. 既存の有効サブスクがないか確認(重複契約防止)
-5. stripe.subscriptions.create()でサブスクを作成
-6. subscriptionsテーブルにstatus='active'で保存
-7. Stripeのcheckout URLをフロントエンドに返却
-
-[Webhook]
-8. POST /payments/webhook でStripeからイベントを受信
-9. invoice.payment_succeeded → subscriptions.statusを'active'に確認
-10. invoice.payment_failed → subscriptions.statusを'past_due'に更新
-    → 学習者にメール通知
-11. customer.subscription.deleted → subscriptions.statusを'canceled'に更新
-    → canceled_atを記録
-    → チャット・コンテンツへのアクセスをcurrent_period_end以降にブロック
+1. POST /payments/checkout に course_id を送信（無料コース・既購入済みコースは400/409エラー）
+2. テストモード:
+   → Purchaseをstatus='succeeded'で即時作成 → 全レッスンにLessonProgressを作成(冪等) → 完了
+3. 本番モード:
+   → stripe.PaymentIntent.create()でPayment Intentを作成（idempotency_key付き）
+   → Purchaseをstatus='pending'で保存
+   → client_secretをフロントエンドに返却（フロント側でStripe Elements等を使い決済確定）
+4. Webhook(payment_intent.succeeded) → Purchase.status='succeeded'に更新 → 全レッスンにLessonProgressを作成
+5. Webhook(payment_intent.payment_failed) → Purchase.status='failed'に更新
 ```
+
+### 3.2 サブスクリプションフロー（`POST /payments/subscribe`）
+
+```
+1. POST /payments/subscribe に course_id, tier('A'/'B') を送信
+2. 既存の有効サブスク(incomplete/active/past_due)がある場合は409エラー（重複契約防止）
+3. テストモード: CourseSubscriptionをstatus='active'で即時作成
+4. 本番モード:
+   → stripe.Customer.create() → stripe.Product.create()（Tierごとの動的Price） → stripe.Subscription.create()
+   → payment_behavior='default_incomplete'で作成し、CourseSubscriptionをstatus='incomplete'で保存
+   → latest_invoice.payment_intent.client_secretをフロントエンドに返却
+5. Webhook(customer.subscription.updated/created, invoice.payment_succeeded)
+   → ステータスマッピング: active→active, trialing→active, past_due→past_due, unpaid→past_due,
+      canceled→canceled, incomplete→incomplete, incomplete_expired→canceled
+   → past_dueに遷移した時刻をpast_due_sinceに記録（猶予期間の起点）
+6. Webhook(customer.subscription.deleted) → status='canceled'に更新
+```
+
+### 3.3 Tier変更・解約
+
+- `POST /payments/subscriptions/{id}/change-tier`: アクティブな契約のTierをA⇄B変更（解約→再契約せず既存サブスクリプションを更新、Stripe側はProduct再作成＋`proration_behavior='create_prorations'`で按分計算）
+- `POST /payments/subscriptions/{id}/cancel`: 即時解約（Stripe側もサブスクリプションを削除）
+- 管理者による全額返金: `POST /payments/refund/{purchase_id}`（買い切り購入のみ対象、`stripe.Refund.create()`）
 
 ---
 
-## 4. メール通知設計
+## 4. 通知・メール配信設計
 
-### 4.1 メール配信インフラ
+### 4.1 通知の二系統
 
-**採用: Resend**
+ManaVillageの通知は **アプリ内通知（`Notification`テーブル）** を主とし、メールアドレスが設定されている学習者にはResend経由で**補助的に**メールも送信する（メール未設定でもアプリ内通知は届く）。
 
-理由:
-- シンプルなAPIで実装コストが低い
-- Next.js / React Emailとの親和性が高い
-- 無料枠(3,000通/月)でMVP検証が可能
-- 配信スケジューリングはCronジョブ側で制御する
+`GET /notifications/`で未読件数と通知一覧（最大50件）を取得、`PUT /notifications/{id}/read`・`PUT /notifications/read-all`で既読化する（`backend/app/routers/notifications.py`）。
 
-### 4.2 メール種別と送信タイミング
+### 4.2 メール配信インフラ（Resend）
+
+`backend/app/core/email.py`の`send_email()`がResend APIを直接HTTPで呼ぶ薄いラッパー。`RESEND_API_KEY`未設定、または宛先メールアドレスが空の場合は何もせず`False`を返す（ベストエフォート、送信失敗で本処理を止めない設計）。
+
+### 4.3 通知種別と送信タイミング（`backend/app/core/daily_notifications.py`, `review_generation.py`）
 
 | 種別 | トリガー | 内容 |
 |---|---|---|
-| 朝の声かけ | 学習者が設定した朝の時刻(Cronで実行) | 今日のタスク + クリエイターからのメッセージ |
-| 夜のリマインド | 学習者が設定した夜の時刻かつ当日未学習報告 | 「今日の学習はできた?」+ チャットへのリンク |
-| 週次レビュー | 毎週同じ曜日 | 週の振り返りサマリー |
-| 決済失敗通知 | Stripe Webhook(invoice.payment_failed) | カード情報確認のお願い |
-| Tier B回答通知 | 講師が回答を承認した時点 | 回答内容 + チャットへのリンク |
+| 朝の声かけ(`daily_morning`) | 学習者が設定した朝の時刻と現在時刻が一致(±5分) | 当日のタスク・直近サマリーを踏まえてAIが都度生成 |
+| 夜のリマインド(`daily_evening`) | 学習者が設定した夜の時刻と現在時刻が一致(±5分) | 同上 |
+| 未開封リマインド(`inactivity_reminder`) | 直近の質問送信（チャット利用）から1日以上経過、1日1コース1通まで | 未開封日数に応じた3段階のトーン（1日目=通常, 2日目=促進, 3日目以上=感情に寄り添う） |
+| 週次レビュー | Day番号が7の倍数 | 週の振り返り・達成・来週の課題 |
+| 月次レビュー | Day番号が30の倍数 | 月の振り返り、Day1ロードマップとの比較 |
+| 講師宛: Tier B質問到着 | 学習者がTier Bで質問送信 | 「24時間以内にご確認・回答をお願いします」 |
+| 講師宛: 学習者未開封 | 学習者が4日以上チャット未開封 | 「直接メッセージを送ることをご検討ください」 |
+| パスワード変更通知 | パスワード変更・リセット完了時 | 不正なアカウント変更の早期検知 |
+| 管理者2FA認証コード | 管理者ログイン時 | 6桁の認証コード |
 
-### 4.3 Cronジョブ設計
+通知時刻・有効/無効設定は学習者がコースごとに`PUT /diagnosis/{course_id}/notification-settings`で設定する（`NotificationSetting`テーブル、デフォルト朝7:00/夜21:00/有効）。
 
-```python
-# Redis上にスケジュールを保持
-# 毎分実行のCronジョブが対象ユーザーを抽出してメール送信
+### 4.4 バッチ処理の実行方式
 
-def send_morning_notifications():
-    current_time = datetime.now().strftime("%H:%M")
-    target_settings = db.query(NotificationSetting).filter(
-        NotificationSetting.morning_time == current_time,
-        NotificationSetting.is_enabled == True
-    ).all()
-
-    for setting in target_settings:
-        # course_daysテーブルからプリ生成済みのメッセージを取得(APIコールなし)
-        day_number = get_current_day_number(setting.user_id, setting.course_id)
-        course_day = db.query(CourseDay).filter_by(
-            course_id=setting.course_id,
-            day_number=day_number
-        ).first()
-        # Resend APIでメール送信(プリ生成済みメッセージをそのまま使用)
-        send_morning_email(setting.user_id, course_day.ai_message_morning)
-```
+毎分実行されるループ（バックグラウンドタスク）から`send_due_notifications()`・`check_inactive_reminders()`・`generate_due_reviews()`を呼び出す方式。各処理は冪等性（同日同種別の重複送信防止、`Notification`の事前存在チェックや`LearnerReview`のunique制約相当のチェック）を内部で保証している。
 
 ---
 
-## 5. フロントエンドコンポーネント設計
+## 5. フロントエンドコンポーネント構成
 
-### 5.1 主要コンポーネント一覧
+フロントエンドはNext.js（App Router）。状態管理はReactの標準フック（`useState`/`useEffect`）中心で、グローバルなクライアント状態管理ライブラリ（Redux/Zustand等）は導入していない。認証情報はトークンをストレージに保持し、APIクライアントがAuthorizationヘッダーに付与する方式。
 
-| コンポーネント | 役割 | 使用画面 |
-|---|---|---|
-| `<ChatWindow />` | チャット履歴表示・メッセージ送信 | SCR-03 |
-| `<StreamingMessage />` | AIレスポンスをストリーミング表示 | SCR-03 |
-| `<TierBUpgradeCTA />` | フラストレーション検知時のアップグレード誘導 | SCR-03 |
-| `<RoadmapCard />` | 30日ロードマップのサマリー表示 | SCR-03, Day1 |
-| `<DayProgress />` | 30日中の現在位置と進捗バー | SCR-03 |
-| `<TodayTasks />` | 当日のタスクリスト | SCR-03 |
-| `<InterviewChat />` | AIインタビューのチャットUI | SCR-13 |
-| `<CalendarEditor />` | 30日カレンダー編集 | SCR-17 |
-| `<QuestionAnalytics />` | 質問カテゴリ別集計グラフ | SCR-18 |
-| `<DraftAnswerPanel />` | Tier B AI下書き確認・編集 | SCR-19 |
+### 5.1 主要ページ（`frontend/app/`）
 
-### 5.2 StreamingMessageコンポーネント
+| パス | 役割 |
+|---|---|
+| `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/change-password` | 認証関連 |
+| `/courses/[id]` | コース詳細・購入/サブスク登録 |
+| `/courses/[id]/diagnosis` | Day1初回診断（クリエイターのカスタム質問＋教材進捗入力） |
+| `/courses/[id]/chat` | デイリー伴走チャット（質問・相談、ロードマップ表示） |
+| `/courses/[id]/schedule` | 30日カレンダー（個人化タスク配分の表示） |
+| `/courses/[id]/reviews` | 週次・月次レビュー一覧 |
+| `/creator/interview` | AIインタビュー（人格収集）画面 |
+| `/creator/profile` | 人格プロファイルの確認・手動修正 |
+| `/creator/courses`, `/creator/courses/new`, `/creator/courses/[id]/calendar`, `/creator/courses/[id]/textbooks`, `/creator/courses/[id]/enrollments` | クリエイターのコース管理・カレンダー編集・教材設定・受講者一覧 |
+| `/creator/inbox` | Tier B質問対応（AI下書きの確認・編集・承認） |
+| `/creator/analytics` | 質問カテゴリ別集計・新規カテゴリ承認 |
+| `/creator/revenue` | 収益管理 |
+| `/creator/apply` | クリエイター申請 |
+| `/dashboard`, `/dashboard/characters/*` | 学習者ダッシュボード・キャラクター管理 |
+| `/creators`, `/creators/[id]` | クリエイター一覧・紹介ページ（人格プロファイルのサンプル返信を表示） |
+| `/studio` | AIコンテンツ生成スタジオ |
+| `/admin` および `/admin/tabs/*` | 管理者画面（クリエイター承認、コースモデレーション、ユーザー管理、教材プリセット管理、レポート対応、Tier B未対応監視等） |
+| `/mypage`, `/favorites`, `/pricing`, `/policy`, `/purchase-complete` | その他ユーザー向けページ |
 
-```tsx
-export const StreamingMessage = ({
-  endpoint, payload, onComplete, onFrustrationSignal
-}: Props) => {
-  const [text, setText] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+### 5.2 主要共有コンポーネント（`frontend/components/`）
 
-  const startStream = async () => {
-    setIsStreaming(true);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+| コンポーネント | 役割 |
+|---|---|
+| `<AppHeader />` | 共通ヘッダー（ナビゲーション） |
+| `<NotificationBell />` | アプリ内通知の未読バッジ・一覧表示 |
+| `<StreamingText />` | DeepSeek APIのSSEストリーミング応答を逐次表示するテキストコンポーネント |
+| `<CourseCheckoutModal />` | コース購入・サブスク登録（Tier選択）のモーダル |
+| `<SampleChatPreview />` | クリエイター紹介ページの「会話のイメージ」表示（人格プロファイルの`sample_reply`を使用） |
+| `<PromptPreviewModal />` | 管理者/クリエイター向け、AI生成プロンプトのプレビュー表示 |
+| `<Toast />` | トースト通知 |
+| `<Skeleton />` | ローディングスケルトン |
+| `<DarkModeToggle />` | ダークモード切り替え |
+| `<LogoutButton />`, `<Footer />`, `<SectionHeading />` | 共通UI部品 |
 
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullText = "";
+### 5.3 ストリーミング応答の受信方式
 
-    while (true) {
-      const { done, value } = await reader!.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      fullText += chunk;
-      setText(fullText);
-
-      // フラストレーションシグナルの検知
-      const frustrationMatch = fullText.match(
-        /<frustration_signal topic="(.+)" count="(\d+)">/
-      );
-      if (frustrationMatch && parseInt(frustrationMatch[2]) >= 3) {
-        onFrustrationSignal?.(frustrationMatch[1]);
-      }
-    }
-
-    // シグナルタグを除いた本文を最終表示
-    const cleanText = fullText.replace(/<frustration_signal[^>]*>/g, "");
-    setText(cleanText);
-    setIsStreaming(false);
-    onComplete?.(cleanText);
-  };
-
-  return (
-    <div className="message ai">
-      <pre className="whitespace-pre-wrap">{text}</pre>
-      {isStreaming && <span className="typing-indicator">...</span>}
-    </div>
-  );
-};
-```
+バックエンドの`stream_text()`（`backend/app/core/llm.py`）がDeepSeek APIのSSEを自前パースして文字列断片を逐次`yield`する。フロントエンドの`<StreamingText />`は`fetch`のレスポンスボディを`ReadableStream`として読み取り、チャンクをデコードしながら画面に逐次反映する。フラストレーション検知（2.4節）はチャット応答本体に含まれる構造化フィールド（`frustration_signal`）として返却され、ストリーミング本文中にタグを埋め込む方式は採用していない。
 
 ---
 
 ## 6. エラーハンドリング方針
 
-| エラー種別 | HTTPステータス | フロントエンドの対応 |
+| エラー種別 | HTTPステータス | 主な発生箇所 |
 |---|---|---|
-| バリデーションエラー | 400 | フォームの該当フィールド下にメッセージ表示 |
-| 認証エラー | 401 | ログインページにリダイレクト |
-| 権限エラー | 403 | 「アクセス権限がありません」画面を表示 |
-| 重複サブスク | 409 | 「すでに購入済みです」トースト表示 |
-| AI生成エラー | 500 | 「少し時間をおいてもう一度試してください」+ 再試行ボタン |
-| Stripe決済エラー | 402 | 「決済に失敗しました。カード情報を確認してください」 |
-| ネットワークエラー | - | 「通信エラーが発生しました。接続を確認してください」 |
+| バリデーションエラー | 400 | 入力不正、必須質問未回答、injectionパターン検出、二重診断など |
+| 認証エラー | 401 | ログイン失敗、認証コード不正、トークン無効 |
+| 権限エラー | 403 | クリエイター権限なし、アクセス不可コース、ロック中アカウント |
+| 対象不存在 | 404 | コース・質問・カテゴリ・サブスクリプション等が見つからない |
+| 重複・競合 | 409 | 購入済み、サブスク登録済み、Day1診断済み |
+| レート制限超過 | 429 | チャット送信回数・文字数上限、IPベースのレート制限 |
+| AI生成エラー | 500 | DeepSeek API呼び出し失敗・JSON解析失敗（`LLMError`） |
+| 決済処理エラー | 502 | Stripe API呼び出し失敗 |
+| 決済機能未設定 | 503 | `STRIPE_SECRET_KEY`未設定時の決済系エンドポイント |
+
+`LLMError`は`backend/app/core/llm.py`で定義され、API呼び出し失敗・空応答・JSON解析失敗（trailing comma除去等のフォールバックを含む）を一括して扱う。
 
 ---
 
@@ -648,9 +459,9 @@ export const StreamingMessage = ({
 
 | 項目 | 内容 |
 |---|---|
-| Tier Bアップグレードトリガーの閾値 | フラストレーション検知の「3回」は仮設定。MVPのデータで調整 |
-| 週次・月次レビューの送信曜日・時刻 | 学習者が設定するか固定にするか |
-| 学習開始30日目の自動再診断フロー | Day1フロー詳細仕様 Section 12に記載 |
-| Stripe ConnectによるクリエイターへのPayoutフロー | MVP後に実装 |
-| ResendのテンプレートID管理方法 | 環境変数 vs DBで管理するか |
-| モデル判別キーワードリストの継続最適化 | `NEEDS_SONNET`のキーワードリストはMVP後にチャットログを分析して随時更新する。「どう暗記すればいい？」「コツある？」など、キーワード未登録のまま意図せずHaikuで処理されているケースを定期的にサンプリングして追加・修正を行う |
+| フラストレーション検知の閾値・期間 | `FRUSTRATION_THRESHOLD`(3回)・対象期間(7日間)は仮設定。MVPのデータで調整する |
+| DeepSeekモデルの細分化 | `DEEPSEEK_MODEL`/`DEEPSEEK_MODEL_LITE`が現状同一モデルを指している。`deepseek-reasoner`等の上位モデルを使い分けるかは要検証 |
+| エスカレーション判定キーワードの継続最適化 | `NEEDS_SONNET_PATTERN`のキーワードはMVP後にチャットログを分析して随時更新する |
+| Stripe ConnectによるクリエイターへのPayoutフロー | MVP後に実装（`PLATFORM_FEE_RATE`はプラットフォーム手数料率として設定済みだが、実際の振込フローは未実装） |
+| ResendのテンプレートID管理方法 | 現状はPython側でHTML文字列を直接組み立てている。テンプレート化するか検討 |
+| past_due猶予期間の具体的な制御箇所 | `past_due_since`は記録されるが、何日後にアクセスを遮断するかのバッチ処理は別途確認が必要 |

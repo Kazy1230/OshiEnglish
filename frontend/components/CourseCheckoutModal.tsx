@@ -8,7 +8,7 @@ import { toast } from "@/components/Toast";
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 
-function PayForm({ courseId, onClose }: { courseId: number; onClose: () => void }) {
+function PayForm({ courseId, isSubscription, onClose }: { courseId: number; isSubscription: boolean; onClose: () => void }) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
@@ -41,14 +41,14 @@ function PayForm({ courseId, onClose }: { courseId: number; onClose: () => void 
       <div className="flex gap-2">
         <button type="button" onClick={onClose} className="btn-ghost flex-1">キャンセル</button>
         <button type="submit" disabled={!stripe || submitting} className="btn-primary flex-1 disabled:opacity-50">
-          {submitting ? "処理中…" : "購入する"}
+          {submitting ? "処理中…" : isSubscription ? "月額プランを開始する" : "購入する"}
         </button>
       </div>
     </form>
   );
 }
 
-export function CourseCheckoutModal({ courseId, clientSecret, onClose }: { courseId: number; clientSecret: string; onClose: () => void }) {
+export function CourseCheckoutModal({ courseId, clientSecret, isSubscription = false, onClose }: { courseId: number; clientSecret: string; isSubscription?: boolean; onClose: () => void }) {
   if (!stripePromise) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 px-4">
@@ -63,9 +63,14 @@ export function CourseCheckoutModal({ courseId, clientSecret, onClose }: { cours
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 px-4">
       <div className="card max-w-md w-full">
-        <h3 className="font-bold mb-3" style={{ color: "var(--primary)" }}>お支払い情報を入力</h3>
+        <h3 className="font-bold mb-1" style={{ color: "var(--primary)" }}>お支払い情報を入力</h3>
+        {isSubscription && (
+          <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+            これは月額の継続課金（サブスクリプション）です。解約するまで毎月自動的に請求されます。
+          </p>
+        )}
         <Elements stripe={stripePromise} options={{ clientSecret }}>
-          <PayForm courseId={courseId} onClose={onClose} />
+          <PayForm courseId={courseId} isSubscription={isSubscription} onClose={onClose} />
         </Elements>
       </div>
     </div>

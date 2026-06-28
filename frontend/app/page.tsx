@@ -232,7 +232,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {(featured ? [featured, ...courseGrid] : courseGrid).map(course => (
+                {courseGrid.map(course => (
                   <CourseTile key={course.id} course={course} />
                 ))}
               </div>

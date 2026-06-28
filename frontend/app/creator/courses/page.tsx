@@ -21,6 +21,13 @@ const STATUS_LABEL: Record<string, string> = {
   unpublished: "非公開",
 };
 
+const STATUS_BADGE_STYLE: Record<string, { background: string; color: string }> = {
+  draft: { background: "var(--example-bg, #eee)", color: "var(--muted)" },
+  review: { background: "#f5a623", color: "white" },
+  published: { background: "var(--accent)", color: "white" },
+  unpublished: { background: "#8a8a8a", color: "white" },
+};
+
 export default function CreatorCoursesPage() {
   const { loading } = useRoleGuard(["creator", "admin"]);
   const [courses, setCourses] = useState<CreatedCourse[]>([]);
@@ -52,10 +59,7 @@ export default function CreatorCoursesPage() {
                   <p className="font-bold" style={{ color: "var(--primary)" }}>{c.title}</p>
                   <span
                     className="text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap"
-                    style={{
-                      background: c.status === "published" ? "var(--accent)" : c.status === "review" ? "#f5a623" : "var(--example-bg, #eee)",
-                      color: c.status === "published" || c.status === "review" ? "white" : "var(--muted)",
-                    }}
+                    style={STATUS_BADGE_STYLE[c.status] ?? STATUS_BADGE_STYLE.draft}
                   >
                     {STATUS_LABEL[c.status] ?? c.status}
                   </span>

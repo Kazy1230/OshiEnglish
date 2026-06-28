@@ -36,7 +36,7 @@ export default function CreatorsPage() {
           <div className="flex flex-col gap-4">
             {creators.map(cr => (
               <Link key={cr.id} href={`/creators/${cr.id}`} className="card flex gap-4 hover-lift">
-                <div className="flex-shrink-0" style={{ width: "20%" }}>
+                <div className="flex-shrink-0 w-16 sm:w-20">
                   {cr.character?.avatar_url ? (
                     <img src={cr.character.avatar_url} alt="" className="w-full aspect-square rounded-full object-cover" />
                   ) : (
@@ -44,7 +44,7 @@ export default function CreatorsPage() {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-3" style={{ width: "80%" }}>
+                <div className="flex flex-col gap-3 flex-1 min-w-0">
                   <div>
                     <p className="font-bold" style={{ color: "var(--primary)" }}>{cr.display_name}</p>
                     <p className="text-xs" style={{ color: "var(--muted)" }}>{cr.character?.name || "キャラクター未設定"}</p>

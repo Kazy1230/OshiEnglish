@@ -13,6 +13,7 @@ const NAV_ITEMS: Record<Role, { href: string; label: string; badgeKey?: "overdue
     { href: "/mypage", label: "マイページ" },
     { href: "/", label: "コースを探す" },
     { href: "/creators", label: "クリエイターを探す" },
+    { href: "/favorites", label: "お気に入り" },
   ],
   creator: [
     { href: "/dashboard", label: "ダッシュボード" },

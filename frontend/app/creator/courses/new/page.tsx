@@ -23,6 +23,7 @@ export default function NewCoursePage() {
   const [tierAPrice, setTierAPrice] = useState("1480");
   const [tierBPrice, setTierBPrice] = useState("3980");
   const [enableTierB, setEnableTierB] = useState(true);
+  const [isFree, setIsFree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -50,8 +51,8 @@ export default function NewCoursePage() {
         intensity,
         pace,
         price: 0,
-        is_free: false,
-        tier_a_price: Number(tierAPrice),
+        is_free: isFree,
+        tier_a_price: isFree ? null : Number(tierAPrice),
         tier_b_price: enableTierB ? Number(tierBPrice) : null,
       });
       toast("コースを作成しました。次に使用する教材を設定しましょう。", "success");
@@ -104,10 +105,21 @@ export default function NewCoursePage() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>Tier A（AIのみ伴走）月額 *</label>
-            <input type="number" min="980" max="1980" value={tierAPrice} onChange={e => setTierAPrice(e.target.value)} required />
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>980〜1,980円/月の範囲で指定してください</p>
+            <label className="flex items-center gap-2 text-xs font-medium mb-1" style={{ color: "var(--muted)" }}>
+              <input type="checkbox" checked={isFree} onChange={e => setIsFree(e.target.checked)} />
+              無料コースにする
+            </label>
+            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+              ※ 無料コースはTier A（AIのみ伴走）を提供できません。Tier B（AI＋クリエイター添削）の有料オプションは併用できます。
+            </p>
           </div>
+          {!isFree && (
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>Tier A（AIのみ伴走）月額 *</label>
+              <input type="number" min="980" max="1980" value={tierAPrice} onChange={e => setTierAPrice(e.target.value)} required />
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>980〜1,980円/月の範囲で指定してください</p>
+            </div>
+          )}
           <div>
             <label className="flex items-center gap-2 text-xs font-medium mb-1" style={{ color: "var(--muted)" }}>
               <input type="checkbox" checked={enableTierB} onChange={e => setEnableTierB(e.target.checked)} />

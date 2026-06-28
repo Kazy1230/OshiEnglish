@@ -12,6 +12,7 @@ type PurchasedCourse = {
   title: string;
   total_lessons: number;
   completed_count: number;
+  is_day_based?: boolean;
   thumbnail_url?: string | null;
   character?: { name?: string | null; avatar_url?: string | null } | null;
 };
@@ -84,6 +85,7 @@ export default function MyPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {courses.map(c => {
                 const percent = progressPercent(c);
+                const unit = c.is_day_based ? "日" : "レッスン";
                 return (
                   <div key={c.course_id} className={`card hover-lift shadow-soft flex flex-col gap-3 overflow-hidden ${percent >= 100 ? "achievement-card" : ""}`}>
                     <div className="relative -m-5 mb-0">
@@ -115,7 +117,7 @@ export default function MyPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
-                      <span>{c.completed_count}/{c.total_lessons} レッスン完了</span>
+                      <span>{c.completed_count}/{c.total_lessons} {unit}完了</span>
                       <span className="font-bold" style={{ color: percent >= 100 ? "#e8b923" : "var(--accent)" }}>{percent}%</span>
                     </div>
                     <div className="h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
@@ -126,8 +128,8 @@ export default function MyPage() {
                     </div>
                     <p className="text-xs -mt-1" style={{ color: "var(--muted)" }}>
                       {percent >= 100
-                        ? "全レッスン達成おめでとうございます！"
-                        : `あと${Math.max(0, c.total_lessons - c.completed_count)}レッスンで達成！`}
+                        ? "全て達成おめでとうございます！"
+                        : `あと${Math.max(0, c.total_lessons - c.completed_count)}${unit}で達成！`}
                     </p>
 
                     <div className="flex flex-col gap-2 mt-1">

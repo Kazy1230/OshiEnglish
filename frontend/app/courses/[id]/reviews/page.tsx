@@ -62,6 +62,30 @@ export default function ReviewsPage() {
           </div>
         ) : (
           <>
+            {weekly.length > 0 && (
+              <section className="flex flex-col gap-4">
+                <h2 className="font-bold" style={{ color: "var(--primary)" }}>週次レビュー</h2>
+                {weekly.map(r => (
+                  <div key={r.id} className="card flex flex-col gap-2">
+                    <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>第{r.period_number}週</p>
+                    {r.content.weekly_summary && <p className="text-sm" style={{ color: "var(--text)" }}>{r.content.weekly_summary}</p>}
+                    {r.content.achievement && (
+                      <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>良かった点: </span>{r.content.achievement}</p>
+                    )}
+                    {r.content.challenge && (
+                      <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>来週の課題: </span>{r.content.challenge}</p>
+                    )}
+                    {r.content.next_week_focus && (
+                      <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>来週のテーマ: </span>{r.content.next_week_focus}</p>
+                    )}
+                    {r.content.encouragement && (
+                      <p className="text-sm italic" style={{ color: "var(--accent)" }}>「{r.content.encouragement}」</p>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
+
             {monthly.length > 0 && (
               <section className="flex flex-col gap-4">
                 <h2 className="font-bold" style={{ color: "var(--primary)" }}>月次レビュー</h2>
@@ -80,30 +104,6 @@ export default function ReviewsPage() {
                     )}
                     {r.content.plan_adjustment && (
                       <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>計画の修正案: </span>{r.content.plan_adjustment}</p>
-                    )}
-                    {r.content.encouragement && (
-                      <p className="text-sm italic" style={{ color: "var(--accent)" }}>「{r.content.encouragement}」</p>
-                    )}
-                  </div>
-                ))}
-              </section>
-            )}
-
-            {weekly.length > 0 && (
-              <section className="flex flex-col gap-4">
-                <h2 className="font-bold" style={{ color: "var(--primary)" }}>週次レビュー</h2>
-                {weekly.map(r => (
-                  <div key={r.id} className="card flex flex-col gap-2">
-                    <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>第{r.period_number}週</p>
-                    {r.content.weekly_summary && <p className="text-sm" style={{ color: "var(--text)" }}>{r.content.weekly_summary}</p>}
-                    {r.content.achievement && (
-                      <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>良かった点: </span>{r.content.achievement}</p>
-                    )}
-                    {r.content.challenge && (
-                      <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>来週の課題: </span>{r.content.challenge}</p>
-                    )}
-                    {r.content.next_week_focus && (
-                      <p className="text-sm"><span className="font-bold" style={{ color: "var(--primary)" }}>来週のテーマ: </span>{r.content.next_week_focus}</p>
                     )}
                     {r.content.encouragement && (
                       <p className="text-sm italic" style={{ color: "var(--accent)" }}>「{r.content.encouragement}」</p>

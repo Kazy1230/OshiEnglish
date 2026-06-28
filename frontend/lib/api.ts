@@ -141,6 +141,8 @@ export const api = {
   listDiagnosisQuestions: (courseId: number) => apiFetch(`/courses/${courseId}/diagnosis-questions`),
   addDiagnosisQuestion: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/diagnosis-questions`, { method: "POST", body: JSON.stringify(data) }),
+  addDiagnosisQuestionsBulk: (courseId: number, questions: object[]) =>
+    apiFetch(`/courses/${courseId}/diagnosis-questions/bulk`, { method: "POST", body: JSON.stringify({ questions }) }),
   updateDiagnosisQuestion: (questionId: number, data: object) =>
     apiFetch(`/diagnosis-questions/${questionId}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteDiagnosisQuestion: (questionId: number) => apiFetch(`/diagnosis-questions/${questionId}`, { method: "DELETE" }),

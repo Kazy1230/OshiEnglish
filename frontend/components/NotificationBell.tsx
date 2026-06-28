@@ -8,13 +8,14 @@ import { toast } from "@/components/Toast";
 type NotificationItem = {
   id: number;
   type: string;
-  payload: { course_id?: number; title?: string } | null;
+  payload: { course_id?: number; title?: string; message?: string } | null;
   is_read: boolean;
   created_at: string;
 };
 
 function describe(n: NotificationItem): string {
   if (n.type === "new_course") return `新着コース: ${n.payload?.title || ""}`;
+  if (n.payload?.message) return n.payload.message;
   return n.type;
 }
 
@@ -37,6 +38,8 @@ export function NotificationBell() {
   useEffect(() => {
     setLoggedIn(!!getToken());
     load();
+    const interval = setInterval(load, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
