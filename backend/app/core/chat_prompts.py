@@ -88,6 +88,10 @@ def build_answer_system(personality_profile: dict, message_type: str, tone_profi
     catchphrase = tp.get("catchphrase", "")
     ng_expressions = tp.get("ng_expressions") or []
 
+    background = tp.get("background", "")
+    reaction_patterns = tp.get("reaction_patterns", "")
+    speaking_samples = tp.get("speaking_samples") or []
+
     personality_lines = []
     if first_person:
         personality_lines.append(f"- 一人称: 「{first_person}」")
@@ -99,6 +103,10 @@ def build_answer_system(personality_profile: dict, message_type: str, tone_profi
         personality_lines.append(f"- 性格・特徴: {personality_text}")
     if catchphrase:
         personality_lines.append(f"- 口癖: {catchphrase}")
+    if background:
+        personality_lines.append(f"- 背景設定: {background}")
+    if reaction_patterns:
+        personality_lines.append(f"- 感情リアクション: {reaction_patterns}")
     if strictness:
         personality_lines.append(f"- 指導の厳しさ: {strictness}")
     if encouragement:
@@ -108,12 +116,17 @@ def build_answer_system(personality_profile: dict, message_type: str, tone_profi
 
     personality_block = "\n".join(personality_lines) if personality_lines else "（人格設定なし）"
 
+    samples_block = ""
+    if speaking_samples:
+        samples_list = "\n".join(f'  「{s}」' for s in speaking_samples if s)
+        samples_block = f"\n【このキャラクターの実際のセリフ例（この口調・雰囲気で返答すること）】\n{samples_list}"
+
     preamble = f"""あなたは英語学習コーチとして、以下の人格で学習者からの相談に回答してください。
 必ず一貫した人格・口調を保ち、前後の文脈を踏まえた自然な会話をしてください。
 
 【人格設定】
 {personality_block}
-"""
+{samples_block}"""
     suffix = f"""【今回の回答スタイル】
 {style}
 

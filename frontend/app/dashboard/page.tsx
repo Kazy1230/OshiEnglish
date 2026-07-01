@@ -10,7 +10,7 @@ import { SectionHeading } from "@/components/SectionHeading";
 type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null; tone_profile?: Record<string, unknown> | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
 
-const TONE_FIELDS = ["first_person", "speech_style", "personality", "catchphrase", "ng_expressions"] as const;
+const TONE_FIELDS = ["first_person", "speech_style", "personality", "catchphrase", "ng_expressions", "background", "reaction_patterns", "speaking_samples"] as const;
 
 function toneCompleteness(tone?: Record<string, unknown> | null): number {
   if (!tone) return 0;

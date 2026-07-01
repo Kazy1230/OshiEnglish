@@ -13,6 +13,9 @@ type ToneProfile = {
   personality?: string;
   catchphrase?: string;
   ng_expressions?: string[];
+  background?: string;
+  reaction_patterns?: string;
+  speaking_samples?: string[];
 };
 
 export default function EditCharacterPage() {
@@ -29,6 +32,8 @@ export default function EditCharacterPage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  const [samplesText, setSamplesText] = useState("");
+
   const [sampleText, setSampleText] = useState("仮定法過去完了は、過去の事実に反する仮定を表す表現です。");
   const [previewResult, setPreviewResult] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -43,6 +48,7 @@ export default function EditCharacterPage() {
       const tp: ToneProfile = c.tone_profile || {};
       setTone(tp);
       setNgText((tp.ng_expressions || []).join("、"));
+      setSamplesText((tp.speaking_samples || []).join("\n"));
       setImageUrl(c.image_url || null);
     }).catch(() => toast("キャラクターの読み込みに失敗しました", "error")).finally(() => setLoadingChar(false));
   }, [loading, characterId]);
@@ -84,13 +90,18 @@ export default function EditCharacterPage() {
     setGenerating(true);
     try {
       const result = await api.generateToneProfile(name, description, tone);
-      setTone({
-        first_person: result.first_person || "",
-        speech_style: [result.tone, result.sentence_ending].filter(Boolean).join("。語尾の特徴: "),
-        personality: result.personality || "",
-        catchphrase: result.catchphrase || "",
-      });
+      setTone(prev => ({
+        ...prev,
+        first_person: result.first_person || prev.first_person || "",
+        speech_style: [result.tone, result.sentence_ending].filter(Boolean).join("。語尾の特徴: ") || prev.speech_style || "",
+        personality: result.personality || prev.personality || "",
+        catchphrase: result.catchphrase || prev.catchphrase || "",
+        background: result.background || prev.background || "",
+        reaction_patterns: result.reaction_patterns || prev.reaction_patterns || "",
+        speaking_samples: result.speaking_samples?.length ? result.speaking_samples : prev.speaking_samples,
+      }));
       setNgText((result.ng_words || []).join("、"));
+      if (result.speaking_samples?.length) setSamplesText(result.speaking_samples.join("\n"));
       toast("トーン設定を生成しました。内容を確認・編集して保存してください", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "生成に失敗しました。もう一度試してください", "error");
@@ -105,6 +116,7 @@ export default function EditCharacterPage() {
       const tone_profile = {
         ...tone,
         ng_expressions: ngText ? ngText.split(/[、,]/).map(s => s.trim()).filter(Boolean) : [],
+        speaking_samples: samplesText ? samplesText.split("\n").map(s => s.trim()).filter(Boolean) : [],
       };
       await api.updateCharacterFull(characterId, { name, description, tone_profile });
       toast("保存しました", "success");
@@ -165,6 +177,11 @@ export default function EditCharacterPage() {
           <textarea value={tone.personality || ""} onChange={e => setTone(t => ({ ...t, personality: e.target.value }))} placeholder="性格・特徴" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <input value={tone.catchphrase || ""} onChange={e => setTone(t => ({ ...t, catchphrase: e.target.value }))} placeholder="口癖・文末の癖" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <input value={ngText} onChange={e => setNgText(e.target.value)} placeholder="避けるべき表現(、区切り)" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+
+          <p className="text-xs font-bold mt-2" style={{ color: "var(--muted)" }}>— キャラ再現に効果的な追加設定 —</p>
+          <textarea value={tone.background || ""} onChange={e => setTone(t => ({ ...t, background: e.target.value }))} placeholder="背景設定・世界観（例：元落ちこぼれ英語学習者で苦労して習得。その経験を活かして学習者を励ます）" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          <textarea value={tone.reaction_patterns || ""} onChange={e => setTone(t => ({ ...t, reaction_patterns: e.target.value }))} placeholder="感情・リアクションパターン（例：褒められると照れて否定する。学習者が失敗すると呆れながらもフォローする）" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          <textarea value={samplesText} onChange={e => setSamplesText(e.target.value)} placeholder={"セリフサンプル（1行1例）\n例：「べ、別に教えてあげてもいいけど」\n「また間違えたの？まあ、最初はみんなそうだから」"} rows={4} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
           <button onClick={handleSave} disabled={saving} className="btn-primary self-start disabled:opacity-50">
             {saving ? "保存中…" : "保存する"}
           </button>
