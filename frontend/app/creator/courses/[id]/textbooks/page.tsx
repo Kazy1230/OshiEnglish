@@ -69,8 +69,11 @@ export default function CourseTextbooksPage() {
 
   const [customMode, setCustomMode] = useState(false);
   const [customName, setCustomName] = useState("");
-  const [customToc, setCustomToc] = useState("");
   const [customType, setCustomType] = useState("textbook");
+  const [tocChatHistory, setTocChatHistory] = useState<{ role: string; content: string }[]>([]);
+  const [tocItems, setTocItems] = useState<string[]>([]);
+  const [tocInput, setTocInput] = useState("");
+  const [tocChatting, setTocChatting] = useState(false);
 
   const [adding, setAdding] = useState(false);
   const [proceeding, setProceeding] = useState(false);
@@ -120,23 +123,45 @@ export default function CourseTextbooksPage() {
     }
   }
 
+  async function handleTocChat(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tocInput.trim() || !customName.trim()) {
+      toast("教材名とメッセージを入力してください", "error");
+      return;
+    }
+    setTocChatting(true);
+    const newHistory = [...tocChatHistory, { role: "user", content: tocInput }];
+    setTocChatHistory(newHistory);
+    setTocInput("");
+    try {
+      const res = await api.parseTocChat(courseId, customName, tocInput, tocChatHistory);
+      setTocChatHistory([...newHistory, { role: "assistant", content: res.ai_message }]);
+      if (res.toc_items && res.toc_items.length > 0) setTocItems(res.toc_items);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "AIとの通信に失敗しました", "error");
+    } finally {
+      setTocChatting(false);
+    }
+  }
+
   async function handleAddCustom(e: React.FormEvent) {
     e.preventDefault();
-    const items = customToc.split("\n").map(s => s.trim()).filter(Boolean);
-    if (!customName.trim() || items.length === 0) {
-      toast("教材名と目次（1行1項目）を入力してください", "error");
+    if (!customName.trim() || tocItems.length === 0) {
+      toast("教材名と目次項目が必要です。AIと相談して目次を確定してください", "error");
       return;
     }
     setAdding(true);
     try {
       const added = await api.addCourseTextbook(courseId, {
         custom_name: customName.trim(),
-        custom_toc: items.map(item => ({ item })),
+        custom_toc: tocItems.map(item => ({ item })),
         type: customType,
       });
       setTextbooks(prev => [...prev, added]);
       setCustomName("");
-      setCustomToc("");
+      setTocItems([]);
+      setTocChatHistory([]);
+      setTocInput("");
       setCustomMode(false);
       toast(`「${added.name}」を追加しました`, "success");
     } catch (err: unknown) {
@@ -288,20 +313,50 @@ export default function CourseTextbooksPage() {
             {customMode ? "手入力をやめる" : "プリセットにない教材を手入力で追加する"}
           </button>
           {customMode && (
-            <form onSubmit={handleAddCustom} className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-              <input value={customName} onChange={e => setCustomName(e.target.value)} placeholder="教材名" required />
+            <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              <input value={customName} onChange={e => setCustomName(e.target.value)} placeholder="教材名（例：DUO3.0）" />
               <select value={customType} onChange={e => setCustomType(e.target.value)}>
                 <option value="textbook">教材（参考書・問題集など）</option>
                 <option value="vocabulary">単語帳</option>
               </select>
-              <textarea
-                rows={4}
-                value={customToc}
-                onChange={e => setCustomToc(e.target.value)}
-                placeholder={"目次を1行に1項目ずつ入力してください\n例：\nUnit 1 現在形\nUnit 2 過去形"}
-              />
-              <button type="submit" className="btn-primary self-start" disabled={adding}>{adding ? "追加中…" : "追加する"}</button>
-            </form>
+              {tocChatHistory.length > 0 && (
+                <div className="flex flex-col gap-2 max-h-56 overflow-y-auto p-2 rounded-lg" style={{ background: "var(--example-bg, #eee)" }}>
+                  {tocChatHistory.map((m, i) => (
+                    <div key={i} className={`text-xs p-2 rounded-lg max-w-[90%] ${m.role === "user" ? "self-end" : "self-start"}`}
+                      style={{ background: m.role === "user" ? "var(--primary)" : "white", color: m.role === "user" ? "white" : "var(--text)" }}>
+                      {m.content}
+                    </div>
+                  ))}
+                  {tocChatting && <div className="text-xs self-start p-2 rounded-lg" style={{ background: "white", color: "var(--muted)" }}>考え中…</div>}
+                </div>
+              )}
+              {tocItems.length > 0 && (
+                <div className="text-xs p-2 rounded-lg" style={{ background: "var(--bg)", color: "var(--muted)" }}>
+                  <span className="font-bold" style={{ color: "var(--accent)" }}>現在の目次（{tocItems.length}項目）</span>
+                  <div className="mt-1 max-h-24 overflow-y-auto flex flex-col gap-0.5">
+                    {tocItems.map((item, i) => <span key={i}>{item}</span>)}
+                  </div>
+                </div>
+              )}
+              <form onSubmit={handleTocChat} className="flex gap-2">
+                <input
+                  value={tocInput}
+                  onChange={e => setTocInput(e.target.value)}
+                  placeholder={tocChatHistory.length === 0 ? "例：560例文で構成されているが、私のコースでは40例文ずつ区切る" : "返信する…"}
+                  disabled={tocChatting}
+                  className="flex-1 text-sm"
+                />
+                <button type="submit" className="btn-ghost px-3 text-sm" disabled={tocChatting || !tocInput.trim()}>送信</button>
+              </form>
+              <button
+                type="button"
+                className="btn-primary self-start text-sm"
+                disabled={adding || tocItems.length === 0}
+                onClick={handleAddCustom}
+              >
+                {adding ? "追加中…" : `完了（${tocItems.length}項目で追加）`}
+              </button>
+            </div>
           )}
         </div>
 

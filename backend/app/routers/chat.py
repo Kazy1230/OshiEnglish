@@ -227,10 +227,23 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     route_to_instructor = tier == "B" and not _today_questions_used_by_tier_b(db, current_user.id, course_id)
 
     personality = _get_personality_profile(db, course) or {}
+    tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
     existing_category_names = [
         c.name for c in db.query(QuestionCategory).filter(QuestionCategory.creator_id == creator_id).all()
     ] if creator_id else []
+
+    # 直近5件のQ&Aを会話履歴として取得する
+    recent_questions = db.query(Question).filter(
+        Question.user_id == current_user.id,
+        Question.course_id == course_id,
+    ).order_by(Question.created_at.desc()).limit(5).all()
+    recent_questions = list(reversed(recent_questions))
+    conversation_history: list[dict] = []
+    for rq in recent_questions:
+        conversation_history.append({"role": "user", "content": rq.body})
+        if rq.answers:
+            conversation_history.append({"role": "assistant", "content": rq.answers[-1].body})
 
     try:
         classify_raw = generate_text(
@@ -264,10 +277,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
         linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
         try:
             draft_body = generate_text(
-                prompts.build_answer_system(personality, message_type),
+                prompts.build_answer_system(personality, message_type, tone_profile),
                 prompts.build_answer_messages(
                     data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
-                    today_tasks, recent_summaries,
+                    today_tasks, recent_summaries, conversation_history,
                 ),
                 max_tokens=400,
                 model=settings.DEEPSEEK_MODEL,
@@ -288,10 +301,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     answer_model = prompts.select_answer_model(message_type, data.body, settings.DEEPSEEK_MODEL_LITE, settings.DEEPSEEK_MODEL)
     try:
         answer_body = generate_text(
-            prompts.build_answer_system(personality, message_type),
+            prompts.build_answer_system(personality, message_type, tone_profile),
             prompts.build_answer_messages(
                 data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
-                today_tasks, recent_summaries,
+                today_tasks, recent_summaries, conversation_history,
             ),
             max_tokens=400,
             model=answer_model,

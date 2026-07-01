@@ -7,24 +7,19 @@ import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 import { SectionHeading } from "@/components/SectionHeading";
 
-type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null };
+type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null; tone_profile?: Record<string, unknown> | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
-type PersonalityProfile = {
-  communication?: Record<string, string>;
-  coaching_style?: Record<string, string>;
-  learning_philosophy?: Record<string, string>;
-  thinking_style?: Record<string, string>;
-} | null;
 
-const PROFILE_CATEGORIES: { key: keyof NonNullable<PersonalityProfile>; label: string }[] = [
-  { key: "communication", label: "口調" },
-  { key: "coaching_style", label: "指導スタイル" },
-  { key: "learning_philosophy", label: "学習philosophy" },
-  { key: "thinking_style", label: "思考スタイル" },
-];
+const TONE_FIELDS = ["first_person", "speech_style", "personality", "catchphrase", "ng_expressions"] as const;
 
-function categoryFilled(value?: Record<string, string>): boolean {
-  return !!value && Object.values(value).some(v => !!v && v.trim().length > 0);
+function toneCompleteness(tone?: Record<string, unknown> | null): number {
+  if (!tone) return 0;
+  const filled = TONE_FIELDS.filter(k => {
+    const v = tone[k];
+    if (Array.isArray(v)) return v.length > 0;
+    return !!v && String(v).trim().length > 0;
+  }).length;
+  return Math.round((filled / TONE_FIELDS.length) * 100);
 }
 
 export default function DashboardPage() {
@@ -35,16 +30,12 @@ export default function DashboardPage() {
   const [overdueCount, setOverdueCount] = useState(0);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [reviewCourseCount, setReviewCourseCount] = useState(0);
-  const [personality, setPersonality] = useState<PersonalityProfile>(null);
-  const [revenue, setRevenue] = useState<{ net_balance: number; active_subscriptions: number } | null>(null);
 
   useEffect(() => {
     if (loading) return;
     api.listMyCharacters().then(list => setCharacter(list[0] ?? null)).catch(() => {}).finally(() => setLoadingChars(false));
     api.getMyPurchasedCourses().then(setPurchasedCourses).catch(() => {});
     api.getPendingOverdueCount().then(r => setOverdueCount(r.overdue_count)).catch(() => {});
-    api.getPersonalityProfile().then(setPersonality).catch(() => {});
-    api.getMyRevenue().then(setRevenue).catch(() => {});
     if (me?.role !== "admin") {
       api.getMyCreatorProfile().then(p => setProfileStatus(p.status)).catch(() => {});
     }
@@ -55,14 +46,12 @@ export default function DashboardPage() {
 
   if (loading) return <Skeleton />;
 
-  const filledCount = PROFILE_CATEGORIES.filter(c => categoryFilled(personality?.[c.key])).length;
-  const completeness = Math.round((filledCount / PROFILE_CATEGORIES.length) * 100);
+  const completeness = toneCompleteness(character?.tone_profile);
 
   const tiles: { href: string; icon: string; label: string; locked?: boolean }[] = [
     { href: "/creator/courses/new", icon: "📅", label: "30日伴走コースを作る", locked: !isApproved },
     { href: "/studio", icon: "🎬", label: "AIコンテンツ生成スタジオ", locked: !isApproved },
     ...(character ? [] : [{ href: "/creator/interview", icon: "🧠", label: "AIインタビュー" }]),
-    { href: "/creator/profile", icon: "👤", label: "人格プロファイルを編集" },
     { href: "/creator/analytics", icon: "📊", label: "質問分析ダッシュボード", locked: !isApproved },
     { href: "/creator/revenue", icon: "💰", label: "収益" },
   ];
@@ -111,7 +100,7 @@ export default function DashboardPage() {
                     <span className="text-xs text-white/90 whitespace-nowrap">プロフィール完成度 {completeness}%</span>
                   </div>
                   {completeness < 100 && (
-                    <Link href="/creator/interview" className="text-xs text-white underline mt-1 inline-block">人格プロファイルを充実させる →</Link>
+                    <Link href={character ? `/dashboard/characters/${character.id}` : "/creator/interview"} className="text-xs text-white underline mt-1 inline-block">人格プロファイルを充実させる →</Link>
                   )}
                 </div>
               </div>
@@ -120,7 +109,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 今すぐ対応リング */}
-        {(overdueCount > 0 || (!isApproved && profileStatus) || reviewCourseCount > 0 || (revenue && revenue.active_subscriptions > 0)) && (
+        {(overdueCount > 0 || (!isApproved && profileStatus) || reviewCourseCount > 0) && (
           <div className="flex flex-wrap gap-3">
             {overdueCount > 0 && (
               <Link href="/creator/inbox" className="card flex items-center gap-2 flex-1 min-w-[200px]" style={{ borderColor: "#e53e3e" }}>
@@ -138,12 +127,6 @@ export default function DashboardPage() {
               <Link href="/creator/courses" className="card flex items-center gap-2 flex-1 min-w-[200px]" style={{ borderColor: "var(--accent)" }}>
                 <span className="text-xl">📝</span>
                 <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>運営確認中のコース {reviewCourseCount}件</p>
-              </Link>
-            )}
-            {revenue && revenue.active_subscriptions > 0 && (
-              <Link href="/creator/revenue" className="card flex items-center gap-2 flex-1 min-w-[200px]" style={{ borderColor: "var(--primary)" }}>
-                <span className="text-xl">💰</span>
-                <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>受講中 {revenue.active_subscriptions}名／今月の残高 ¥{revenue.net_balance.toLocaleString()}</p>
               </Link>
             )}
           </div>

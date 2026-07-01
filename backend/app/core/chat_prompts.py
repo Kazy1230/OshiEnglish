@@ -67,25 +67,57 @@ ANSWER_STYLE_BY_TYPE = {
 }
 
 
-def build_answer_system(personality_profile: dict, message_type: str) -> list[dict]:
+def build_answer_system(personality_profile: dict, message_type: str, tone_profile: dict | None = None) -> list[dict]:
     """人格プロファイル部分（同じコースの全チャットで不変）とメッセージ種別ごとの回答スタイル（可変）を
     別々のcontent blockに分け、人格プロファイル側にcache_controlを付けてPrompt Cachingを有効化する
-    （詳細設計書2.5節：システムプロンプトのキャッシュでAPIコストを削減）。"""
+    （詳細設計書2.5節：システムプロンプトのキャッシュでAPIコストを削減）。
+    tone_profileはCharacterのtone_profile（first_person/speech_style/personality/catchphrase/ng_expressions）。
+    personality_profileが空でもtone_profileから人格を組み立てられるようにする。"""
     comm = personality_profile.get("communication", {})
     coaching = personality_profile.get("coaching_style", {})
+    tp = tone_profile or {}
     style = ANSWER_STYLE_BY_TYPE.get(message_type, ANSWER_STYLE_BY_TYPE["content"])
 
+    # tone_profileから補完（personality_profileが空の場合のフォールバック）
+    first_person = comm.get("first_person") or tp.get("first_person", "")
+    tone_text = comm.get("tone") or tp.get("speech_style", "")
+    sentence_ending = comm.get("sentence_ending") or ""
+    strictness = coaching.get("strictness", "")
+    encouragement = coaching.get("encouragement", "")
+    personality_text = tp.get("personality", "")
+    catchphrase = tp.get("catchphrase", "")
+    ng_expressions = tp.get("ng_expressions") or []
+
+    personality_lines = []
+    if first_person:
+        personality_lines.append(f"- 一人称: 「{first_person}」")
+    if tone_text:
+        personality_lines.append(f"- 口調・話し方: {tone_text}")
+    if sentence_ending:
+        personality_lines.append(f"- 文末の癖: {sentence_ending}")
+    if personality_text:
+        personality_lines.append(f"- 性格・特徴: {personality_text}")
+    if catchphrase:
+        personality_lines.append(f"- 口癖: {catchphrase}")
+    if strictness:
+        personality_lines.append(f"- 指導の厳しさ: {strictness}")
+    if encouragement:
+        personality_lines.append(f"- 励まし方: {encouragement}")
+    if ng_expressions:
+        personality_lines.append(f"- 使ってはいけない表現: {', '.join(ng_expressions)}")
+
+    personality_block = "\n".join(personality_lines) if personality_lines else "（人格設定なし）"
+
     preamble = f"""あなたは英語学習コーチとして、以下の人格で学習者からの相談に回答してください。
+必ず一貫した人格・口調を保ち、前後の文脈を踏まえた自然な会話をしてください。
 
 【人格設定】
-- 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）
-- 指導の厳しさ: {coaching.get('strictness', '')}
-- 励まし方: {coaching.get('encouragement', '')}
+{personality_block}
 """
     suffix = f"""【今回の回答スタイル】
 {style}
 
-回答は3〜5文程度の自然なチャットメッセージとして書いてください。説明文や前置きは不要です。
+回答は3〜5文程度の自然なチャットメッセージとして書いてください。前置きや説明は不要です。
 """
     return [
         {"type": "text", "text": preamble, "cache_control": {"type": "ephemeral"}},
@@ -105,6 +137,7 @@ def build_answer_messages(
     linked_content_url: str | None,
     today_tasks: list[dict] | None = None,
     recent_summaries: list[str] | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> list[dict]:
     content_note = ""
     if linked_content_title and linked_content_url:
@@ -117,7 +150,9 @@ def build_answer_messages(
         context_note += f"\n\n【今日のタスク】\n{today_tasks}"
     if recent_summaries:
         context_note += f"\n\n【直近3日間のサマリー】\n{_format_summaries(recent_summaries)}"
-    return [{"role": "user", "content": f"学習者からの相談:\n{question_body}{content_note}{context_note}"}]
+    messages: list[dict] = list(conversation_history) if conversation_history else []
+    messages.append({"role": "user", "content": f"学習者からの相談:\n{question_body}{content_note}{context_note}"})
+    return messages
 
 
 def build_today_message_system(personality_profile: dict, message_kind: str) -> str:

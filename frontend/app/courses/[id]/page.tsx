@@ -74,6 +74,7 @@ export default function CourseDetailPage() {
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
   const [checkedTaskTypes, setCheckedTaskTypes] = useState<Set<string>>(new Set());
   const [reporting, setReporting] = useState(false);
+  const [reportedDay, setReportedDay] = useState<number | null>(null);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (c: CourseDetail) => {
@@ -97,8 +98,12 @@ export default function CourseDetailPage() {
         setLogs(byDay);
         const tasksByDay: Record<number, AdjustedTask[]> = {};
         for (const ld of learnerDays) {
-          const carryover = (ld.carryover_tasks ?? []).map((t: AdjustedTask) => ({ ...t, carryover: true }));
-          tasksByDay[ld.day] = [...(ld.adjusted_tasks ?? []), ...carryover];
+          const adjusted = ld.adjusted_tasks ?? [];
+          const adjustedTypes = new Set(adjusted.map((t: AdjustedTask) => t.type));
+          const carryover = (ld.carryover_tasks ?? [])
+            .filter((t: AdjustedTask) => !adjustedTypes.has(t.type))
+            .map((t: AdjustedTask) => ({ ...t, carryover: true }));
+          tasksByDay[ld.day] = [...adjusted, ...carryover];
         }
         setLearnerTasksByDay(tasksByDay);
       }
@@ -206,8 +211,10 @@ export default function CourseDetailPage() {
     if (reporting) return;
     setReporting(true);
     try {
-      await api.completeDayLog(courseId, currentDay, undefined, Array.from(checkedTaskTypes));
+      const completed = checkedTaskTypes.size > 0 ? Array.from(checkedTaskTypes) : null;
+      await api.completeDayLog(courseId, currentDay, undefined, completed ?? undefined);
       setLogs(prev => ({ ...prev, [currentDay]: { day_number: currentDay, is_completed: true, completed_at: new Date().toISOString(), memo: null } }));
+      setReportedDay(currentDay);
       toast("今日の学習を報告しました！", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "報告に失敗しました", "error");
@@ -244,7 +251,9 @@ export default function CourseDetailPage() {
   const completedLessonCount = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
 
   const completedCount = Object.values(logs).filter(l => l.is_completed).length;
-  const currentDay = Math.min(completedCount + 1, 30);
+  const derivedDay = Math.min(completedCount + 1, 30);
+  // 報告直後は翌日に飛ばさず、完了したその日を表示し続ける
+  const currentDay = reportedDay ?? derivedDay;
   const today = days.find(d => d.day === currentDay) ?? null;
   const todayTasks = learnerTasksByDay[currentDay] ?? [];
   const todayLog = logs[currentDay] ?? null;
@@ -496,13 +505,24 @@ export default function CourseDetailPage() {
 
                       {!today.is_rest_day && (
                         <div className="pt-3 flex flex-wrap items-center justify-between gap-3" style={{ borderTop: "1px solid var(--border)" }}>
-                          <button
-                            onClick={() => handleReportToday(currentDay)}
-                            disabled={reporting || !!todayLog?.is_completed}
-                            className="btn-primary disabled:opacity-50"
-                          >
-                            {todayLog?.is_completed ? "✅ 報告済み" : reporting ? "報告中…" : "今日の学習を報告する"}
-                          </button>
+                          {todayLog?.is_completed ? (
+                            <div className="flex flex-wrap items-center gap-3">
+                              <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ Day {currentDay} 完了！</span>
+                              {reportedDay !== null && derivedDay > currentDay && (
+                                <button onClick={() => setReportedDay(null)} className="btn-ghost text-xs">
+                                  Day {derivedDay} のタスクを確認する →
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleReportToday(currentDay)}
+                              disabled={reporting}
+                              className="btn-primary disabled:opacity-50"
+                            >
+                              {reporting ? "報告中…" : "今日の学習を報告する"}
+                            </button>
+                          )}
                           <Link href={`/courses/${courseId}/chat`} className="text-xs font-bold underline" style={{ color: "var(--accent)" }}>チャットで相談する →</Link>
                         </div>
                       )}

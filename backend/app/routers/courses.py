@@ -1080,6 +1080,35 @@ def plan_course_textbooks(course_id: int, data: TextbookPlanRequest, current_use
     return plan
 
 
+class ParseTocRequest(BaseModel):
+    textbook_name: str
+    message: str
+    history: List[dict] = []
+
+
+@router.post("/courses/{course_id}/textbooks/parse-toc")
+def parse_toc_chat(course_id: int, data: ParseTocRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """ユーザーが自然言語で説明した教材の目次構成をAIがリスト化し、確認を返す。会話形式で精緻化できる。要(本人)"""
+    _get_owned_course(db, course_id, current_user)
+    SYSTEM = f"""あなたは教材の目次を整理するアシスタントです。
+ユーザーが説明した「{data.textbook_name}」の構成を、目次アイテムのリストとして整理してください。
+会話の最後に必ずJSONで返答してください。形式:
+{{"ai_message": "確認メッセージ（日本語）", "toc_items": ["項目1", "項目2", ...]}}
+- toc_itemsは配列形式で、各項目は短い文字列
+- ai_messageで生成した目次リストの内容を確認する
+- 情報が足りない場合はai_messageで質問し、toc_itemsは空配列にする
+JSONのみ返してください。"""
+    messages = list(data.history)
+    messages.append({"role": "user", "content": data.message})
+    try:
+        from app.core.llm import extract_json
+        raw = generate_text(SYSTEM, messages, max_tokens=1000, json_mode=True)
+        result = extract_json(raw)
+    except (LLMError, ValueError) as e:
+        raise HTTPException(status_code=502, detail=f"AI応答の解析に失敗しました: {e}")
+    return result
+
+
 class TextbookPlanItem(BaseModel):
     course_textbook_id: int
     type: str

@@ -161,6 +161,8 @@ export const api = {
     apiFetch(`/courses/${courseId}/textbooks/plan`, { method: "POST", body: JSON.stringify({ description, qa_history: qaHistory }) }),
   applyCourseTextbookPlan: (courseId: number, plans: object[]) =>
     apiFetch(`/courses/${courseId}/textbooks/plan/apply`, { method: "POST", body: JSON.stringify({ plans }) }),
+  parseTocChat: (courseId: number, textbookName: string, message: string, history: { role: string; content: string }[]) =>
+    apiFetch(`/courses/${courseId}/textbooks/parse-toc`, { method: "POST", body: JSON.stringify({ textbook_name: textbookName, message, history }) }),
 
   // マーケットプレイス：コース購入（Stripe Payment Intent）
   checkoutCourse: (courseId: number) =>

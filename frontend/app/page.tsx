@@ -125,7 +125,7 @@ export default function Home() {
             <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onSurface" />
             {loggedIn ? (
               <>
-                <Link href="/mypage" className="hidden sm:inline text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
+                <Link href="/mypage" className="text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
                 <LogoutButton variant="onSurface" />
               </>
             ) : (

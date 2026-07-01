@@ -19,7 +19,6 @@ const NAV_ITEMS: Record<Role, { href: string; label: string; badgeKey?: "overdue
     { href: "/dashboard", label: "ダッシュボード" },
     { href: "/creator/courses", label: "作成したコース" },
     { href: "/creator/inbox", label: "受講者対応", badgeKey: "overdueCount" },
-    { href: "/creator/revenue", label: "収益" },
   ],
 };
 
