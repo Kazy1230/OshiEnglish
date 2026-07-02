@@ -1277,6 +1277,46 @@ class DayLogCompleteRequest(BaseModel):
     completed_task_types: Optional[List[str]] = None  # 実際に完了したタスク種別。未指定なら全タスク完了とみなす
 
 
+def _adjust_next_day_tasks(db: Session, course_id: int, user_id: int, completed_day: int, completed_task_types: Optional[list[str]], memo: Optional[str]) -> None:
+    """Layer3: 前日の完了報告をもとに翌日のタスクをAIで微調整する。失敗時は無音でスキップ。"""
+    if completed_day >= 30:
+        return
+    profile = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == user_id, LearnerProfile.course_id == course_id
+    ).first()
+    if not profile:
+        return
+    next_day_record = db.query(LearnerCourseDay).filter(
+        LearnerCourseDay.learner_profile_id == profile.id,
+        LearnerCourseDay.day_number == completed_day + 1,
+    ).first()
+    if not next_day_record or not next_day_record.adjusted_tasks:
+        return
+
+    all_types = [t.get("type") for t in next_day_record.adjusted_tasks if t.get("type")]
+
+    from app.core import layer3_prompts as l3
+    from app.core.llm import extract_json
+    from app.core.config import settings
+    try:
+        raw = generate_text(
+            l3.DAILY_ADJUST_SYSTEM,
+            l3.build_daily_adjust_messages(completed_task_types, all_types, memo, next_day_record.adjusted_tasks),
+            max_tokens=400,
+            model=settings.DEEPSEEK_MODEL_LITE,
+            json_mode=True,
+        )
+        result = extract_json(raw)
+        if result.get("adjusted_tasks"):
+            next_day_record.adjusted_tasks = result["adjusted_tasks"]
+            reason = result.get("reason", "")
+            if reason:
+                existing = next_day_record.personalize_reason or ""
+                next_day_record.personalize_reason = f"{existing}\n[Layer3: {reason}]".strip()
+    except (LLMError, ValueError):
+        pass
+
+
 def _apply_carryover(db: Session, course_id: int, user_id: int, day_number: int, completed_task_types: Optional[list[str]]) -> None:
     """完了報告された日のタスクのうち未完了だった分を、翌日のcarryover_tasksに反映する（議論サマリー15節）。
     completed_task_typesがNone（未指定）の場合は全タスク完了とみなし、繰越は発生させない。"""
@@ -1331,6 +1371,7 @@ def complete_day_log(course_id: int, day_number: int, data: DayLogCompleteReques
         log.memo = data.memo
     log.completed_task_types = data.completed_task_types
     _apply_carryover(db, course_id, current_user.id, day_number, data.completed_task_types)
+    _adjust_next_day_tasks(db, course_id, current_user.id, day_number, data.completed_task_types, data.memo)
     db.commit()
     return {"day_number": day_number, "is_completed": True, "completed_at": log.completed_at, "memo": log.memo}
 

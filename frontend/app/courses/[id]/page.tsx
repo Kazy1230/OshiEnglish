@@ -28,7 +28,7 @@ type CourseDetail = {
 
 type AdjustedTask = { type: string; minutes: number; carryover?: boolean };
 type Day = { day: number; week_number: number; theme: string | null; is_rest_day: boolean };
-type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null };
+type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null; personalize_reason?: string | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
 
 const TASK_TYPE_LABEL: Record<string, string> = {
@@ -70,6 +70,7 @@ export default function CourseDetailPage() {
   // 30日コース用：今日のタスク・カレンダー
   const [days, setDays] = useState<Day[]>([]);
   const [learnerTasksByDay, setLearnerTasksByDay] = useState<Record<number, AdjustedTask[]>>({});
+  const [layer3ReasonByDay, setLayer3ReasonByDay] = useState<Record<number, string>>({});
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
   const [checkedTaskTypes, setCheckedTaskTypes] = useState<Set<string>>(new Set());
@@ -97,6 +98,7 @@ export default function CourseDetailPage() {
         for (const log of l) byDay[log.day_number] = log;
         setLogs(byDay);
         const tasksByDay: Record<number, AdjustedTask[]> = {};
+        const l3Reasons: Record<number, string> = {};
         for (const ld of learnerDays) {
           const adjusted = ld.adjusted_tasks ?? [];
           const adjustedTypes = new Set(adjusted.map((t: AdjustedTask) => t.type));
@@ -104,8 +106,11 @@ export default function CourseDetailPage() {
             .filter((t: AdjustedTask) => !adjustedTypes.has(t.type))
             .map((t: AdjustedTask) => ({ ...t, carryover: true }));
           tasksByDay[ld.day] = [...adjusted, ...carryover];
+          const l3Match = ld.personalize_reason?.match(/\[Layer3: ([^\]]+)\]/);
+          if (l3Match) l3Reasons[ld.day] = l3Match[1];
         }
         setLearnerTasksByDay(tasksByDay);
+        setLayer3ReasonByDay(l3Reasons);
       }
     });
   }
@@ -437,6 +442,11 @@ export default function CourseDetailPage() {
                     </div>
 
                     <div className="flex flex-col gap-4 p-5">
+                      {layer3ReasonByDay[currentDay] && (
+                        <p className="text-xs px-2 py-1 rounded-lg" style={{ background: "rgba(168,85,247,0.1)", color: "var(--accent)" }}>
+                          ✦ 前日の報告で調整済み：{layer3ReasonByDay[currentDay]}
+                        </p>
+                      )}
                       {today.is_rest_day ? (
                         <div className="flex items-center gap-3 py-2">
                           <span className="text-2xl">🌿</span>
