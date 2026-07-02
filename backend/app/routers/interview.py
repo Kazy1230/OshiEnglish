@@ -42,8 +42,9 @@ def start_interview(data: InterviewStartRequest = InterviewStartRequest(), curre
     profile = _get_own_creator_profile(db, current_user)
 
     session = db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).first()
+    total_questions = len(prompts.FIXED_QUESTIONS)
     if session and session.status == "completed":
-        return {"status": "completed", "question": None, "progress": {"current": 5, "total": 5}}
+        return {"status": "completed", "question": None, "progress": {"current": total_questions, "total": total_questions}}
 
     if not session:
         if data.base_type and data.base_type not in BASE_TYPES:
@@ -67,7 +68,7 @@ def start_interview(data: InterviewStartRequest = InterviewStartRequest(), curre
     return {
         "status": "in_progress",
         "question": session.pending_question,
-        "progress": {"current": session.fixed_index + 1, "total": len(prompts.FIXED_QUESTIONS)},
+        "progress": {"current": session.fixed_index + 1, "total": total_questions},
         "base_type": session.base_type,
     }
 
@@ -129,7 +130,8 @@ def submit_answer(data: InterviewAnswerRequest, current_user=Depends(get_current
         session.pending_question = None
         session.qa_history = history
         db.commit()
-        return {"status": "completed", "question": None, "progress": {"current": 5, "total": 5}}
+        total = len(prompts.FIXED_QUESTIONS)
+        return {"status": "completed", "question": None, "progress": {"current": total, "total": total}}
 
     session.fixed_index += 1
     session.pending_question = prompts.FIXED_QUESTIONS[session.fixed_index]
@@ -162,6 +164,7 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
         raise HTTPException(status_code=500, detail=str(e))
 
     sample_reply = generated.pop("sample_reply", None)
+    tone_profile_data = generated.pop("tone_profile", None)
 
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
     if not personality:
@@ -174,8 +177,13 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
     personality.sample_reply = sample_reply
 
     # 1クリエイター=1人格(キャラクター)。インタビュー完了時点でキャラクターが無ければ自動で作成する
-    if not profile.character:
-        db.add(Character(name=customer_display_name(current_user), creator_id=profile.id))
+    character = profile.character
+    if not character:
+        character = Character(name=customer_display_name(current_user), creator_id=profile.id)
+        db.add(character)
+    # インタビューで得たtone_profileをキャラクターに保存（チャットでの人格再現に使用）
+    if tone_profile_data:
+        character.tone_profile = tone_profile_data
 
     db.commit()
     db.refresh(personality)
@@ -185,6 +193,7 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
         "base_type": personality.base_type,
         "gender": personality.gender,
         "sample_reply": personality.sample_reply,
+        "tone_profile": character.tone_profile if character else None,
     }
 
 
