@@ -262,7 +262,7 @@ export default function CourseCalendarPage() {
   if (loading || fetching) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="30日カレンダー" />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">

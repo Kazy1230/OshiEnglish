@@ -67,7 +67,7 @@ export default function NewCoursePage() {
   if (loading || loadingCharacter) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="30日伴走コース新規作成" />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <form onSubmit={handleSubmit} className="card flex flex-col gap-4">

@@ -1090,19 +1090,41 @@ class ParseTocRequest(BaseModel):
 def parse_toc_chat(course_id: int, data: ParseTocRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """ユーザーが自然言語で説明した教材の目次構成をAIがリスト化し、確認を返す。会話形式で精緻化できる。要(本人)"""
     _get_owned_course(db, course_id, current_user)
-    SYSTEM = f"""あなたは教材の目次を整理するアシスタントです。
-ユーザーが説明した「{data.textbook_name}」の構成を、目次アイテムのリストとして整理してください。
-会話の最後に必ずJSONで返答してください。形式:
-{{"ai_message": "確認メッセージ（日本語）", "toc_items": ["項目1", "項目2", ...]}}
-- toc_itemsは配列形式で、各項目は短い文字列
-- ai_messageで生成した目次リストの内容を確認する
-- 情報が足りない場合はai_messageで質問し、toc_itemsは空配列にする
-JSONのみ返してください。"""
+    SYSTEM = f"""あなたは英語教材の専門家です。
+クリエイターが「{data.textbook_name}」を30日学習カレンダーに組み込むために、
+教材の全章リストと「何日目に何を学習するか」の30日分割り当て計画を作成します。
+
+## 返答形式（JSONのみ・他のテキスト一切不要）
+{{
+  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
+  "toc_items": ["章名1", "章名2", ...],
+  "day_assignments": [
+    {{"day": 1, "items": ["章名1", "章名2"]}},
+    {{"day": 2, "items": ["章名3", "章名4"]}},
+    ...
+  ]
+}}
+
+## ルール
+1. **toc_items**：教材の全章・全セクションを漏れなく配列で返す。
+   - 有名教材（Distinction2000・DUO3.0・速読英単語・システム英単語・英文法ポラリス等）は
+     あなたの知識から全章を即座に提案する（ユーザーに説明させない）
+   - 粒度は「1章 or 1セクション」単位（15〜60分で学習できる単位）
+   - 教材が不明な場合のみtoc_itemsを空配列にして質問する
+
+2. **day_assignments**：toc_itemsを30日間に割り当てる。
+   - ユーザーが「1日Nチャプター」などペースを指定した場合は厳守する
+   - 指定がない場合は全章が均等に収まるよう自動計算する
+   - 教材が30日以内に終わる場合：終了した翌日以降はday_assignmentsに含めない
+   - 教材が30日を超える場合：30日分のみ割り当て、残りは含めない
+   - 学習しない日（休息日候補）はday_assignmentsに含めなくてよい
+
+3. toc_itemsが確定できない場合は両方空配列にして質問する"""
     messages = list(data.history)
     messages.append({"role": "user", "content": data.message})
     try:
         from app.core.llm import extract_json
-        raw = generate_text(SYSTEM, messages, max_tokens=1000, json_mode=True)
+        raw = generate_text(SYSTEM, messages, max_tokens=2000, json_mode=True)
         result = extract_json(raw)
     except (LLMError, ValueError) as e:
         raise HTTPException(status_code=502, detail=f"AI応答の解析に失敗しました: {e}")

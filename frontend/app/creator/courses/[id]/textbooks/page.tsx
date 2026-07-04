@@ -57,6 +57,8 @@ export default function CourseTextbooksPage() {
   const [customType, setCustomType] = useState("textbook");
   const [tocChatHistory, setTocChatHistory] = useState<{ role: string; content: string }[]>([]);
   const [tocItems, setTocItems] = useState<string[]>([]);
+  // 30日分割り当て: index=0がDay1。空文字 = その日は未割り当て
+  const [dayEntries, setDayEntries] = useState<string[]>(Array(30).fill(""));
   const [tocInput, setTocInput] = useState("");
   const [tocChatting, setTocChatting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -100,19 +102,42 @@ export default function CourseTextbooksPage() {
     finally { setAdding(false); }
   }
 
-  async function handleTocChat(e: React.FormEvent) {
-    e.preventDefault();
-    if (!tocInput.trim() || !customName.trim()) { toast("教材名とメッセージを入力してください", "error"); return; }
+  async function sendTocMessage(message: string) {
+    if (!customName.trim()) { toast("先に教材名を入力してください", "error"); return; }
     setTocChatting(true);
-    const newHistory = [...tocChatHistory, { role: "user", content: tocInput }];
+    const newHistory = [...tocChatHistory, { role: "user", content: message }];
     setTocChatHistory(newHistory);
     setTocInput("");
     try {
-      const res = await api.parseTocChat(courseId, customName, tocInput, tocChatHistory);
+      const res = await api.parseTocChat(courseId, customName, message, tocChatHistory);
       setTocChatHistory([...newHistory, { role: "assistant", content: res.ai_message }]);
       if (res.toc_items?.length > 0) setTocItems(res.toc_items);
+      // day_assignments を30日グリッドに反映
+      if (res.day_assignments?.length > 0) {
+        const entries = Array(30).fill("");
+        for (const d of res.day_assignments) {
+          if (d.day >= 1 && d.day <= 30 && Array.isArray(d.items)) {
+            entries[d.day - 1] = d.items.join("、");
+          }
+        }
+        setDayEntries(entries);
+      }
     } catch (err: unknown) { toast(err instanceof Error ? err.message : "AIとの通信に失敗しました", "error"); }
     finally { setTocChatting(false); }
+  }
+
+  async function handleTocChat(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tocInput.trim()) return;
+    await sendTocMessage(tocInput);
+  }
+
+  async function handleTocAutoLookup() {
+    if (!customName.trim()) { toast("先に教材名を入力してください", "error"); return; }
+    const msg = tocInput.trim()
+      ? `「${customName}」の全章・全セクション一覧を作成してください。補足：${tocInput}`
+      : `「${customName}」の全章・全セクション一覧を作成してください`;
+    await sendTocMessage(msg);
   }
 
   async function handleAddCustom(e: React.FormEvent) {
@@ -123,8 +148,27 @@ export default function CourseTextbooksPage() {
       const added = await api.addCourseTextbook(courseId, {
         custom_name: customName.trim(), custom_toc: tocItems.map(item => ({ item })), type: customType,
       });
-      setTextbooks(prev => [...prev, added]);
-      setCustomName(""); setTocItems([]); setTocChatHistory([]); setTocInput(""); setCustomMode(false);
+      // 30日グリッドの内容を day_assignments として保存
+      const assignments: { toc_item: string; day_number: number | null }[] = [];
+      const assignedItems = new Set<string>();
+      dayEntries.forEach((content, idx) => {
+        if (!content.trim()) return;
+        const items = content.split(/[、,\n]/).map(s => s.trim()).filter(Boolean);
+        for (const item of items) {
+          assignments.push({ toc_item: item, day_number: idx + 1 });
+          assignedItems.add(item);
+        }
+      });
+      // toc_items のうち未割り当てのものは day_number: null で追加
+      for (const item of tocItems) {
+        if (!assignedItems.has(item)) assignments.push({ toc_item: item, day_number: null });
+      }
+      if (assignments.length > 0) {
+        await api.setTextbookDayAssignments(added.id, assignments);
+      }
+      setTextbooks(prev => [...prev, { ...added, day_assignments: assignments.map(a => ({ toc_item: a.toc_item, day_number: a.day_number })) }]);
+      setCustomName(""); setTocItems([]); setDayEntries(Array(30).fill(""));
+      setTocChatHistory([]); setTocInput(""); setCustomMode(false);
       toast(`「${added.name}」を追加しました`, "success");
     } catch (err: unknown) { toast(err instanceof Error ? err.message : "追加に失敗しました", "error"); }
     finally { setAdding(false); }
@@ -186,7 +230,7 @@ export default function CourseTextbooksPage() {
   if (loading || fetching) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="使用する教材を設定" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
@@ -230,31 +274,110 @@ export default function CourseTextbooksPage() {
                 <option value="textbook">教材（参考書・問題集など）</option>
                 <option value="vocabulary">単語帳</option>
               </select>
+              {/* チャット履歴 */}
               {tocChatHistory.length > 0 && (
-                <div className="flex flex-col gap-2 max-h-56 overflow-y-auto p-2 rounded-xl" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto p-3 rounded-xl" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
                   {tocChatHistory.map((m, i) => (
-                    <div key={i} className={`text-xs p-2 rounded-lg max-w-[90%] ${m.role === "user" ? "self-end" : "self-start"}`}
+                    <div key={i} className={`text-xs p-2.5 rounded-xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "self-end" : "self-start"}`}
                       style={{ background: m.role === "user" ? "var(--primary)" : "var(--card)", color: m.role === "user" ? "white" : "var(--text)", border: "1px solid var(--border)" }}>
                       {m.content}
                     </div>
                   ))}
-                  {tocChatting && <div className="text-xs self-start p-2 rounded-lg" style={{ background: "var(--card)", color: "var(--muted)" }}>考え中…</div>}
+                  {tocChatting && (
+                    <div className="text-xs self-start px-3 py-2 rounded-xl flex items-center gap-1.5" style={{ background: "var(--card)", color: "var(--muted)" }}>
+                      <span className="animate-pulse">●</span> 調べています…
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* 入力エリア */}
+              {tocChatHistory.length === 0 ? (
+                <div className="flex flex-col gap-2">
+                  <input
+                    value={tocInput}
+                    onChange={e => setTocInput(e.target.value)}
+                    placeholder="補足があれば（例：1日4チャプターで進めたい）　なければ空欄でOK"
+                    disabled={tocChatting}
+                    className="text-sm"
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleTocAutoLookup(); } }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary self-start text-sm"
+                    disabled={tocChatting || !customName.trim()}
+                    onClick={handleTocAutoLookup}
+                  >
+                    {tocChatting ? "調べています…" : "🔍 AIに目次を調べてもらう"}
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleTocChat} className="flex gap-2">
+                  <input
+                    value={tocInput}
+                    onChange={e => setTocInput(e.target.value)}
+                    placeholder="修正・追加を伝える…"
+                    disabled={tocChatting}
+                    className="flex-1 text-sm"
+                  />
+                  <button type="submit" className="btn-ghost px-3 text-sm" disabled={tocChatting || !tocInput.trim()}>送信</button>
+                </form>
+              )}
+
+              {/* 30日グリッド */}
               {tocItems.length > 0 && (
-                <div className="text-xs p-2 rounded-lg" style={{ background: "var(--bg)", color: "var(--muted)" }}>
-                  <span className="font-bold" style={{ color: "var(--accent)" }}>確定した目次（{tocItems.length}項目）</span>
-                  <div className="mt-1 max-h-24 overflow-y-auto flex flex-col gap-0.5">{tocItems.map((item, i) => <span key={i}>{item}</span>)}</div>
+                <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                      30日間の割り当て（編集できます）
+                    </p>
+                    <button
+                      type="button"
+                      className="text-[10px]"
+                      style={{ color: "var(--muted)" }}
+                      onClick={() => { setTocItems([]); setDayEntries(Array(30).fill("")); setTocChatHistory([]); }}
+                    >
+                      リセット
+                    </button>
+                  </div>
+                  <p className="text-[10px]" style={{ color: "var(--muted)" }}>
+                    各日の内容を「、」区切りで編集できます。空欄の日は休息日として扱われます。
+                  </p>
+                  <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto pr-1">
+                    {dayEntries.map((content, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span
+                          className="text-xs font-bold flex-shrink-0 w-12 text-right"
+                          style={{ color: content.trim() ? "var(--primary)" : "var(--muted)" }}
+                        >
+                          {idx + 1}日目
+                        </span>
+                        <input
+                          value={content}
+                          onChange={e => setDayEntries(prev => prev.map((v, i) => i === idx ? e.target.value : v))}
+                          placeholder="（空欄 = 休息日）"
+                          className="flex-1 text-xs py-1.5 px-2.5"
+                          style={{
+                            borderColor: content.trim() ? "var(--accent)" : "var(--border)",
+                            background: content.trim() ? "color-mix(in srgb, var(--accent) 5%, var(--bg))" : "var(--bg)",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px]" style={{ color: "var(--muted)" }}>
+                    教材全体：{tocItems.length}項目 ／ 割り当て済み：{dayEntries.filter(d => d.trim()).length}日
+                  </p>
                 </div>
               )}
-              <form onSubmit={handleTocChat} className="flex gap-2">
-                <input value={tocInput} onChange={e => setTocInput(e.target.value)}
-                  placeholder={tocChatHistory.length === 0 ? "例：560例文で構成。40例文ずつ区切りたい" : "返信する…"}
-                  disabled={tocChatting} className="flex-1 text-sm" />
-                <button type="submit" className="btn-ghost px-3 text-sm" disabled={tocChatting || !tocInput.trim()}>送信</button>
-              </form>
-              <button type="button" className="btn-primary self-start text-sm" disabled={adding || tocItems.length === 0} onClick={handleAddCustom}>
-                {adding ? "追加中…" : `完了（${tocItems.length}項目で追加）`}
+
+              <button
+                type="button"
+                className="btn-primary self-start text-sm"
+                disabled={adding || tocItems.length === 0}
+                onClick={handleAddCustom}
+              >
+                {adding ? "追加中…" : "完了 — コースに追加する"}
               </button>
             </div>
           )}

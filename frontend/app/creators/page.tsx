@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { AppHeader } from "@/components/AppHeader";
+import { PublicHeader } from "@/components/PublicHeader";
 import { SampleChatPreview } from "@/components/SampleChatPreview";
 
 type CreatorCard = {
@@ -25,7 +25,7 @@ export default function CreatorsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="learner" title="クリエイターを選ぶ" />
+      <PublicHeader />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {loading ? (

@@ -184,6 +184,48 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
 }
 
+/* ===== ゾーン別テーマ ===== */
+
+/* クリエイターゾーン：温かみのあるエディトリアル・ワークショップ調 */
+.creator-theme {
+  --bg: #f5f0e8;
+  --card: #fffffe;
+  --primary: #2e2010;
+  --accent: #c96420;
+  --text: #1e1508;
+  --muted: #7a6b5c;
+  --border: #e0d8cc;
+}
+:root.dark .creator-theme {
+  --bg: #18130c;
+  --card: #241c12;
+  --primary: #e8a068;
+  --accent: #f0a030;
+  --text: #f0e8d8;
+  --muted: #a8967e;
+  --border: #3a2e1e;
+}
+
+/* スタジオゾーン：暗いアトリエ・クリエイティブツール調 */
+.studio-theme {
+  --bg: #0d0b15;
+  --card: #16131e;
+  --primary: #a888e8;
+  --accent: #f0c050;
+  --text: #eae6f5;
+  --muted: #8880a8;
+  --border: #2a2438;
+}
+:root.dark .studio-theme {
+  --bg: #0d0b15;
+  --card: #16131e;
+  --primary: #a888e8;
+  --accent: #f0c050;
+  --text: #eae6f5;
+  --muted: #8880a8;
+  --border: #2a2438;
+}
+
 /* ===== 印刷スタイル ===== */
 @media print {
   /* ヘッダー・サイドバー・ナビを非表示 */

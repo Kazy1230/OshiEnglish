@@ -43,7 +43,7 @@ export default function CourseEnrollmentsPage() {
   if (loading || fetching) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" backHref="/creator/courses" backLabel="作成したコース" title="申込者一覧" />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">

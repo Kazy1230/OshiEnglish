@@ -101,7 +101,7 @@ export default function CreatorInterviewPage() {
 
   if (step === "done") {
     return (
-      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
         <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
         <main className="max-w-2xl mx-auto px-4 sm:px-6 py-10 flex flex-col gap-4 items-center text-center">
           <span className="text-4xl">✅</span>
@@ -117,7 +117,7 @@ export default function CreatorInterviewPage() {
 
   if (step === "gender") {
     return (
-      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
         <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
 
         <section className="gradient-hero relative overflow-hidden px-4 sm:px-6 py-10 sm:py-12 text-center">
@@ -151,7 +151,7 @@ export default function CreatorInterviewPage() {
 
   if (step === "preset") {
     return (
-      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
         <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
 
         <section className="gradient-hero relative overflow-hidden px-4 sm:px-6 py-10 sm:py-12 text-center">
@@ -192,7 +192,7 @@ export default function CreatorInterviewPage() {
   if (starting) return <Skeleton />;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
 
       <div className="flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>

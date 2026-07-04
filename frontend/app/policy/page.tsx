@@ -6,6 +6,7 @@ import { getToken } from "@/lib/auth";
 import { resolveTheme, type CharacterTheme } from "@/lib/theme";
 import { useDarkMode } from "@/lib/darkMode";
 import { DarkModeToggle } from "@/components/DarkModeToggle";
+import { PublicHeader } from "@/components/PublicHeader";
 
 export default function PolicyPage() {
   const router = useRouter();
@@ -32,19 +33,7 @@ export default function PolicyPage() {
 
   return (
     <div className="min-h-screen" style={{ background: t.bg, fontFamily: t.fontFamily }}>
-      <header className="sticky top-0 z-20 shadow-md" style={{ background: t.primary }}>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push(loggedIn ? "/" : "/login")} aria-label="戻る"
-              className="text-white/70 hover:text-white text-sm">← 戻る</button>
-            <h1 className="text-lg sm:text-xl font-black text-white">ManaVillage</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
-          </div>
-        </div>
-        <div className="h-1" style={{ background: t.accent }} />
-      </header>
+      <PublicHeader />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <h2 className="text-2xl font-black mb-2" style={{ color: t.primary }}>📄 返金・解約ポリシー</h2>

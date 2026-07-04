@@ -101,7 +101,7 @@ export default function CreatorAnalyticsPage() {
   if (loading || loadingData) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="質問分析ダッシュボード" />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {pending.length > 0 && (

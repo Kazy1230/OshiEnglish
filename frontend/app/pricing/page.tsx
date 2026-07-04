@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getToken } from "@/lib/auth";
-import { AppHeader } from "@/components/AppHeader";
+import { PublicHeader } from "@/components/PublicHeader";
 
 export default function PricingPage() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="learner" title="料金プラン" />
+      <PublicHeader />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col gap-8">
         <div>

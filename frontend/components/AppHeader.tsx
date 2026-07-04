@@ -10,14 +10,14 @@ type Role = "learner" | "creator";
 
 const NAV_ITEMS: Record<Role, { href: string; label: string; badgeKey?: "overdueCount" }[]> = {
   learner: [
+    { href: "/", label: "トップ" },
     { href: "/mypage", label: "マイページ" },
-    { href: "/", label: "コースを探す" },
-    { href: "/creators", label: "クリエイターを探す" },
     { href: "/favorites", label: "お気に入り" },
   ],
   creator: [
     { href: "/dashboard", label: "ダッシュボード" },
     { href: "/creator/courses", label: "作成したコース" },
+    { href: "/studio", label: "スタジオ" },
     { href: "/creator/inbox", label: "受講者対応", badgeKey: "overdueCount" },
   ],
 };
@@ -61,7 +61,7 @@ export function AppHeader({
                   style={{
                     color: "white",
                     fontWeight: active ? 700 : 400,
-                    background: active ? "#a855f7" : "transparent",
+                    background: active ? "var(--accent)" : "transparent",
                   }}
                 >
                   {item.label}

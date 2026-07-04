@@ -57,7 +57,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="クリエイターダッシュボード" overdueCount={overdueCount} />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">

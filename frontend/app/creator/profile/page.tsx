@@ -80,7 +80,7 @@ export default function CreatorProfilePage() {
   if (loading || fetching) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="人格プロファイル" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">

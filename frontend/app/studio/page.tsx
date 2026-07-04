@@ -215,7 +215,7 @@ export default function StudioPage() {
   const stepIdx = progressSteps.findIndex(s => s.key === step);
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="studio-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="AIコンテンツ生成スタジオ" />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">

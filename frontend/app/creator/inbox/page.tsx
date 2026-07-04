@@ -50,7 +50,7 @@ export default function CreatorInboxPage() {
   const overdueCount = questions.filter(q => q.is_overdue).length;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="未回答の質問（Tier B）" overdueCount={overdueCount} />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         {overdueCount > 0 && (

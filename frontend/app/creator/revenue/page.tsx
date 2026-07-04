@@ -20,7 +20,7 @@ export default function CreatorRevenuePage() {
   if (loading || loadingData || !revenue) return <Skeleton />;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="収益ダッシュボード" />
       <main className="max-w-xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-4">
         <div className="card flex flex-col gap-3">
