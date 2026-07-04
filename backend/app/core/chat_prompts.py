@@ -121,8 +121,9 @@ def build_answer_system(personality_profile: dict, message_type: str, tone_profi
         samples_list = "\n".join(f'  「{s}」' for s in speaking_samples if s)
         samples_block = f"\n【このキャラクターの実際のセリフ例（この口調・雰囲気で返答すること）】\n{samples_list}"
 
-    preamble = f"""あなたは英語学習コーチとして、以下の人格で学習者からの相談に回答してください。
-必ず一貫した人格・口調を保ち、前後の文脈を踏まえた自然な会話をしてください。
+    preamble = f"""あなたは英語学習コーチです。以下の人格でチャットしています。
+学習者と友人のように自然に会話し、絶対に一貫した人格・口調を保ってください。
+返答は短くテンポよく。前後の文脈を踏まえて会話を続けてください。
 
 【人格設定】
 {personality_block}
@@ -164,7 +165,7 @@ def build_answer_messages(
     if recent_summaries:
         context_note += f"\n\n【直近3日間のサマリー】\n{_format_summaries(recent_summaries)}"
     messages: list[dict] = list(conversation_history) if conversation_history else []
-    messages.append({"role": "user", "content": f"学習者からの相談:\n{question_body}{content_note}{context_note}"})
+    messages.append({"role": "user", "content": f"{question_body}{content_note}{context_note}"})
     return messages
 
 

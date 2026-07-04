@@ -1,9 +1,10 @@
+import json as json_lib
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.security import get_current_creator_or_admin
 from app.core.llm import generate_text, stream_text, extract_json, LLMError
 from app.core import studio_prompts as prompts
@@ -102,7 +103,112 @@ def generate_tone_profile(
     raise HTTPException(status_code=500, detail=str(last_error))
 
 
-# ── Step 1: コンテンツ相談 ────────────────────────────────────
+# ── 新スタジオ: アイデア提案 ──────────────────────────────────
+
+class IdeasRequest(BaseModel):
+    format: str
+    character_id: int
+    duration_sec: Optional[int] = None
+    char_limit: Optional[int] = None
+
+
+@router.post("/ideas")
+def generate_ideas(data: IdeasRequest, current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    _require_active_creator(db, current_user)
+    character = _get_owned_character(db, data.character_id, current_user)
+    from app.core.character_voice import render_tone_profile
+    tone_block = render_tone_profile(character.tone_profile or {}) or "(口調設定未登録)"
+    format_label = prompts.FORMAT_LABELS.get(data.format, data.format)
+    constraint = prompts.get_format_constraint(data.format, data.duration_sec, data.char_limit)
+    try:
+        text = generate_text(prompts.IDEAS_SYSTEM, prompts.build_ideas_messages(format_label, constraint, tone_block), max_tokens=600, json_mode=True)
+        return extract_json(text)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AnglesRequest(BaseModel):
+    idea_title: str
+    idea_hook: str
+    format: str
+    character_id: int
+
+
+@router.post("/angles")
+def generate_angles(data: AnglesRequest, current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    _require_active_creator(db, current_user)
+    format_label = prompts.FORMAT_LABELS.get(data.format, data.format)
+    try:
+        text = generate_text(prompts.ANGLES_SYSTEM, prompts.build_angles_messages(data.idea_title, data.idea_hook, format_label), max_tokens=400, json_mode=True)
+        return extract_json(text)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class GenerateContentRequest(BaseModel):
+    character_id: int
+    format: str
+    idea: str
+    hook: str
+    duration_sec: Optional[int] = None
+    char_limit: Optional[int] = None
+
+
+@router.post("/generate/content")
+def generate_content(data: GenerateContentRequest, current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    """フォーマット別コンテンツ生成：素材生成→口調変換を1ストリームで返す。"""
+    _require_active_creator(db, current_user)
+    character = _get_owned_character(db, data.character_id, current_user)
+    creator_id = _get_own_creator_profile_id(db, current_user)
+
+    raw_system = prompts.build_format_content_system(data.format, data.duration_sec, data.char_limit)
+    raw_messages = [{"role": "user", "content": f"テーマ: {data.idea}\n切り口・フック: {data.hook}"}]
+
+    voiced_system = prompts.build_voiced_content_system(character)
+
+    draft = ContentDraft(creator_id=creator_id, theme=data.idea, structure=[], target_level=data.format)
+    db.add(draft)
+    db.commit()
+    db.refresh(draft)
+    draft_id = draft.id
+
+    def _stream():
+        raw_chunks: list[str] = []
+        yield "data: {\"phase\": \"raw\"}\n\n"
+        try:
+            for chunk in stream_text(raw_system, raw_messages, max_tokens=1500):
+                raw_chunks.append(chunk)
+                yield f"data: {json_lib.dumps({'delta': chunk, 'phase': 'raw'})}\n\n"
+        except LLMError as e:
+            yield f"data: {json_lib.dumps({'error': str(e)})}\n\n"
+            return
+
+        raw_text = "".join(raw_chunks)
+        yield "data: {\"phase\": \"voiced\"}\n\n"
+        voiced_chunks: list[str] = []
+        try:
+            for chunk in stream_text(voiced_system, prompts.build_voiced_content_messages(raw_text), max_tokens=1500):
+                voiced_chunks.append(chunk)
+                yield f"data: {json_lib.dumps({'delta': chunk, 'phase': 'voiced'})}\n\n"
+        except LLMError as e:
+            yield f"data: {json_lib.dumps({'error': str(e)})}\n\n"
+            return
+
+        voiced_text = "".join(voiced_chunks)
+        with SessionLocal() as gen_db:
+            d = gen_db.query(ContentDraft).filter(ContentDraft.id == draft_id).first()
+            if d:
+                d.raw_content = raw_text
+                d.voiced_content = voiced_text
+                d.character_id = character.id
+                gen_db.commit()
+
+        yield f"data: {json_lib.dumps({'done': True, 'draft_id': draft_id})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+# ── Step 1: コンテンツ相談（旧フロー・後方互換） ─────────────────
 
 class ConsultRequest(BaseModel):
     theme: str

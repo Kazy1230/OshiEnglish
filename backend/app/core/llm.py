@@ -66,7 +66,7 @@ def generate_text(
     return text
 
 
-def stream_text(system_prompt: str, messages: list[dict], max_tokens: int = 2000) -> Iterator[str]:
+def stream_text(system_prompt: str | list[dict], messages: list[dict], max_tokens: int = 2000, model: str | None = None) -> Iterator[str]:
     """DeepSeek APIのSSEストリーミングを使い、テキスト断片を逐次yieldする。
 
     openai公式SDKは依存に含めず、既存のgenerate_text()と同じhttpxベースで
@@ -84,7 +84,7 @@ def stream_text(system_prompt: str, messages: list[dict], max_tokens: int = 2000
                 "content-type": "application/json",
             },
             json={
-                "model": settings.DEEPSEEK_MODEL,
+                "model": model or settings.DEEPSEEK_MODEL,
                 "max_tokens": max_tokens,
                 "messages": [{"role": "system", "content": _flatten_system_prompt(system_prompt)}, *messages],
                 "stream": True,

@@ -2,47 +2,47 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
-type ChatQuestion = {
-  id: number;
+type ChatMessage = {
+  id: number | string;
+  role: "user" | "assistant";
   body: string;
-  status: string;
-  category: string | null;
-  created_at: string;
-  answer: { body: string; answered_by: string; linked_content_url: string | null; is_draft: boolean } | null;
-  frustration_signal?: { topic: string; count: number } | null;
+  is_draft?: boolean;
+  linked_content_url?: string | null;
 };
+
 type Character = { id: number; name: string; avatar_url?: string | null };
 
-const QUICK_ACTIONS: { id: string; label: string; type: "report" | "emotion" | "question" }[] = [
-  { id: "half_done", label: "📖 半分できた", type: "report" },
-  { id: "struggled", label: "😓 今日は難しかった", type: "emotion" },
-  { id: "question", label: "❓ 質問がある", type: "question" },
+const QUICK_ACTIONS = [
+  { id: "half_done", label: "半分できました！", icon: "📖" },
+  { id: "struggled", label: "今日はきつかったです…", icon: "😓" },
+  { id: "done_all", label: "全部終わりました！", icon: "✅" },
 ];
 
 export default function CourseChatPage() {
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.id);
-  const [questions, setQuestions] = useState<ChatQuestion[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [pendingBody, setPendingBody] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [upgradeCta, setUpgradeCta] = useState<{ topic: string } | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [tier, setTier] = useState<"A" | "B" | null>(null);
   const [completedDays, setCompletedDays] = useState(0);
-  const [progressError, setProgressError] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
+  const textInputRef = useRef<HTMLInputElement>(null);
 
-  function load() {
-    return api.getChatHistory(courseId).then(setQuestions);
-  }
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto" });
+    hasScrolledOnceRef.current = true;
+  }, [messages, streamingText]);
 
   useEffect(() => {
     async function init() {
@@ -55,13 +55,40 @@ export default function CourseChatPage() {
         }
         setCharacter(detail.character ?? null);
         setTier(detail.my_subscription?.tier ?? null);
-        await load();
 
-        let hadProgressError = false;
-        const logs = await api.listDayLogs(courseId).catch(() => { hadProgressError = true; return [] as { day_number: number; is_completed: boolean }[]; });
-        const completed = logs.filter((l: { is_completed: boolean }) => l.is_completed).length;
-        setCompletedDays(completed);
-        setProgressError(hadProgressError);
+        const [history, logs] = await Promise.all([
+          api.getChatHistory(courseId),
+          api.listDayLogs(courseId).catch(() => []),
+        ]);
+        setCompletedDays(logs.filter((l: { is_completed: boolean }) => l.is_completed).length);
+
+        const converted: ChatMessage[] = [];
+        for (const q of history) {
+          converted.push({ id: `q-${q.id}`, role: "user", body: q.body });
+          if (q.answer) {
+            converted.push({
+              id: `a-${q.id}`, role: "assistant", body: q.answer.body,
+              is_draft: q.answer.is_draft,
+              linked_content_url: q.answer.linked_content_url,
+            });
+          }
+        }
+
+        if (converted.length === 0) {
+          // キャラクターの挨拶を取得して最初のメッセージとして表示
+          try {
+            const hour = new Date().getHours();
+            const msgType = hour < 17 ? "morning" : "evening";
+            const greet = await api.getTodayMessage(courseId, msgType);
+            if (greet?.message) {
+              converted.push({ id: "greeting", role: "assistant", body: greet.message });
+            }
+          } catch {
+            // 挨拶取得失敗はサイレントスキップ
+          }
+        }
+
+        setMessages(converted);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
       } finally {
@@ -71,27 +98,74 @@ export default function CourseChatPage() {
     init();
   }, [courseId, router]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto" });
-    hasScrolledOnceRef.current = true;
-  }, [questions, pendingBody]);
-
-  async function sendMessage(body: string, restoreOnError: boolean) {
+  async function sendMessage(body: string) {
     if (!body.trim() || sending) return;
     setSending(true);
-    setPendingBody(body);
+    setStreamingText("");
+
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", body };
+    setMessages(prev => [...prev, userMsg]);
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("yt_token") : null;
     try {
-      const result: ChatQuestion = await api.askChatQuestion(courseId, body);
-      setQuestions(prev => [...prev, result]);
-      if (result.frustration_signal) {
-        setUpgradeCta({ topic: result.frustration_signal.topic });
+      const res = await fetch(`${API_BASE}/chat/${courseId}/ask-stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ body }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "エラーが発生しました" }));
+        throw new Error(err.detail || `エラー (${res.status})`);
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (!payload) continue;
+          try {
+            const evt = JSON.parse(payload);
+            if (evt.error) throw new Error(evt.error);
+            if (evt.delta) {
+              accumulated += evt.delta;
+              setStreamingText(accumulated);
+            }
+            if (evt.done) {
+              setStreamingText(null);
+              const assistantMsg: ChatMessage = {
+                id: `a-${evt.question_id}`,
+                role: "assistant",
+                body: evt.answer || accumulated,
+              };
+              setMessages(prev => [...prev, assistantMsg]);
+              if (evt.frustration_signal) setUpgradeCta({ topic: evt.frustration_signal.topic });
+            }
+          } catch (parseErr: unknown) {
+            if (parseErr instanceof Error && parseErr.message !== "Unexpected token") {
+              throw parseErr;
+            }
+          }
+        }
       }
     } catch (err: unknown) {
+      setStreamingText(null);
       toast(err instanceof Error ? err.message : "送信に失敗しました", "error");
-      if (restoreOnError) setDraft(body);
     } finally {
       setSending(false);
-      setPendingBody(null);
     }
   }
 
@@ -100,130 +174,137 @@ export default function CourseChatPage() {
     if (!draft.trim() || sending) return;
     const body = draft;
     setDraft("");
-    await sendMessage(body, true);
+    await sendMessage(body);
   }
 
-  const textInputRef = useRef<HTMLInputElement>(null);
-
-  function handleQuickAction(action: { label: string; type: "report" | "emotion" | "question" }) {
-    if (action.type === "question") {
-      textInputRef.current?.focus();
-      return;
-    }
-    sendMessage(action.label, false);
+  function handleQuickAction(label: string) {
+    sendMessage(label);
   }
 
   if (loading) return <Skeleton className="h-screen w-full" style={{ borderRadius: 0 }} />;
 
+  const avatarEl = character?.avatar_url ? (
+    <img src={character.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+  ) : (
+    <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: "var(--primary)", color: "white" }}>
+      🎭
+    </div>
+  );
+
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+      {/* ヘッダー */}
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
         {character?.avatar_url ? (
-          <img src={character.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-white/40" />
+          <img src={character.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40" />
         ) : (
-          <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl ring-2 ring-white/40" style={{ background: "rgba(255,255,255,0.2)" }}>🎭</div>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg ring-2 ring-white/40" style={{ background: "rgba(255,255,255,0.2)" }}>🎭</div>
         )}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-white">{character?.name ?? "メンター"}</p>
+            <p className="text-sm font-bold text-white truncate">{character?.name ?? "メンター"}</p>
             {tier && (
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.25)", color: "white" }}>
-                Tier {tier} ・ {tier === "B" ? "講師添削つき" : "AIのみ"}
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(255,255,255,0.25)", color: "white" }}>
+                Tier {tier}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1.5">
-            <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }}>
-              <div className="h-1.5 rounded-full" style={{ background: "white", width: `${Math.round((completedDays / 30) * 100)}%` }} />
+          <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }}>
+              <div className="h-1 rounded-full" style={{ background: "white", width: `${Math.round((completedDays / 30) * 100)}%` }} />
             </div>
-            <span className="text-xs whitespace-nowrap text-white/90">{completedDays}/30日</span>
+            <span className="text-xs whitespace-nowrap text-white/80">{completedDays}/30日</span>
           </div>
         </div>
       </div>
 
-      {progressError && (
-        <p className="text-xs text-center mt-2 flex-shrink-0" style={{ color: "var(--muted)" }}>
-          ⚠ 進捗の取得に失敗しました。再読み込みしてください。
-        </p>
-      )}
-
-      <main className="flex-1 min-h-0 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4 overflow-y-auto">
-        {questions.length === 0 && (
-          <p className="text-sm text-center mt-10" style={{ color: "var(--muted)" }}>
-            学習の相談・質問をいつでも送ってください。
-          </p>
-        )}
-        {questions.map(q => (
-          <div key={q.id} className="flex flex-col gap-2">
-            <div className="self-end max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--primary)", color: "white" }}>
-              {q.body}
+      {/* メッセージ一覧 */}
+      <main className="flex-1 min-h-0 max-w-2xl w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 overflow-y-auto">
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            {msg.role === "assistant" && avatarEl}
+            <div
+              className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                msg.role === "user" ? "rounded-br-md" : "rounded-bl-md"
+              }`}
+              style={
+                msg.role === "user"
+                  ? { background: "var(--primary)", color: "white" }
+                  : { background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }
+              }
+            >
+              {msg.is_draft && (
+                <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>講師が確認中（下書き）</p>
+              )}
+              {msg.body}
             </div>
-            {q.answer ? (
-              <div className="self-start max-w-[85%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap" style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }}>
-                {q.answer.is_draft && (
-                  <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>講師の確認中です（下書き）</p>
-                )}
-                {q.answer.body}
-              </div>
-            ) : (
-              <div className="self-start text-xs" style={{ color: "var(--muted)" }}>回答待ち…</div>
-            )}
           </div>
         ))}
-        {pendingBody && (
-          <div className="flex flex-col gap-2">
-            <div className="self-end max-w-[85%] rounded-2xl px-4 py-2 text-sm" style={{ background: "var(--primary)", color: "white" }}>
-              {pendingBody}
-            </div>
-            <div className="self-start flex items-center gap-1 rounded-2xl px-4 py-3" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-              {[0, 1, 2].map(i => (
-                <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--muted)", animationDelay: `${i * 0.15}s` }} />
-              ))}
+
+        {/* ストリーミング中のバブル */}
+        {streamingText !== null && (
+          <div className="flex gap-2 justify-start">
+            {avatarEl}
+            <div
+              className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed"
+              style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }}
+            >
+              {streamingText || (
+                <span className="flex items-center gap-1">
+                  {[0, 1, 2].map(i => (
+                    <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce inline-block" style={{ background: "var(--muted)", animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </span>
+              )}
             </div>
           </div>
         )}
+
         <div ref={bottomRef} />
       </main>
 
+      {/* Tier Bアップグレード提案 */}
       {upgradeCta && (
-        <div className="mx-4 sm:mx-6 mb-3 card flex flex-col gap-2">
+        <div className="mx-4 sm:mx-6 mb-2 card flex flex-col gap-2">
           <p className="text-sm font-bold" style={{ color: "var(--text)" }}>
             「{upgradeCta.topic}」について、先生に直接聞いてみませんか？
           </p>
           <p className="text-xs" style={{ color: "var(--muted)" }}>Tier Bなら先生が明日までに回答します。</p>
           <div className="flex gap-2">
-            <Link href={`/courses/${courseId}`} className="btn-primary flex-1 text-center">先生に聞く → Tier Bを見る</Link>
+            <Link href={`/courses/${courseId}`} className="btn-primary flex-1 text-center">Tier Bを見る →</Link>
             <button onClick={() => setUpgradeCta(null)} className="text-xs underline" style={{ color: "var(--muted)" }}>今はいい</button>
           </div>
         </div>
       )}
 
-      <div className="flex gap-2 px-4 sm:px-6 pt-2 flex-shrink-0 overflow-x-auto" style={{ background: "var(--bg)" }}>
+      {/* クイックアクション */}
+      <div className="flex gap-2 px-4 sm:px-6 pt-1 flex-shrink-0 overflow-x-auto" style={{ background: "var(--bg)" }}>
         {QUICK_ACTIONS.map(action => (
           <button
             key={action.id}
             type="button"
-            onClick={() => handleQuickAction(action)}
+            onClick={() => handleQuickAction(action.label)}
             disabled={sending}
-            className="text-xs whitespace-nowrap px-3 py-1.5 rounded-full disabled:opacity-50"
+            className="text-xs whitespace-nowrap px-3 py-1.5 rounded-full disabled:opacity-40 transition-opacity"
             style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }}
           >
-            {action.label}
+            {action.icon} {action.label}
           </button>
         ))}
       </div>
 
+      {/* 入力フォーム */}
       <form onSubmit={handleSend} className="border-t px-4 sm:px-6 py-3 flex gap-2 flex-shrink-0" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
         <input
           ref={textInputRef}
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          placeholder="質問や相談を入力…"
+          placeholder="メッセージを送る…"
           className="flex-1"
           disabled={sending}
         />
-        <button type="submit" disabled={sending || !draft.trim()} className="btn-primary disabled:opacity-50">
-          {sending ? "送信中…" : "送信"}
+        <button type="submit" disabled={sending || !draft.trim()} className="btn-primary disabled:opacity-40">
+          送信
         </button>
       </form>
     </div>

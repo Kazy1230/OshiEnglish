@@ -1,11 +1,14 @@
+import json as json_lib
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.llm import generate_text, extract_json, LLMError
+from app.core.llm import generate_text, stream_text, extract_json, LLMError
+from app.core.database import SessionLocal
 from app.core.rate_limit import enforce_daily_character_limit, enforce_daily_message_limit
 from app.core import chat_prompts as prompts
 from app.core.config import settings
@@ -323,6 +326,103 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     # Tier A学習者が同一トピックで繰り返し質問している場合、Tier Bアップグレードを提案する（事業検証ポイント①）
     frustration_signal = _detect_frustration(db, current_user.id, course_id, category) if tier == "A" else None
     return _serialize_question(question, frustration_signal)
+
+
+@router.post("/{course_id}/ask-stream")
+def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """チャット回答をSSEストリームで返す。Tier B講師ルート以外に使用。"""
+    course = _get_accessible_course(db, course_id, current_user)
+    if not data.body.strip():
+        raise HTTPException(status_code=400, detail="質問内容を入力してください")
+    if prompts.check_injection(data.body):
+        raise HTTPException(status_code=400, detail="このメッセージは送信できません")
+
+    enforce_daily_message_limit(current_user.id, course_id, limit=30)
+    enforce_daily_character_limit(current_user.id, course_id, len(data.body), limit=DAILY_CHARACTER_LIMIT)
+
+    tier = _get_tier(db, course, current_user)
+    creator_id = course.character.creator_id if course.character else None
+    personality = _get_personality_profile(db, course) or {}
+    tone_profile = (course.character.tone_profile if course.character else None) or {}
+    day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
+    existing_category_names = [
+        c.name for c in db.query(QuestionCategory).filter(QuestionCategory.creator_id == creator_id).all()
+    ] if creator_id else []
+
+    try:
+        classify_raw = generate_text(
+            prompts.CLASSIFY_SYSTEM,
+            prompts.build_classify_messages(data.body, existing_category_names),
+            max_tokens=200, model=settings.DEEPSEEK_MODEL_LITE, json_mode=True,
+        )
+        classified = extract_json(classify_raw)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"質問の分類に失敗しました: {e}") from e
+
+    category = _resolve_category(db, creator_id, classified.get("category_name", ""))
+    message_type = classified.get("message_type", "content")
+
+    recent_questions = db.query(Question).filter(
+        Question.user_id == current_user.id, Question.course_id == course_id,
+    ).order_by(Question.created_at.desc()).limit(5).all()
+    recent_questions = list(reversed(recent_questions))
+    conversation_history: list[dict] = []
+    for rq in recent_questions:
+        conversation_history.append({"role": "user", "content": rq.body})
+        if rq.answers:
+            conversation_history.append({"role": "assistant", "content": rq.answers[-1].body})
+
+    linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
+
+    question = Question(
+        user_id=current_user.id, course_id=course_id, tier=tier, body=data.body,
+        category_id=category.id if category else None, status="pending",
+    )
+    db.add(question)
+    db.commit()
+    db.refresh(question)
+    question_id = question.id
+
+    system_prompt = prompts.build_answer_system(personality, message_type, tone_profile)
+    messages_list = prompts.build_answer_messages(
+        data.body, linked_content.title if linked_content else None,
+        linked_content.url if linked_content else None,
+        today_tasks, recent_summaries, conversation_history,
+    )
+    answer_model = prompts.select_answer_model(message_type, data.body, settings.DEEPSEEK_MODEL_LITE, settings.DEEPSEEK_MODEL)
+    user_id = current_user.id
+    is_daily_close = prompts.is_daily_close_signal(data.body)
+    category_id_for_frustration = category.id if (category and category.status == "approved" and tier == "A") else None
+
+    def generate():
+        chunks: list[str] = []
+        try:
+            for chunk in stream_text(system_prompt, messages_list, max_tokens=400, model=answer_model):
+                chunks.append(chunk)
+                yield f"data: {json_lib.dumps({'delta': chunk})}\n\n"
+        except LLMError as e:
+            yield f"data: {json_lib.dumps({'error': str(e)})}\n\n"
+            return
+
+        full_text = "".join(chunks)
+        frustration_signal = None
+        with SessionLocal() as gen_db:
+            q = gen_db.query(Question).filter(Question.id == question_id).first()
+            if q:
+                q.status = "answered_by_ai"
+                gen_db.add(Answer(question_id=question_id, answered_by="ai", body=full_text, is_draft=False,
+                                  linked_content_url=linked_content.url if linked_content else None))
+                gen_db.commit()
+            if is_daily_close:
+                _generate_and_save_daily_summary(gen_db, user_id, course_id, day_number)
+            if category_id_for_frustration:
+                cat = gen_db.query(QuestionCategory).filter(QuestionCategory.id == category_id_for_frustration).first()
+                if cat:
+                    frustration_signal = _detect_frustration(gen_db, user_id, course_id, cat)
+
+        yield f"data: {json_lib.dumps({'done': True, 'question_id': question_id, 'answer': full_text, 'frustration_signal': frustration_signal})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/{course_id}/history")

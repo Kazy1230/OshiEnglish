@@ -68,6 +68,87 @@ def build_consult_messages(theme: str) -> list[dict]:
     return [{"role": "user", "content": f"テーマ: {theme}"}]
 
 
+# ── 新スタジオ: アイデア提案 ─────────────────────────────────────
+
+IDEAS_SYSTEM = """あなたは英語学習コンテンツの企画・ネタ提案専門家です。
+クリエイターの口調・人格プロファイルと選択したコンテンツフォーマットをもとに、
+今すぐ作れる英語学習ネタを6個提案してください。
+
+条件:
+- 英語学習者が「これ悩んでた」「これ知りたかった」と感じる具体的テーマ
+- クリエイターの個性・強みが自然に出る切り口
+- 指定フォーマットの尺・文字数で完結できるスコープ
+
+JSON形式のみで返してください:
+{"ideas": [{"title": "ネタタイトル（20文字以内）", "hook": "冒頭の掴み文（40文字以内）", "why": "なぜ刺さるか（25文字以内）"}]}"""
+
+
+def build_ideas_messages(format_label: str, format_constraint: str, tone_block: str) -> list[dict]:
+    content = (
+        f"コンテンツフォーマット: {format_label}\n"
+        f"制約: {format_constraint}\n\n"
+        f"クリエイターの口調・人格:\n{tone_block}"
+    )
+    return [{"role": "user", "content": content}]
+
+
+# ── 新スタジオ: 切り口提案 ───────────────────────────────────────
+
+ANGLES_SYSTEM = """選んだネタに対して、3つの異なる「切り口（角度）」を提案してください。
+同じテーマでも、誰に向けるか・どんな感情を引き出すか・どこから入るかで全く別のコンテンツになります。
+
+JSON形式のみで返してください:
+{"angles": [{"label": "切り口ラベル（15文字以内）", "hook": "この切り口での冒頭フック文（50文字以内）", "why": "なぜ効くか（25文字以内）"}]}"""
+
+
+def build_angles_messages(idea_title: str, idea_hook: str, format_label: str) -> list[dict]:
+    return [{"role": "user", "content": f"ネタ: {idea_title}\n初期フック: {idea_hook}\nフォーマット: {format_label}"}]
+
+
+# ── 新スタジオ: フォーマット別コンテンツ生成 ─────────────────────
+
+_FORMAT_CONSTRAINTS: dict[str, str] = {
+    "x": "140文字以内（厳守）。改行は1〜2回。ハッシュタグは入れない。",
+    "threads": "500文字程度。段落分けして読みやすく。",
+    "instagram_post": "1000〜1500文字。ハッシュタグは末尾に5〜8個。絵文字を適度に使用。",
+    "instagram_reel": "話し言葉で{duration}秒分。冒頭3秒でフック→本題→まとめの構成。",
+    "youtube_short": "話し言葉で{duration}秒以内。冒頭で結論から入る→理由→まとめ。",
+    "youtube": "{duration}分の動画台本。イントロ（30秒）→本編→まとめ→CTA構成。",
+}
+
+FORMAT_LABELS: dict[str, str] = {
+    "x": "X（ツイート）",
+    "threads": "Threads",
+    "instagram_post": "インスタ投稿",
+    "instagram_reel": "インスタReels",
+    "youtube_short": "YouTubeショート",
+    "youtube": "YouTube動画",
+}
+
+
+def get_format_constraint(format_key: str, duration_sec: int | None, char_limit: int | None) -> str:
+    template = _FORMAT_CONSTRAINTS.get(format_key, "")
+    if "{duration}" in template:
+        if format_key == "youtube":
+            val = f"{(duration_sec or 480) // 60}"
+        else:
+            val = str(duration_sec or 60)
+        return template.replace("{duration}", val)
+    if char_limit:
+        template = template.replace("140", str(char_limit)).replace("500", str(char_limit)).replace("1000〜1500", f"{char_limit}")
+    return template
+
+
+def build_format_content_system(format_key: str, duration_sec: int | None, char_limit: int | None) -> str:
+    constraint = get_format_constraint(format_key, duration_sec, char_limit)
+    return (
+        f"あなたは英語教育の専門家です。口調・キャラクター性は一切加えず、"
+        f"事実と解説のみをプレーンな文章で書いてください。\n\n"
+        f"出力フォーマット: {FORMAT_LABELS.get(format_key, format_key)}\n"
+        f"制約: {constraint}"
+    )
+
+
 RAW_CONTENT_SYSTEM = """あなたは英語教育の専門家です。
 与えられたテーマと構成に従い、正確でわかりやすい英語学習教材を作成してください。
 口調・キャラクター性は一切加えず、事実と解説のみをプレーンな文章で書いてください。"""

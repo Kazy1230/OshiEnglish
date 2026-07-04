@@ -25,31 +25,26 @@ type CourseDetail = {
   suspension_reason?: string | null;
   my_subscription?: { id: number; tier: "A" | "B"; status: string } | null;
 };
-
 type AdjustedTask = { type: string; minutes: number; carryover?: boolean };
 type Day = { day: number; week_number: number; theme: string | null; is_rest_day: boolean };
 type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null; personalize_reason?: string | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
 
 const TASK_TYPE_LABEL: Record<string, string> = {
-  vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
+  vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認",
+  reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
 };
-
 const TASK_TYPE_ICON: Record<string, string> = {
   vocabulary: "📖", listening: "🎧", grammar: "📐", reading: "📰", shadowing: "🗣️", practice: "✏️",
 };
-
 const REST_DAY_TIPS = [
-  "お気に入りの音楽を聴いてリラックス！",
+  "音楽を聴いてリラックス！英語のものなら尚よし。",
   "今日学んだことを声に出して振り返ってみよう。",
   "しっかり休んで、明日また気持ちよく再開しよう。",
-  "散歩や軽い運動で気分転換するのもおすすめです。",
-  "好きな海外ドラマや動画を字幕付きで観てみよう。",
+  "散歩しながら英語のポッドキャストを流してみよう。",
+  "好きな海外ドラマを字幕付きで気楽に観てみよう。",
 ];
-
-function restDayTip(day: number): string {
-  return REST_DAY_TIPS[day % REST_DAY_TIPS.length];
-}
+function restDayTip(day: number) { return REST_DAY_TIPS[day % REST_DAY_TIPS.length]; }
 
 export default function CourseDetailPage() {
   const params = useParams();
@@ -65,9 +60,6 @@ export default function CourseDetailPage() {
   const [canceling, setCanceling] = useState(false);
   const [changingTier, setChangingTier] = useState(false);
   const [showContractDetail, setShowContractDetail] = useState(false);
-  const [showLessonDrawer, setShowLessonDrawer] = useState(false);
-
-  // 30日コース用：今日のタスク・カレンダー
   const [days, setDays] = useState<Day[]>([]);
   const [learnerTasksByDay, setLearnerTasksByDay] = useState<Record<number, AdjustedTask[]>>({});
   const [layer3ReasonByDay, setLayer3ReasonByDay] = useState<Record<number, string>>({});
@@ -76,6 +68,7 @@ export default function CourseDetailPage() {
   const [checkedTaskTypes, setCheckedTaskTypes] = useState<Set<string>>(new Set());
   const [reporting, setReporting] = useState(false);
   const [reportedDay, setReportedDay] = useState<number | null>(null);
+  const [memo, setMemo] = useState("");
 
   function load() {
     return api.getCourseDetail(courseId).then(async (c: CourseDetail) => {
@@ -124,9 +117,7 @@ export default function CourseDetailPage() {
       setCompletedLessonIds(prev => new Set(prev).add(lessonId));
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "完了の記録に失敗しました", "error");
-    } finally {
-      setCompleting(false);
-    }
+    } finally { setCompleting(false); }
   }
 
   async function handlePurchase() {
@@ -134,20 +125,15 @@ export default function CourseDetailPage() {
     setPurchasing(true);
     try {
       const res = await api.checkoutCourse(courseId);
-      if (!res.client_secret) {
-        router.push(`/purchase-complete?course_id=${courseId}`);
-        return;
-      }
+      if (!res.client_secret) { router.push(`/purchase-complete?course_id=${courseId}`); return; }
       setCheckout({ clientSecret: res.client_secret, isSubscription: false });
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");
-    } finally {
-      setPurchasing(false);
-    }
+    } finally { setPurchasing(false); }
   }
 
   async function handleCancelSubscription(subscriptionId: number) {
-    if (!confirm("このサブスクリプションを解約しますか？解約後は即時利用できなくなります。")) return;
+    if (!confirm("このサブスクリプションを解約しますか？")) return;
     setCanceling(true);
     try {
       await api.cancelSubscription(subscriptionId);
@@ -155,13 +141,11 @@ export default function CourseDetailPage() {
       await load();
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "解約に失敗しました", "error");
-    } finally {
-      setCanceling(false);
-    }
+    } finally { setCanceling(false); }
   }
 
   async function handleChangeTier(subscriptionId: number, tier: "A" | "B") {
-    if (!confirm(`Tier ${tier}に変更しますか？次回請求から新しい料金が適用されます。`)) return;
+    if (!confirm(`Tier ${tier}に変更しますか？次回請求から適用されます。`)) return;
     setChangingTier(true);
     try {
       await api.changeSubscriptionTier(subscriptionId, tier);
@@ -169,9 +153,7 @@ export default function CourseDetailPage() {
       await load();
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "Tier変更に失敗しました", "error");
-    } finally {
-      setChangingTier(false);
-    }
+    } finally { setChangingTier(false); }
   }
 
   async function handleSubscribe(tier: "A" | "B") {
@@ -179,16 +161,11 @@ export default function CourseDetailPage() {
     setPurchasing(true);
     try {
       const res = await api.subscribeToCourse(courseId, tier);
-      if (!res.client_secret) {
-        router.push(`/purchase-complete?course_id=${courseId}`);
-        return;
-      }
+      if (!res.client_secret) { router.push(`/purchase-complete?course_id=${courseId}`); return; }
       setCheckout({ clientSecret: res.client_secret, isSubscription: true });
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "決済の開始に失敗しました", "error");
-    } finally {
-      setPurchasing(false);
-    }
+    } finally { setPurchasing(false); }
   }
 
   async function handleReport() {
@@ -206,8 +183,7 @@ export default function CourseDetailPage() {
   function toggleTaskType(type: string) {
     setCheckedTaskTypes(prev => {
       const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
+      if (next.has(type)) next.delete(type); else next.add(type);
       return next;
     });
   }
@@ -217,463 +193,520 @@ export default function CourseDetailPage() {
     setReporting(true);
     try {
       const completed = checkedTaskTypes.size > 0 ? Array.from(checkedTaskTypes) : null;
-      await api.completeDayLog(courseId, currentDay, undefined, completed ?? undefined);
-      setLogs(prev => ({ ...prev, [currentDay]: { day_number: currentDay, is_completed: true, completed_at: new Date().toISOString(), memo: null } }));
+      await api.completeDayLog(courseId, currentDay, memo || undefined, completed ?? undefined);
+      setLogs(prev => ({ ...prev, [currentDay]: { day_number: currentDay, is_completed: true, completed_at: new Date().toISOString(), memo: memo || null } }));
       setReportedDay(currentDay);
-      toast("今日の学習を報告しました！", "success");
+      setMemo("");
+      toast("お疲れさまでした！今日の学習を記録しました ✨", "success");
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "報告に失敗しました", "error");
-    } finally {
-      setReporting(false);
-    }
+    } finally { setReporting(false); }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen px-4 sm:px-6 py-8 max-w-4xl mx-auto flex flex-col gap-4" style={{ background: "var(--bg)" }}>
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-8 w-1/2" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <Skeleton className="h-72 w-full" style={{ borderRadius: 0 }} />
+        <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-4">
+          <Skeleton className="h-10 w-3/4" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
       </div>
     );
   }
+
   if (!course) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
         <div className="card max-w-sm text-center flex flex-col gap-3">
-          <p className="text-3xl">🔍</p>
-          <p className="text-sm font-bold" style={{ color: "var(--text)" }}>コースが見つかりません</p>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>削除された、または非公開になった可能性があります。</p>
+          <p className="text-4xl">🔍</p>
+          <p className="font-bold" style={{ color: "var(--text)" }}>コースが見つかりません</p>
+          <p className="text-sm" style={{ color: "var(--muted)" }}>削除または非公開になった可能性があります。</p>
           <Link href="/" className="btn-primary self-center">コースを探す</Link>
         </div>
       </div>
     );
   }
 
-  const activeLesson = course.lessons.find(l => l.id === activeLessonId) ?? course.lessons[0];
-  const unlocked = course.is_purchased;
-  const completedLessonCount = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
-
+  const unlocked = course.is_purchased || course.is_free;
   const completedCount = Object.values(logs).filter(l => l.is_completed).length;
   const derivedDay = Math.min(completedCount + 1, 30);
-  // 報告直後は翌日に飛ばさず、完了したその日を表示し続ける
   const currentDay = reportedDay ?? derivedDay;
   const today = days.find(d => d.day === currentDay) ?? null;
   const todayTasks = learnerTasksByDay[currentDay] ?? [];
   const todayLog = logs[currentDay] ?? null;
-
-  const completedWithDates = Object.values(logs).filter(l => l.is_completed && l.completed_at);
-  let paceBadge: { text: string; tone: "good" | "neutral" } | null = null;
-  if (completedWithDates.length >= 2) {
-    const firstAt = new Date(Math.min(...completedWithDates.map(l => new Date(l.completed_at!).getTime())));
-    const daysSinceFirst = Math.max(1, (Date.now() - firstAt.getTime()) / 86400000);
-    const avgPace = daysSinceFirst / completedCount;
-    if (avgPace <= 1.1) paceBadge = { text: "🔥 いいペースで進んでいます！", tone: "good" };
-    else if (avgPace >= 1.6) paceBadge = { text: "ゆっくりペースです。今日から少しずつ取り戻しましょう", tone: "neutral" };
-  }
-
+  const completedLessonCount = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
+  const progressPct = days.length > 0 ? Math.round((completedCount / 30) * 100) : 0;
   const weeks: Day[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  const totalTaskMinutes = todayTasks.reduce((s, t) => s + t.minutes, 0);
 
-  const contractCard = (course.tier_a_price || course.tier_b_price) ? (
-    <div className="card flex flex-col gap-3">
-      {unlocked ? (
-        <>
-          <button onClick={() => setShowContractDetail(v => !v)} className="flex items-center justify-between gap-2 w-full text-left">
-            <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>
-              ✅ {course.my_subscription ? `Tier ${course.my_subscription.tier} 契約中` : "購入済み"}
+  return (
+    <div style={{ background: "var(--bg)" }}>
+      {/* ===== HERO ===== */}
+      <div className="relative overflow-hidden" style={{ minHeight: 280 }}>
+        {course.thumbnail_url ? (
+          <img src={course.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }} />
+        )}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.72) 100%)" }} />
+
+        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 pt-10 pb-16 flex flex-col gap-3">
+          {course.category && (
+            <span className="self-start text-xs font-bold px-3 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.18)", color: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}>
+              {course.category}
             </span>
-            <span className="text-xs" style={{ color: "var(--muted)" }}>{showContractDetail ? "契約情報を閉じる ▲" : "契約情報を見る ▼"}</span>
-          </button>
-          {showContractDetail && (
-            <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-              {course.my_subscription && (() => {
-                const otherTier = course.my_subscription.tier === "A" ? "B" : "A";
-                const otherTierPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
-                return otherTierPrice ? (
-                  <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
-                    className="text-xs underline self-start disabled:opacity-50" style={{ color: "var(--accent)" }}>
-                    Tier {otherTier}に変更する
-                  </button>
-                ) : null;
-              })()}
-              {course.my_subscription && (
-                <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
-                  className="text-xs underline self-start disabled:opacity-50" style={{ color: "var(--muted)" }}>
-                  解約する
-                </button>
-              )}
-            </div>
           )}
-        </>
-      ) : course.my_subscription?.status === "incomplete" ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm" style={{ color: "var(--muted)" }}>決済処理中です。少し時間をおいて再度ご確認ください。</p>
-          <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
-            className="text-xs underline self-start disabled:opacity-50" style={{ color: "var(--muted)" }}>
-            {canceling ? "処理中…" : "キャンセルしてやり直す"}
-          </button>
-        </div>
-      ) : (
-        <>
-          <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>月額プランを選択してください</p>
-          <div className="flex flex-col gap-3">
-            {course.tier_a_price && (
-              <div className="border rounded-lg p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
-                <p className="text-xs font-bold" style={{ color: "var(--text)" }}>Tier A（AIのみ）</p>
-                <p className="font-black" style={{ color: "var(--accent)" }}>¥{course.tier_a_price.toLocaleString()}/月</p>
-                <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="btn-primary disabled:opacity-50">
-                  {purchasing ? "準備中…" : "Tier Aで始める"}
-                </button>
-              </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-white leading-snug" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>
+            {course.title}
+          </h1>
+          <div className="flex items-center gap-2 mt-1">
+            {course.character.avatar_url ? (
+              <img src={course.character.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover ring-2 ring-white/60" />
+            ) : (
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm ring-2 ring-white/60" style={{ background: "rgba(255,255,255,0.2)" }}>🎭</div>
             )}
-            {course.tier_b_price && (
-              <div className="border rounded-lg p-3 flex flex-col gap-2" style={{ borderColor: "var(--border)" }}>
-                <p className="text-xs font-bold" style={{ color: "var(--text)" }}>Tier B（AI＋クリエイター添削）</p>
-                <p className="font-black" style={{ color: "var(--accent)" }}>¥{course.tier_b_price.toLocaleString()}/月</p>
-                <button onClick={() => handleSubscribe("B")} disabled={purchasing} className="btn-primary disabled:opacity-50">
-                  {purchasing ? "準備中…" : "Tier Bで始める"}
-                </button>
-              </div>
+            <span className="text-sm font-bold text-white/90">{course.character.name}</span>
+            {course.character.creator_id && (
+              <Link href={`/creators/${course.character.creator_id}`} className="text-xs text-white/60 underline">クリエイターページ</Link>
             )}
           </div>
-        </>
-      )}
-    </div>
-  ) : (
-    <div className="card flex flex-col gap-2">
-      <p className="font-black text-lg" style={{ color: "var(--accent)" }}>
-        {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
-      </p>
-      {unlocked ? (
-        <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 購入済み</span>
-      ) : course.is_free ? (
-        <span className="text-sm" style={{ color: "var(--muted)" }}>無料で閲覧できます</span>
-      ) : (
-        <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">
-          {purchasing ? "準備中…" : "購入する"}
-        </button>
-      )}
-    </div>
-  );
 
-  const infoCard = (
-    <div className="card flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        {course.character.avatar_url ? (
-          <img src={course.character.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
-        ) : (
-          <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
-        )}
-        <div className="flex-1">
-          {course.category && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{course.category}</span>}
-          <h1 className="text-xl font-black mt-2" style={{ color: "var(--primary)" }}>{course.title}</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>{course.character.name}</p>
-          {course.character.creator_id && (
-            <Link href={`/creators/${course.character.creator_id}`} className="text-xs underline" style={{ color: "var(--accent)" }}>クリエイターページへ</Link>
+          {/* 購入済みバッジ */}
+          {unlocked && (
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
+              {course.my_subscription ? (
+                <span className="text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.18)", color: "white", backdropFilter: "blur(8px)" }}>
+                  ✅ Tier {course.my_subscription.tier} 受講中
+                </span>
+              ) : (
+                <span className="text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.18)", color: "white", backdropFilter: "blur(8px)" }}>
+                  ✅ 受講中
+                </span>
+              )}
+              <Link href={`/courses/${courseId}/chat`} className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.18)", color: "white", backdropFilter: "blur(8px)" }}>
+                💬 メンターにチャット
+              </Link>
+              <Link href={`/courses/${courseId}/reviews`} className="text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.18)", color: "white", backdropFilter: "blur(8px)" }}>
+                📊 レビュー
+              </Link>
+            </div>
           )}
         </div>
       </div>
-      {course.description && <p className="text-sm" style={{ color: "var(--text)" }}>{course.description}</p>}
-      {(unlocked || course.is_free) && (
-        <div className="flex gap-2 flex-wrap pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-          <Link href={`/courses/${courseId}/chat`} className="btn-ghost text-xs">💬 チャット</Link>
-          <Link href={`/courses/${courseId}/reviews`} className="btn-ghost text-xs">📈 レビュー</Link>
-        </div>
-      )}
-      <button onClick={handleReport} className="text-xs underline self-start" style={{ color: "var(--muted)" }}>このコースを通報する</button>
-    </div>
-  );
 
-  return (
-    <div>
-      {course.thumbnail_url && (
-        <div className="w-full max-h-64 overflow-hidden">
-          <img src={course.thumbnail_url} alt="" className="w-full h-64 object-cover" />
+      {/* ===== 停止バナー ===== */}
+      {course.is_suspended && (
+        <div className="mx-4 sm:mx-6 mt-4 max-w-2xl mx-auto px-4 py-3 rounded-xl border-2 flex gap-2" style={{ borderColor: "#e53e3e", background: "color-mix(in srgb, #e53e3e 8%, var(--card))" }}>
+          <span>⚠️</span>
+          <div>
+            <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>このコースは現在停止されています</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text)" }}>{course.suspension_reason || "詳しくはサポートにお問い合わせください。"}</p>
+          </div>
         </div>
       )}
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
-        {course.is_suspended && (
-          <div className="card border-2 flex flex-col gap-1" style={{ borderColor: "#e53e3e", background: "color-mix(in srgb, #e53e3e 8%, var(--card))" }}>
-            <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>⚠️ このコースは現在停止されています</p>
-            <p className="text-sm" style={{ color: "var(--text)" }}>
-              {course.suspension_reason || "運営により一時的に停止されています。詳しくはサポートにお問い合わせください。"}
-            </p>
-          </div>
-        )}
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:items-start">
-          <div className="sm:col-span-2">{infoCard}</div>
-          <div className="sm:col-span-1">{contractCard}</div>
-        </div>
-
-        {unlocked && course.lessons.length > 0 && (
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
-              <div className="h-2 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedLessonCount / course.lessons.length) * 100)}%` }} />
-            </div>
-            <span className="text-xs font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedLessonCount}/{course.lessons.length} レッスン完了</span>
-          </div>
-        )}
-
-        {/* 30日コース：今日のタスク＋カレンダー */}
-        {(unlocked || course.is_free) && course.has_days && (
+        {/* ===== 未購入：説明 + 購入CTA ===== */}
+        {!unlocked && (
           <>
-            {!course.has_diagnosis ? (
-              <div className="card border-2 flex flex-col gap-3" style={{ borderColor: "var(--accent)" }}>
-                <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>🚀 まずはDay1診断から始めましょう</p>
-                <p className="text-sm" style={{ color: "var(--text)" }}>診断に答えると、あなた専用の30日プランが作られます。</p>
-                <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary self-start">Day1診断を始める</Link>
+            {course.description && (
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>{course.description}</p>
+            )}
+
+            {(course.tier_a_price || course.tier_b_price) ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-bold" style={{ color: "var(--muted)" }}>プランを選んで始める</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {course.tier_a_price && (
+                    <div className="card flex flex-col gap-3 p-5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--primary) 10%, transparent)", color: "var(--primary)" }}>Tier A</span>
+                        <span className="text-xs" style={{ color: "var(--muted)" }}>メンター相談つき</span>
+                      </div>
+                      <p className="text-2xl font-black" style={{ color: "var(--primary)" }}>¥{course.tier_a_price.toLocaleString()}<span className="text-sm font-bold text-muted">/月</span></p>
+                      <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--muted)" }}>
+                        <li>✓ 30日パーソナライズコース</li>
+                        <li>✓ メンターとのチャット（無制限）</li>
+                      </ul>
+                      <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="btn-primary w-full disabled:opacity-50">
+                        {purchasing ? "準備中…" : "Tier Aで始める"}
+                      </button>
+                    </div>
+                  )}
+                  {course.tier_b_price && (
+                    <div className="card flex flex-col gap-3 p-5" style={{ border: "2px solid var(--accent)" }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>Tier B</span>
+                        <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>おすすめ</span>
+                      </div>
+                      <p className="text-2xl font-black" style={{ color: "var(--accent)" }}>¥{course.tier_b_price.toLocaleString()}<span className="text-sm font-bold" style={{ color: "var(--muted)" }}>/月</span></p>
+                      <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--muted)" }}>
+                        <li>✓ 30日パーソナライズコース</li>
+                        <li>✓ メンターとのチャット（無制限）</li>
+                        <li>✓ <strong style={{ color: "var(--accent)" }}>クリエイター直接添削（1日1回）</strong></li>
+                      </ul>
+                      <button onClick={() => handleSubscribe("B")} disabled={purchasing} className="btn-primary w-full disabled:opacity-50" style={{ background: "var(--accent)" }}>
+                        {purchasing ? "準備中…" : "Tier Bで始める"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <>
-                {today && (
-                  <div className="card shadow-soft overflow-hidden p-0" style={{ borderColor: "var(--accent)" }}>
-                    <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">🔥</span>
-                        <p className="text-sm font-black text-white">今日のタスク</p>
-                      </div>
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.22)", color: "white" }}>
-                        Day {currentDay}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col gap-4 p-5">
-                      {layer3ReasonByDay[currentDay] && (
-                        <p className="text-xs px-2 py-1 rounded-lg" style={{ background: "rgba(168,85,247,0.1)", color: "var(--accent)" }}>
-                          ✦ 前日の報告で調整済み：{layer3ReasonByDay[currentDay]}
-                        </p>
-                      )}
-                      {today.is_rest_day ? (
-                        <div className="flex items-center gap-3 py-2">
-                          <span className="text-2xl">🌿</span>
-                          <div>
-                            <p className="text-sm font-bold" style={{ color: "var(--text)" }}>今日は休息日です</p>
-                            <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{restDayTip(currentDay)}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {todayTasks.length > 0 ? (
-                            <ul className="flex flex-col gap-2">
-                              {(() => {
-                                // テーマ文字列「単語Ch1-4+模試2大5」のように複数項目が+で連結されている場合、
-                                // 各タスクに対応する項目をインデックスで割り当てる（件数が一致しない場合は全体をそのまま使う）
-                                const themeParts = today.theme ? today.theme.split("+").map(s => s.trim()) : [];
-                                const useThemeParts = themeParts.length === todayTasks.length;
-                                return todayTasks.map((t, i) => {
-                                  const isChecked = checkedTaskTypes.has(t.type);
-                                  const label = useThemeParts
-                                    ? themeParts[i]
-                                    : (today.theme || TASK_TYPE_LABEL[t.type] || t.type);
-                                  return (
-                                    <li key={i}>
-                                      <label
-                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
-                                        style={{
-                                          background: isChecked ? "color-mix(in srgb, var(--accent) 12%, var(--card))" : "var(--bg)",
-                                          border: `1px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
-                                        }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={isChecked}
-                                          onChange={() => toggleTaskType(t.type)}
-                                          disabled={!!todayLog?.is_completed}
-                                          className="flex-shrink-0"
-                                          style={{ width: "1rem", height: "1rem" }}
-                                        />
-                                        <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>
-                                          📌 {label}
-                                        </span>
-                                        {t.carryover && (
-                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>繰越</span>
-                                        )}
-                                        <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--example-bg, #eee)", color: "var(--muted)" }}>
-                                          {t.minutes}分
-                                        </span>
-                                      </label>
-                                    </li>
-                                  );
-                                });
-                              })()}
-                            </ul>
-                          ) : (
-                            <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。復習をしましょう！</p>
-                          )}
-                        </>
-                      )}
-
-                      {!today.is_rest_day && currentDay === 30 && (
-                        <p className="text-xs" style={{ color: "var(--muted)" }}>
-                          最終日のため、未完了タスクは翌日に繰り越せません。今日中の完了を目指しましょう。
-                        </p>
-                      )}
-
-                      {!today.is_rest_day && (
-                        <div className="pt-3 flex flex-wrap items-center justify-between gap-3" style={{ borderTop: "1px solid var(--border)" }}>
-                          {todayLog?.is_completed ? (
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ Day {currentDay} 完了！</span>
-                              {reportedDay !== null && derivedDay > currentDay && (
-                                <button onClick={() => setReportedDay(null)} className="btn-ghost text-xs">
-                                  Day {derivedDay} のタスクを確認する →
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleReportToday(currentDay)}
-                              disabled={reporting}
-                              className="btn-primary disabled:opacity-50"
-                            >
-                              {reporting ? "報告中…" : "今日の学習を報告する"}
-                            </button>
-                          )}
-                          <Link href={`/courses/${courseId}/chat`} className="text-xs font-bold underline" style={{ color: "var(--accent)" }}>チャットで相談する →</Link>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+              <div className="card p-5 flex items-center justify-between gap-4">
+                <p className="text-2xl font-black" style={{ color: "var(--primary)" }}>
+                  {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
+                </p>
+                {course.is_free ? (
+                  <span className="text-sm" style={{ color: "var(--muted)" }}>無料で受講できます</span>
+                ) : (
+                  <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">
+                    {purchasing ? "準備中…" : "購入して始める"}
+                  </button>
                 )}
+              </div>
+            )}
 
-                {days.length > 0 && (
-                  <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
-                        <div className="h-2 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedCount / 30) * 100)}%` }} />
-                      </div>
-                      <span className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedCount}/30日 完了</span>
+            {course.lessons.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>カリキュラム（{course.lessons.length}レッスン）</p>
+                <div className="flex flex-col gap-1.5">
+                  {course.lessons.slice(0, 5).map(l => (
+                    <div key={l.id} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+                      <span className="text-base">{l.is_preview ? "🔓" : "🔒"}</span>
+                      <span className="text-sm flex-1" style={{ color: "var(--text)" }}>{l.order}. {l.title}</span>
+                      {l.is_preview && <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>無料</span>}
                     </div>
-
-                    {paceBadge && (
-                      <p className="text-xs font-bold px-3 py-2 rounded-lg self-start" style={{
-                        background: paceBadge.tone === "good" ? "var(--accent)" : "var(--example-bg, #eee)",
-                        color: paceBadge.tone === "good" ? "white" : "var(--muted)",
-                      }}>
-                        {paceBadge.text}
-                      </p>
-                    )}
-
-                    {weeks.map((week, wi) => (
-                      <div key={wi} className="flex flex-col gap-1.5">
-                        <p className="text-[11px] font-bold" style={{ color: "var(--muted)" }}>第{wi + 1}週</p>
-                        <div className="grid grid-cols-7 gap-2">
-                          {week.map(d => {
-                            const log = logs[d.day];
-                            const isCompleted = !!log?.is_completed;
-                            const isToday = d.day === currentDay;
-                            return (
-                              <button
-                                key={d.day}
-                                onClick={() => setSelectedDay(d)}
-                                className="aspect-square flex flex-col items-center justify-center text-xs font-bold transition-all hover:shadow-md"
-                                style={{
-                                  borderRadius: isCompleted ? "999px" : "10px",
-                                  background: isCompleted ? "var(--accent)" : isToday ? "var(--primary)" : d.is_rest_day ? "var(--example-bg, #eee)" : "var(--card)",
-                                  color: isCompleted || isToday ? "white" : d.is_rest_day ? "var(--muted)" : "var(--text)",
-                                  border: isCompleted || isToday || d.is_rest_day ? "none" : "1px solid var(--border)",
-                                  boxShadow: isCompleted ? "0 2px 8px rgba(0,0,0,0.18)" : undefined,
-                                  transform: isCompleted ? "scale(1.04)" : undefined,
-                                }}
-                              >
-                                {isCompleted ? <span className="text-base leading-none">✓</span> : <span>Day{d.day}</span>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
+                  ))}
+                  {course.lessons.length > 5 && (
+                    <p className="text-xs text-center py-2" style={{ color: "var(--muted)" }}>…他 {course.lessons.length - 5} レッスン</p>
+                  )}
+                </div>
+              </div>
             )}
           </>
         )}
 
-        {/* 30日コースでない場合：従来のレッスン閲覧UI */}
-        {!course.has_days && (
-          <>
-            {course.lessons.length > 0 && (
-              <button onClick={() => setShowLessonDrawer(true)} className="sm:hidden btn-ghost text-sm flex items-center justify-between">
-                <span>📚 レッスン一覧（{course.lessons.length}）</span>
-                <span>▼</span>
-              </button>
+        {/* ===== 購入済み：契約管理 ===== */}
+        {unlocked && course.my_subscription && (
+          <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-2" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+            <span className="text-sm" style={{ color: "var(--muted)" }}>Tier {course.my_subscription.tier} 受講中</span>
+            <button onClick={() => setShowContractDetail(v => !v)} className="text-xs underline" style={{ color: "var(--muted)" }}>
+              {showContractDetail ? "閉じる" : "契約管理"}
+            </button>
+            {showContractDetail && (
+              <div className="absolute top-full left-0 right-0 mt-1 card flex flex-col gap-2 z-10">
+                {(() => {
+                  const otherTier = course.my_subscription!.tier === "A" ? "B" : "A";
+                  const otherPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
+                  return otherPrice ? (
+                    <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
+                      className="text-xs underline text-left disabled:opacity-50" style={{ color: "var(--accent)" }}>
+                      Tier {otherTier}（¥{otherPrice.toLocaleString()}/月）に変更
+                    </button>
+                  ) : null;
+                })()}
+                <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
+                  className="text-xs underline text-left disabled:opacity-50" style={{ color: "var(--muted)" }}>
+                  {canceling ? "処理中…" : "解約する"}
+                </button>
+              </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="hidden sm:flex sm:col-span-1 flex-col gap-2">
-                <LessonList
-                  lessons={course.lessons}
-                  activeLessonId={activeLessonId}
-                  completedLessonIds={completedLessonIds}
-                  unlocked={unlocked}
-                  isFree={course.is_free}
-                  onSelect={setActiveLessonId}
-                />
+          </div>
+        )}
+
+        {/* ===== 30日コース：Day1診断 ===== */}
+        {unlocked && course.has_days && !course.has_diagnosis && (
+          <div className="card flex flex-col gap-4 overflow-hidden p-0">
+            <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+              <p className="text-lg font-black text-white">まずは診断から始めよう</p>
+              <p className="text-sm text-white/80 mt-1">あなた専用の30日プランが作られます</p>
+            </div>
+            <div className="px-6 pb-6">
+              <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1 診断を始める →</Link>
+            </div>
+          </div>
+        )}
+
+        {/* ===== 30日コース：学習UI ===== */}
+        {unlocked && course.has_days && course.has_diagnosis && today && (
+          <>
+            {/* 進捗バー */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: "var(--text)" }}>全体の進捗</span>
+                <span className="text-sm font-black" style={{ color: "var(--accent)" }}>{completedCount} / 30 日</span>
+              </div>
+              <div className="relative h-3 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{ width: `${progressPct}%`, background: "linear-gradient(to right, var(--primary), var(--accent))" }} />
+              </div>
+              <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
+                <span>スタート</span>
+                <span>{progressPct}% 完了</span>
+                <span>ゴール</span>
+              </div>
+            </div>
+
+            {/* 今日のタスクカード */}
+            <div className="card overflow-hidden p-0 shadow-lg">
+              {/* カードヘッダー */}
+              <div className="relative px-5 py-4" style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-white/70 uppercase tracking-wider">Today</p>
+                    <p className="text-xl font-black text-white mt-0.5">Day {currentDay}</p>
+                  </div>
+                  {today.theme && (
+                    <div className="text-right">
+                      <p className="text-xs text-white/70">テーマ</p>
+                      <p className="text-sm font-bold text-white mt-0.5 max-w-[140px] text-right">{today.theme}</p>
+                    </div>
+                  )}
+                </div>
+                {!today.is_rest_day && totalTaskMinutes > 0 && (
+                  <div className="flex items-center gap-2 mt-3">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
+                      <span className="text-xs text-white">⏱</span>
+                      <span className="text-xs font-bold text-white">合計 {totalTaskMinutes} 分</span>
+                    </div>
+                    {layer3ReasonByDay[currentDay] && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
+                        <span className="text-xs text-white">✦</span>
+                        <span className="text-xs font-bold text-white">{layer3ReasonByDay[currentDay]}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="sm:col-span-2 card flex flex-col gap-4">
-                {!activeLesson ? (
-                  <p className="text-sm" style={{ color: "var(--muted)" }}>レッスンがまだありません。</p>
-                ) : (activeLesson.body == null && activeLesson.youtube_url == null) ? (
-                  <div className="text-center py-10">
-                    <p className="text-4xl mb-3">🔒</p>
-                    <p className="text-sm" style={{ color: "var(--muted)" }}>このレッスンは購入後に閲覧できます。</p>
+              <div className="p-5 flex flex-col gap-4">
+                {today.is_rest_day ? (
+                  <div className="flex items-start gap-4 py-2">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style={{ background: "color-mix(in srgb, var(--accent) 12%, var(--bg))" }}>
+                      🌿
+                    </div>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--text)" }}>今日は休息日です</p>
+                      <p className="text-sm mt-1 leading-relaxed" style={{ color: "var(--muted)" }}>{restDayTip(currentDay)}</p>
+                    </div>
+                  </div>
+                ) : todayLog?.is_completed ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3 py-2 px-4 rounded-xl" style={{ background: "color-mix(in srgb, var(--accent) 10%, var(--bg))", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)" }}>
+                      <span className="text-2xl">🎉</span>
+                      <div>
+                        <p className="font-bold" style={{ color: "var(--accent)" }}>Day {currentDay} 完了！</p>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>お疲れさまでした。明日も一緒に頑張りましょう。</p>
+                      </div>
+                    </div>
+                    {reportedDay !== null && derivedDay > currentDay && (
+                      <button onClick={() => setReportedDay(null)} className="btn-ghost text-sm self-start">
+                        Day {derivedDay} のタスクを見る →
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <>
-                    {activeLesson.content_type === "video" && activeLesson.youtube_url ? (
-                      <div className="aspect-video">
-                        <iframe src={activeLesson.youtube_url} className="w-full h-full rounded-lg" allowFullScreen />
-                      </div>
+                    {/* タスクリスト */}
+                    {todayTasks.length > 0 ? (
+                      <ul className="flex flex-col gap-2">
+                        {(() => {
+                          const themeParts = today.theme ? today.theme.split("+").map(s => s.trim()) : [];
+                          const useThemeParts = themeParts.length === todayTasks.length;
+                          return todayTasks.map((t, i) => {
+                            const isChecked = checkedTaskTypes.has(t.type);
+                            const label = useThemeParts ? themeParts[i] : (today.theme || TASK_TYPE_LABEL[t.type] || t.type);
+                            const icon = TASK_TYPE_ICON[t.type] || "📌";
+                            return (
+                              <li key={i}>
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all" style={{
+                                  background: isChecked ? "color-mix(in srgb, var(--accent) 10%, var(--bg))" : "var(--bg)",
+                                  border: `1.5px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
+                                }}>
+                                  <input type="checkbox" checked={isChecked} onChange={() => toggleTaskType(t.type)}
+                                    className="flex-shrink-0" style={{ width: "1.1rem", height: "1.1rem", accentColor: "var(--accent)" }} />
+                                  <span className="text-base flex-shrink-0">{icon}</span>
+                                  <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{label}</span>
+                                  {t.carryover && (
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "var(--accent)", color: "white" }}>繰越</span>
+                                  )}
+                                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--border)", color: "var(--muted)" }}>{t.minutes}分</span>
+                                </label>
+                              </li>
+                            );
+                          });
+                        })()}
+                      </ul>
                     ) : (
-                      <article className="prose whitespace-pre-wrap text-sm" style={{ color: "var(--text)" }}>{activeLesson.body}</article>
+                      <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。</p>
                     )}
-                    {(unlocked || course.is_free) && (
-                      completedLessonIds.has(activeLesson.id) ? (
-                        <span className="self-start text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 完了済み</span>
-                      ) : (
-                        <button onClick={() => handleCompleteLesson(activeLesson.id)} disabled={completing} className="btn-primary self-start disabled:opacity-50">
-                          このレッスンを完了にする
-                        </button>
-                      )
-                    )}
+
+                    {/* メモ欄 */}
+                    <textarea
+                      value={memo}
+                      onChange={e => setMemo(e.target.value)}
+                      placeholder="今日の感想・メモ（任意）"
+                      rows={2}
+                      className="w-full text-sm px-4 py-3 rounded-xl resize-none"
+                      style={{ background: "var(--bg)", border: "1.5px solid var(--border)", color: "var(--text)" }}
+                    />
+
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <button onClick={() => handleReportToday(currentDay)} disabled={reporting}
+                        className="btn-primary flex-1 disabled:opacity-50 text-center" style={{ minWidth: 160 }}>
+                        {reporting ? "記録中…" : "今日の学習を記録する ✓"}
+                      </button>
+                      <Link href={`/courses/${courseId}/chat`} className="text-sm font-bold underline flex-shrink-0" style={{ color: "var(--accent)" }}>
+                        メンターに相談 →
+                      </Link>
+                    </div>
                   </>
                 )}
               </div>
             </div>
+
+            {/* 30日カレンダー */}
+            {days.length > 0 && (
+              <div className="card flex flex-col gap-5">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold" style={{ color: "var(--text)" }}>30日カレンダー</p>
+                  <span className="text-sm font-black" style={{ color: "var(--accent)" }}>{completedCount}日 完了</span>
+                </div>
+                {weeks.map((week, wi) => (
+                  <div key={wi}>
+                    <p className="text-[11px] font-bold mb-2" style={{ color: "var(--muted)" }}>第{wi + 1}週</p>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {week.map(d => {
+                        const log = logs[d.day];
+                        const isCompleted = !!log?.is_completed;
+                        const isToday = d.day === currentDay;
+                        const isFuture = d.day > currentDay && !isCompleted;
+                        return (
+                          <button key={d.day} onClick={() => setSelectedDay(d)}
+                            className="aspect-square flex flex-col items-center justify-center gap-0.5 transition-all hover:scale-105"
+                            style={{
+                              borderRadius: 12,
+                              background: isCompleted
+                                ? "linear-gradient(135deg, var(--primary), var(--accent))"
+                                : isToday
+                                  ? "var(--primary)"
+                                  : d.is_rest_day
+                                    ? "var(--border)"
+                                    : "var(--card)",
+                              color: isCompleted || isToday ? "white" : d.is_rest_day ? "var(--muted)" : isFuture ? "var(--border)" : "var(--text)",
+                              border: isToday ? "none" : isCompleted ? "none" : `1.5px solid ${isFuture ? "var(--border)" : "var(--border)"}`,
+                              boxShadow: isCompleted ? "0 4px 12px rgba(0,0,0,0.2)" : isToday ? "0 4px 12px rgba(35,51,71,0.3)" : "none",
+                            }}>
+                            <span className="text-base leading-none">{isCompleted ? "✓" : d.is_rest_day ? "☆" : ""}</span>
+                            <span className="text-[10px] font-bold">{d.day}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center gap-4 pt-2 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))", display: "inline-block" }} /> 完了
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded" style={{ background: "var(--primary)", display: "inline-block" }} /> 今日
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded" style={{ background: "var(--border)", display: "inline-block" }} /> 休息日
+                  </span>
+                </div>
+              </div>
+            )}
           </>
         )}
+
+        {/* ===== 非30日コース：レッスン閲覧 ===== */}
+        {unlocked && !course.has_days && course.lessons.length > 0 && (
+          <div className="flex flex-col gap-4">
+            {/* 進捗バー */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-sm">
+                <span style={{ color: "var(--text)" }}>レッスン進捗</span>
+                <span className="font-black" style={{ color: "var(--accent)" }}>{completedLessonCount}/{course.lessons.length}</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                <div className="h-2 rounded-full" style={{ width: `${Math.round((completedLessonCount / course.lessons.length) * 100)}%`, background: "linear-gradient(to right, var(--primary), var(--accent))" }} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="sm:col-span-1 flex flex-col gap-1.5">
+                {course.lessons.map(l => {
+                  const isLocked = !unlocked && !l.is_preview && !course.is_free;
+                  const isActive = activeLessonId === l.id;
+                  const isDone = completedLessonIds.has(l.id);
+                  return (
+                    <button key={l.id} onClick={() => setActiveLessonId(l.id)}
+                      className="text-left text-sm px-3 py-2.5 rounded-xl flex items-center gap-2 transition-all"
+                      style={{
+                        background: isActive ? "var(--primary)" : isDone ? "color-mix(in srgb, var(--accent) 8%, var(--card))" : "var(--card)",
+                        color: isActive ? "white" : isLocked ? "var(--muted)" : "var(--text)",
+                        border: `1px solid ${isActive ? "transparent" : isDone ? "color-mix(in srgb, var(--accent) 25%, transparent)" : "var(--border)"}`,
+                        opacity: isLocked ? 0.55 : 1,
+                      }}>
+                      <span className="flex-shrink-0 text-base">{isDone ? "✅" : isActive ? "▶" : isLocked ? "🔒" : "○"}</span>
+                      <span className="flex-1 truncate">{l.order}. {l.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="sm:col-span-2">
+                {(() => {
+                  const activeLesson = course.lessons.find(l => l.id === activeLessonId) ?? course.lessons[0];
+                  if (!activeLesson) return null;
+                  if (activeLesson.body == null && activeLesson.youtube_url == null) {
+                    return (
+                      <div className="card flex flex-col items-center gap-3 py-12">
+                        <span className="text-4xl">🔒</span>
+                        <p className="text-sm font-bold" style={{ color: "var(--muted)" }}>このレッスンは購入後に閲覧できます</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="card flex flex-col gap-4">
+                      <p className="font-bold" style={{ color: "var(--primary)" }}>{activeLesson.title}</p>
+                      {activeLesson.content_type === "video" && activeLesson.youtube_url ? (
+                        <div className="aspect-video rounded-xl overflow-hidden">
+                          <iframe src={activeLesson.youtube_url} className="w-full h-full" allowFullScreen />
+                        </div>
+                      ) : (
+                        <article className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text)" }}>{activeLesson.body}</article>
+                      )}
+                      {(unlocked || course.is_free) && (
+                        completedLessonIds.has(activeLesson.id) ? (
+                          <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 完了済み</span>
+                        ) : (
+                          <button onClick={() => handleCompleteLesson(activeLesson.id)} disabled={completing} className="btn-primary self-start disabled:opacity-50">
+                            {completing ? "記録中…" : "このレッスンを完了にする"}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={handleReport} className="text-xs self-center underline" style={{ color: "var(--muted)" }}>
+          このコースを通報する
+        </button>
       </main>
 
       {checkout && (
         <CourseCheckoutModal courseId={courseId} clientSecret={checkout.clientSecret} isSubscription={checkout.isSubscription} onClose={() => setCheckout(null)} />
-      )}
-
-      {showLessonDrawer && (
-        <div className="sm:hidden fixed inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={() => setShowLessonDrawer(false)}>
-          <div
-            className="w-full max-h-[80vh] overflow-y-auto rounded-t-2xl p-4 flex flex-col gap-2"
-            style={{ background: "var(--card)" }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <p className="font-bold text-sm" style={{ color: "var(--primary)" }}>レッスン一覧</p>
-              <button onClick={() => setShowLessonDrawer(false)} className="text-sm" style={{ color: "var(--muted)" }}>閉じる ✕</button>
-            </div>
-            <LessonList
-              lessons={course.lessons}
-              activeLessonId={activeLessonId}
-              completedLessonIds={completedLessonIds}
-              unlocked={unlocked}
-              isFree={course.is_free}
-              onSelect={id => { setActiveLessonId(id); setShowLessonDrawer(false); }}
-            />
-          </div>
-        </div>
       )}
 
       {selectedDay && (
@@ -690,86 +723,59 @@ export default function CourseDetailPage() {
   );
 }
 
-function LessonList({
-  lessons, activeLessonId, completedLessonIds, unlocked, isFree, onSelect,
-}: {
-  lessons: Lesson[];
-  activeLessonId: number | null;
-  completedLessonIds: Set<number>;
-  unlocked: boolean;
-  isFree: boolean;
-  onSelect: (id: number) => void;
+function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: {
+  courseId: number; day: Day; tasks: AdjustedTask[]; log: DayLog | null; isToday: boolean; onClose: () => void;
 }) {
+  const totalMin = tasks.reduce((s, t) => s + t.minutes, 0);
   return (
-    <>
-      {lessons.map(l => {
-        const isLocked = !unlocked && !l.is_preview && !isFree;
-        const isActive = activeLessonId === l.id;
-        const isDone = completedLessonIds.has(l.id);
-        return (
-          <button key={l.id} onClick={() => onSelect(l.id)}
-            className="text-left text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2"
-            style={{
-              background: isActive ? "var(--primary)" : "var(--card)",
-              color: isActive ? "white" : isLocked ? "var(--muted)" : "var(--text)",
-              border: "1px solid var(--border)",
-              opacity: isLocked ? 0.55 : 1,
-            }}>
-            <span className="flex-shrink-0">
-              {isDone ? "✅" : isActive ? "▶️" : isLocked ? "🔒" : "○"}
-            </span>
-            <span className="flex-1">
-              {l.order}. {l.title} {l.is_preview && <span className="text-xs">（無料公開）</span>}
-            </span>
-            {isActive && !isDone && <span className="text-[10px] font-bold flex-shrink-0">進行中</span>}
-          </button>
-        );
-      })}
-    </>
-  );
-}
-
-function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { courseId: number; day: Day; tasks: AdjustedTask[]; log: DayLog | null; isToday: boolean; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="card max-w-lg w-full max-h-[90vh] overflow-y-auto flex flex-col gap-3" style={{ background: "var(--card-bg, #fff)" }} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="font-black text-lg" style={{ color: "var(--primary)" }}>Day{day.day}（第{day.week_number}週）</h3>
-          {log?.is_completed && (
-            <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: "var(--accent)", color: "white" }}>完了済み</span>
-          )}
-          {isToday && !log?.is_completed && (
-            <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: "var(--primary)", color: "white" }}>本日</span>
-          )}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl flex flex-col gap-0 overflow-hidden"
+        style={{ background: "var(--card)" }} onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-5 flex flex-col gap-1" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-white/70">Week {day.week_number}</p>
+              <p className="text-xl font-black text-white">Day {day.day}</p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              {log?.is_completed && <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.25)", color: "white" }}>完了済み ✓</span>}
+              {isToday && !log?.is_completed && <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.25)", color: "white" }}>今日</span>}
+              {day.is_rest_day && <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.25)", color: "white" }}>休息日 🌿</span>}
+            </div>
+          </div>
+          {day.theme && <p className="text-sm text-white/90 mt-1">{day.theme}</p>}
+          {totalMin > 0 && <p className="text-xs text-white/70 mt-0.5">⏱ 合計 {totalMin} 分</p>}
         </div>
-        {day.is_rest_day ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm" style={{ color: "var(--text)" }}>🌿 今日はチャージの日です。明日からまた頑張りましょう！</p>
-            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--example-bg, #eee)", color: "var(--muted)" }}>
-              💡 {restDayTip(day.day)}
-            </p>
-          </div>
-        ) : (
-          <>
-            {day.theme && <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{day.theme}</p>}
-            {tasks.length > 0 && (
-              <ul className="text-sm list-disc pl-5" style={{ color: "var(--text)" }}>
-                {tasks.map((t, i) => <li key={i}>{TASK_TYPE_LABEL[t.type] ?? t.type}（{t.minutes}分）</li>)}
-              </ul>
-            )}
-          </>
-        )}
-        {log?.memo && (
-          <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--example-bg, #eee)", color: "var(--text)" }}>
-            <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>あなたのメモ</p>
-            {log.memo}
-          </div>
-        )}
-        <div className="flex gap-2 justify-end">
-          {isToday && !log?.is_completed && !day.is_rest_day && (
-            <Link href={`/courses/${courseId}/chat`} className="btn-primary">チャットで報告する →</Link>
+
+        <div className="p-5 flex flex-col gap-4">
+          {day.is_rest_day ? (
+            <p className="text-sm" style={{ color: "var(--muted)" }}>🌿 今日はチャージの日。ゆっくり休みましょう。</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {tasks.map((t, i) => (
+                <li key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: "var(--bg)", border: "1.5px solid var(--border)" }}>
+                  <span className="text-base">{TASK_TYPE_ICON[t.type] || "📌"}</span>
+                  <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{TASK_TYPE_LABEL[t.type] ?? t.type}</span>
+                  {t.carryover && <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "var(--accent)", color: "white" }}>繰越</span>}
+                  <span className="text-xs font-bold" style={{ color: "var(--muted)" }}>{t.minutes}分</span>
+                </li>
+              ))}
+            </ul>
           )}
-          <button className="btn-ghost" onClick={onClose}>閉じる</button>
+
+          {log?.memo && (
+            <div className="px-4 py-3 rounded-xl" style={{ background: "var(--bg)" }}>
+              <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>メモ</p>
+              <p className="text-sm" style={{ color: "var(--text)" }}>{log.memo}</p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {isToday && !log?.is_completed && !day.is_rest_day && (
+              <Link href={`/courses/${courseId}/chat`} className="btn-primary flex-1 text-center">メンターに相談する →</Link>
+            )}
+            <button onClick={onClose} className="btn-ghost flex-1">閉じる</button>
+          </div>
         </div>
       </div>
     </div>
