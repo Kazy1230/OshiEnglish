@@ -35,7 +35,7 @@ def _serialize(c: CreatorContent, liked: bool = False) -> dict:
         "like_count": c.like_count,
         "liked": liked,
         "created_at": c.created_at.isoformat() if c.created_at else None,
-        "creator_name": c.creator.display_name if c.creator else None,
+        "creator_name": (c.creator.user.username if c.creator and c.creator.user else None),
         "creator_avatar": (c.creator.character.avatar_url if c.creator and c.creator.character else None),
     }
 
