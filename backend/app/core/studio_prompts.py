@@ -45,17 +45,29 @@ def build_consult_messages(theme: str) -> list[dict]:
 
 # ── 新スタジオ: アイデア提案 ─────────────────────────────────────
 
-IDEAS_SYSTEM = """あなたは英語学習コンテンツの企画・ネタ提案専門家です。
+_IDEAS_SYSTEM_TEMPLATE = """あなたは{subject_label}コンテンツの企画・ネタ提案専門家です。
 クリエイターの口調・人格プロファイルと選択したコンテンツフォーマットをもとに、
-今すぐ作れる英語学習ネタを6個提案してください。
+今すぐ作れる{subject_label}ネタを6個提案してください。
 
 条件:
-- 英語学習者が「これ悩んでた」「これ知りたかった」と感じる具体的テーマ
+- {subject_label}を学ぶ人が「これ悩んでた」「これ知りたかった」と感じる具体的テーマ
 - クリエイターの個性・強みが自然に出る切り口
 - 指定フォーマットの尺・文字数で完結できるスコープ
 
 JSON形式のみで返してください:
 {"ideas": [{"title": "ネタタイトル（20文字以内）", "hook": "冒頭の掴み文（40文字以内）", "why": "なぜ刺さるか（25文字以内）"}]}"""
+
+_SUBJECT_LABELS = {
+    "english": "英語学習",
+    "it": "IT・プログラミング学習",
+    "music": "音楽学習",
+    "japanese": "日本語学習",
+}
+
+
+def build_ideas_system(subject: str = "english") -> str:
+    label = _SUBJECT_LABELS.get(subject, f"{subject}学習")
+    return _IDEAS_SYSTEM_TEMPLATE.format(subject_label=label)
 
 
 def build_ideas_messages(format_label: str, format_constraint: str, tone_block: str) -> list[dict]:
@@ -114,10 +126,19 @@ def get_format_constraint(format_key: str, duration_sec: int | None, char_limit:
     return template
 
 
-def build_format_content_system(format_key: str, duration_sec: int | None, char_limit: int | None) -> str:
+_SUBJECT_EXPERT_LABELS = {
+    "english": "英語教育",
+    "it": "IT・プログラミング教育",
+    "music": "音楽教育",
+    "japanese": "日本語教育",
+}
+
+
+def build_format_content_system(format_key: str, duration_sec: int | None, char_limit: int | None, subject: str = "english") -> str:
     constraint = get_format_constraint(format_key, duration_sec, char_limit)
+    expert_label = _SUBJECT_EXPERT_LABELS.get(subject, "学習")
     return (
-        f"あなたは英語教育の専門家です。口調・キャラクター性は一切加えず、"
+        f"あなたは{expert_label}の専門家です。口調・キャラクター性は一切加えず、"
         f"事実と解説のみをプレーンな文章で書いてください。\n\n"
         f"出力フォーマット: {FORMAT_LABELS.get(format_key, format_key)}\n"
         f"制約: {constraint}"

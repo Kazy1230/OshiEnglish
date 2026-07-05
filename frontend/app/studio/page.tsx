@@ -108,7 +108,7 @@ export default function StudioPage() {
     try {
       const durationSec = format.mediaType === "video" ? paramVal : undefined;
       const charLimit = format.mediaType === "text" ? paramVal : undefined;
-      const res = await api.studioIdeas(format.key, character.id, durationSec, charLimit);
+      const res = await api.studioIdeas(format.key, character.id, durationSec, charLimit, subject ?? undefined);
       setIdeas(res.ideas || []);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "ネタ提案に失敗しました", "error");
@@ -124,7 +124,7 @@ export default function StudioPage() {
     setLoadingAngles(true);
     setStep("angles");
     try {
-      const res = await api.studioAngles(idea.title, idea.hook, format!.key, character!.id);
+      const res = await api.studioAngles(idea.title, idea.hook, format!.key, character!.id, subject ?? undefined);
       setAngles(res.angles || []);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "切り口提案に失敗しました", "error");

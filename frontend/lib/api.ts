@@ -203,10 +203,10 @@ export const api = {
     apiFetch("/studio/generate/tone-profile", { method: "POST", body: JSON.stringify({ name, description, tone_profile: toneProfile }) }),
   studioConsult: (theme: string) =>
     apiFetch("/studio/consult", { method: "POST", body: JSON.stringify({ theme }) }),
-  studioIdeas: (format: string, characterId: number, durationSec?: number, charLimit?: number) =>
-    apiFetch("/studio/ideas", { method: "POST", body: JSON.stringify({ format, character_id: characterId, duration_sec: durationSec, char_limit: charLimit }) }),
-  studioAngles: (ideaTitle: string, ideaHook: string, format: string, characterId: number) =>
-    apiFetch("/studio/angles", { method: "POST", body: JSON.stringify({ idea_title: ideaTitle, idea_hook: ideaHook, format, character_id: characterId }) }),
+  studioIdeas: (format: string, characterId: number, durationSec?: number, charLimit?: number, subject?: string) =>
+    apiFetch("/studio/ideas", { method: "POST", body: JSON.stringify({ format, character_id: characterId, duration_sec: durationSec, char_limit: charLimit, subject: subject ?? "english" }) }),
+  studioAngles: (ideaTitle: string, ideaHook: string, format: string, characterId: number, subject?: string) =>
+    apiFetch("/studio/angles", { method: "POST", body: JSON.stringify({ idea_title: ideaTitle, idea_hook: ideaHook, format, character_id: characterId, subject: subject ?? "english" }) }),
   listDrafts: () => apiFetch("/studio/drafts"),
   getDraft: (id: number) => apiFetch(`/studio/drafts/${id}`),
   deleteDraft: (id: number) => apiFetch(`/studio/drafts/${id}`, { method: "DELETE" }),

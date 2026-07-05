@@ -112,6 +112,7 @@ class IdeasRequest(BaseModel):
     character_id: int
     duration_sec: Optional[int] = None
     char_limit: Optional[int] = None
+    subject: str = "english"
 
 
 @router.post("/ideas")
@@ -122,8 +123,9 @@ def generate_ideas(data: IdeasRequest, current_user=Depends(get_current_creator_
     tone_block = render_tone_profile(character.tone_profile or {}) or "(口調設定未登録)"
     format_label = prompts.FORMAT_LABELS.get(data.format, data.format)
     constraint = prompts.get_format_constraint(data.format, data.duration_sec, data.char_limit)
+    ideas_system = prompts.build_ideas_system(data.subject)
     try:
-        text = generate_text(prompts.IDEAS_SYSTEM, prompts.build_ideas_messages(format_label, constraint, tone_block), max_tokens=600, json_mode=True)
+        text = generate_text(ideas_system, prompts.build_ideas_messages(format_label, constraint, tone_block), max_tokens=600, json_mode=True)
         return extract_json(text)
     except LLMError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -134,6 +136,7 @@ class AnglesRequest(BaseModel):
     idea_hook: str
     format: str
     character_id: int
+    subject: str = "english"
 
 
 @router.post("/angles")
@@ -154,6 +157,7 @@ class GenerateContentRequest(BaseModel):
     hook: str
     duration_sec: Optional[int] = None
     char_limit: Optional[int] = None
+    subject: str = "english"
 
 
 @router.post("/generate/content")
@@ -163,7 +167,7 @@ def generate_content(data: GenerateContentRequest, current_user=Depends(get_curr
     character = _get_owned_character(db, data.character_id, current_user)
     creator_id = _get_own_creator_profile_id(db, current_user)
 
-    raw_system = prompts.build_format_content_system(data.format, data.duration_sec, data.char_limit)
+    raw_system = prompts.build_format_content_system(data.format, data.duration_sec, data.char_limit, subject=data.subject)
     raw_messages = [{"role": "user", "content": f"テーマ: {data.idea}\n切り口・フック: {data.hook}"}]
 
     voiced_system = prompts.build_voiced_content_system(character)
