@@ -7,13 +7,13 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
 
-type TaskType = { type: string; label: string; base_minutes: number };
+type ChecklistItem = { text: string; minutes: number };
 type Day = {
   id: number;
   day: number;
   week_number: number;
   theme: string | null;
-  task_types: TaskType[] | null;
+  checklist_items: ChecklistItem[] | null;
   is_rest_day: boolean;
   is_edited_by_creator: boolean;
 };
@@ -22,15 +22,6 @@ type Material = { id: number; type: string; title: string; file_url: string };
 type QualityCheckItem = { key: string; label: string; score: number; max: number; level: "good" | "warning" | "critical"; feedback: string };
 type QualityCheckResult = { score: number; max_score: number; recommendation: "publish" | "review"; items: QualityCheckItem[] };
 type DiagnosisQuestion = { id: number; question_text: string; answer_type: "text" | "number" | "single" | "multi"; options: string[] | null; is_required: boolean };
-
-const TASK_TYPE_OPTIONS: { type: string; label: string; color: string; icon: string }[] = [
-  { type: "vocabulary", label: "単語", color: "#4f6ef2", icon: "📖" },
-  { type: "listening", label: "リスニング", color: "#0a7e76", icon: "🎧" },
-  { type: "grammar", label: "文法", color: "#7b5ea7", icon: "📐" },
-  { type: "reading", label: "読解", color: "#c97d28", icon: "📄" },
-  { type: "shadowing", label: "シャドーイング", color: "#2f9e64", icon: "🎤" },
-  { type: "practice", label: "演習", color: "#c0392b", icon: "✏️" },
-];
 
 const ANSWER_TYPE_LABEL: Record<string, string> = { text: "テキスト入力", number: "数値入力", single: "単一選択", multi: "複数選択" };
 
@@ -57,6 +48,8 @@ const QUESTION_TEMPLATES: Record<string, { label: string; questions: QuestionTem
 const QUESTION_INTENT_BY_TEXT: Record<string, string> = Object.fromEntries(
   Object.values(QUESTION_TEMPLATES).flatMap(t => t.questions.map(q => [q.question_text, q.intent ?? ""])).filter(([, v]) => v)
 );
+
+const MINUTE_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90];
 
 export default function CourseCalendarPage() {
   const params = useParams();
@@ -209,14 +202,13 @@ export default function CourseCalendarPage() {
     }
   }
 
-  async function handleSaveDay(updated: Partial<Day>) {
-    if (!selectedDay) return;
+  async function handleSaveDay(dayNumber: number, data: { theme: string; checklist_items: ChecklistItem[]; is_rest_day: boolean }) {
     setSaving(true);
     try {
-      const res = await api.updateCourseDay(courseId, selectedDay.day, {
-        theme: updated.theme,
-        task_types: updated.task_types,
-        is_rest_day: updated.is_rest_day,
+      const res = await api.updateCourseDay(courseId, dayNumber, {
+        theme: data.theme,
+        checklist_items: data.checklist_items,
+        is_rest_day: data.is_rest_day,
       });
       setDays(d => d.map(x => x.day === res.day ? res : x));
       setSelectedDay(null);
@@ -256,7 +248,7 @@ export default function CourseCalendarPage() {
     if (slice.length > 0) weeks.push(slice);
   }
 
-  const unsetDays = days.filter(d => !d.is_rest_day && (!d.task_types || d.task_types.length === 0)).length;
+  const unsetDays = days.filter(d => !d.is_rest_day && (!d.checklist_items || d.checklist_items.length === 0)).length;
   const completedPct = days.length > 0 ? Math.round(((days.length - unsetDays) / days.length) * 100) : 0;
 
   if (loading || fetching) return <Skeleton />;
@@ -349,7 +341,8 @@ export default function CourseCalendarPage() {
                     {Array.from({ length: 7 }, (_, di) => {
                       const d = week[di];
                       if (!d) return <div key={di} />;
-                      const noTask = !d.is_rest_day && (!d.task_types || d.task_types.length === 0);
+                      const noTask = !d.is_rest_day && (!d.checklist_items || d.checklist_items.length === 0);
+                      const totalMin = d.checklist_items?.reduce((s, item) => s + item.minutes, 0) ?? 0;
                       const bg = d.is_rest_day
                         ? "var(--border)"
                         : d.is_edited_by_creator
@@ -374,17 +367,13 @@ export default function CourseCalendarPage() {
                             ? <span className="text-[10px] mt-0.5 opacity-70">休</span>
                             : (
                               <>
-                                {d.task_types && d.task_types.length > 0 && (
-                                  <div className="flex flex-wrap gap-0.5 justify-center px-0.5">
-                                    {d.task_types.slice(0, 4).map(t => {
-                                      const meta = TASK_TYPE_OPTIONS.find(o => o.type === t.type);
-                                      return (
-                                        <span key={t.type} className="text-[9px] leading-none" title={t.label}>
-                                          {meta?.icon ?? "•"}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
+                                {d.checklist_items && d.checklist_items.length > 0 && (
+                                  <span className="text-[9px] leading-none opacity-90">
+                                    {d.checklist_items.length}項目
+                                  </span>
+                                )}
+                                {totalMin > 0 && (
+                                  <span className="text-[9px] leading-none opacity-75">{totalMin}分</span>
                                 )}
                                 {d.theme && (
                                   <span className="text-[9px] leading-tight opacity-80 text-center line-clamp-2 px-0.5">{d.theme}</span>
@@ -531,35 +520,38 @@ function DayDrawer({
   day: Day | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (updated: Partial<Day>) => void;
+  onSave: (dayNumber: number, data: { theme: string; checklist_items: ChecklistItem[]; is_rest_day: boolean }) => void;
 }) {
   const [theme, setTheme] = useState("");
-  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [isRestDay, setIsRestDay] = useState(false);
+  const [newItemText, setNewItemText] = useState("");
+  const [newItemMinutes, setNewItemMinutes] = useState(30);
 
   useEffect(() => {
     if (day) {
       setTheme(day.theme ?? "");
-      setTaskTypes(day.task_types ?? []);
+      setChecklistItems(day.checklist_items ?? []);
       setIsRestDay(day.is_rest_day);
+      setNewItemText("");
+      setNewItemMinutes(30);
     }
   }, [day]);
 
   if (!day) return null;
 
-  function toggleTask(opt: typeof TASK_TYPE_OPTIONS[0]) {
-    setTaskTypes(prev =>
-      prev.some(t => t.type === opt.type)
-        ? prev.filter(t => t.type !== opt.type)
-        : [...prev, { type: opt.type, label: opt.label, base_minutes: 15 }]
-    );
+  function addItem() {
+    if (!newItemText.trim()) return;
+    setChecklistItems(prev => [...prev, { text: newItemText.trim(), minutes: newItemMinutes }]);
+    setNewItemText("");
+    setNewItemMinutes(30);
   }
 
-  function setMinutes(type: string, min: number) {
-    setTaskTypes(prev => prev.map(t => t.type === type ? { ...t, base_minutes: min } : t));
+  function removeItem(index: number) {
+    setChecklistItems(prev => prev.filter((_, i) => i !== index));
   }
 
-  const totalMin = taskTypes.reduce((s, t) => s + (t.base_minutes || 0), 0);
+  const totalMin = checklistItems.reduce((s, item) => s + item.minutes, 0);
 
   return (
     <>
@@ -573,7 +565,7 @@ function DayDrawer({
       <div
         className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
         style={{
-          width: "min(420px, 100vw)",
+          width: "min(440px, 100vw)",
           background: "var(--card)",
           borderLeft: "1px solid var(--border)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.15)",
@@ -623,63 +615,75 @@ function DayDrawer({
                 <p className="text-right text-[10px] mt-0.5" style={{ color: "var(--muted)" }}>{theme.length}/15</p>
               </div>
 
-              {/* Task types */}
-              <div>
-                <p className="text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>タスク種別</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {TASK_TYPE_OPTIONS.map(opt => {
-                    const active = taskTypes.some(t => t.type === opt.type);
-                    return (
-                      <button
-                        key={opt.type}
-                        type="button"
-                        onClick={() => toggleTask(opt)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all"
-                        style={{
-                          background: active ? opt.color : "var(--bg)",
-                          color: active ? "white" : "var(--muted)",
-                          border: `1.5px solid ${active ? opt.color : "var(--border)"}`,
-                        }}
-                      >
-                        <span>{opt.icon}</span>
-                        <span className="text-xs">{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Duration per task */}
-              {taskTypes.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>
-                    標準学習時間（合計 <span style={{ color: totalMin > 90 ? "#e53e3e" : "var(--accent)" }}>{totalMin}分</span>
-                    {totalMin > 90 && <span style={{ color: "#e53e3e" }}> — 負荷高め</span>}）
+              {/* Checklist items */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>
+                    今日のチェックリスト
+                    {totalMin > 0 && (
+                      <span className="ml-2 font-normal" style={{ color: totalMin > 90 ? "#e53e3e" : "var(--accent)" }}>
+                        合計 {totalMin}分{totalMin > 90 ? " — 負荷高め" : ""}
+                      </span>
+                    )}
                   </p>
-                  <div className="flex flex-col gap-2">
-                    {taskTypes.map(t => {
-                      const meta = TASK_TYPE_OPTIONS.find(o => o.type === t.type);
-                      return (
-                        <div key={t.type} className="flex items-center gap-3">
-                          <span className="text-sm flex-shrink-0 w-5">{meta?.icon}</span>
-                          <span className="text-xs flex-1 font-bold" style={{ color: "var(--text)" }}>{t.label}</span>
-                          <input
-                            type="range"
-                            min={5}
-                            max={60}
-                            step={5}
-                            value={t.base_minutes}
-                            onChange={e => setMinutes(t.type, Number(e.target.value))}
-                            className="flex-1 accent-current"
-                            style={{ accentColor: meta?.color }}
-                          />
-                          <span className="text-xs font-bold w-10 text-right flex-shrink-0" style={{ color: meta?.color }}>{t.base_minutes}分</span>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
-              )}
+
+                {/* Add new item */}
+                <div className="flex gap-2 flex-wrap items-center">
+                  <input
+                    value={newItemText}
+                    onChange={e => setNewItemText(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addItem(); } }}
+                    placeholder="タスクを入力"
+                    className="flex-1 min-w-0 text-sm"
+                    style={{ minWidth: 120 }}
+                  />
+                  <select
+                    value={newItemMinutes}
+                    onChange={e => setNewItemMinutes(Number(e.target.value))}
+                    className="text-sm w-24 flex-shrink-0"
+                  >
+                    {MINUTE_OPTIONS.map(m => (
+                      <option key={m} value={m}>{m}分</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    disabled={!newItemText.trim()}
+                    className="btn-primary text-sm px-4 flex-shrink-0 disabled:opacity-40"
+                  >
+                    ＋追加
+                  </button>
+                </div>
+
+                {/* Item list */}
+                {checklistItems.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    {checklistItems.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                        style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                      >
+                        <span className="text-xs flex-shrink-0" style={{ color: "var(--muted)" }}>・</span>
+                        <span className="flex-1 text-sm" style={{ color: "var(--text)" }}>{item.text}</span>
+                        <span className="text-xs font-bold flex-shrink-0 px-2 py-0.5 rounded-full" style={{ background: "var(--border)", color: "var(--muted)" }}>{item.minutes}分</span>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(i)}
+                          className="flex-shrink-0 text-sm font-bold leading-none px-1"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>チェックリスト項目がありません。上のフォームから追加してください。</p>
+                )}
+              </div>
             </>
           )}
 
@@ -694,9 +698,9 @@ function DayDrawer({
           <button
             className="btn-primary flex-1"
             disabled={saving}
-            onClick={() => onSave({
+            onClick={() => onSave(day.day, {
               theme,
-              task_types: isRestDay ? [] : taskTypes.map(({ type, label, base_minutes }) => ({ type, label, base_minutes })),
+              checklist_items: isRestDay ? [] : checklistItems,
               is_rest_day: isRestDay,
             })}
           >

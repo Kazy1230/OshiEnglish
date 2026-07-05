@@ -302,9 +302,10 @@ def generate_my_intro(current_user=Depends(get_current_creator_or_admin), db: Se
         raise HTTPException(status_code=400, detail="先にAIインタビューで人格プロファイルを作成してください")
 
     try:
+        _intro_msgs = creator_prompts.build_self_intro_messages(personality.profile, profile.speciality, profile.experience)
         intro = generate_text(
-            creator_prompts.SELF_INTRO_SYSTEM,
-            creator_prompts.build_self_intro_messages(personality.profile, profile.speciality, profile.experience),
+            _intro_msgs[0]["content"],
+            _intro_msgs[1:],
             max_tokens=300,
         )
     except LLMError as e:

@@ -25,18 +25,11 @@ type CourseDetail = {
   suspension_reason?: string | null;
   my_subscription?: { id: number; tier: "A" | "B"; status: string } | null;
 };
-type AdjustedTask = { type: string; minutes: number; carryover?: boolean };
+type AdjustedTask = { text: string; minutes: number; carryover?: boolean };
 type Day = { day: number; week_number: number; theme: string | null; is_rest_day: boolean };
 type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null; personalize_reason?: string | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
 
-const TASK_TYPE_LABEL: Record<string, string> = {
-  vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認",
-  reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
-};
-const TASK_TYPE_ICON: Record<string, string> = {
-  vocabulary: "📖", listening: "🎧", grammar: "📐", reading: "📰", shadowing: "🗣️", practice: "✏️",
-};
 const REST_DAY_TIPS = [
   "音楽を聴いてリラックス！英語のものなら尚よし。",
   "今日学んだことを声に出して振り返ってみよう。",
@@ -65,7 +58,7 @@ export default function CourseDetailPage() {
   const [layer3ReasonByDay, setLayer3ReasonByDay] = useState<Record<number, string>>({});
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
-  const [checkedTaskTypes, setCheckedTaskTypes] = useState<Set<string>>(new Set());
+  const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const [reporting, setReporting] = useState(false);
   const [reportedDay, setReportedDay] = useState<number | null>(null);
   const [memo, setMemo] = useState("");
@@ -94,9 +87,9 @@ export default function CourseDetailPage() {
         const l3Reasons: Record<number, string> = {};
         for (const ld of learnerDays) {
           const adjusted = ld.adjusted_tasks ?? [];
-          const adjustedTypes = new Set(adjusted.map((t: AdjustedTask) => t.type));
+          const adjustedTexts = new Set(adjusted.map((t: AdjustedTask) => t.text));
           const carryover = (ld.carryover_tasks ?? [])
-            .filter((t: AdjustedTask) => !adjustedTypes.has(t.type))
+            .filter((t: AdjustedTask) => !adjustedTexts.has(t.text))
             .map((t: AdjustedTask) => ({ ...t, carryover: true }));
           tasksByDay[ld.day] = [...adjusted, ...carryover];
           const l3Match = ld.personalize_reason?.match(/\[Layer3: ([^\]]+)\]/);
@@ -180,10 +173,10 @@ export default function CourseDetailPage() {
     }
   }
 
-  function toggleTaskType(type: string) {
-    setCheckedTaskTypes(prev => {
+  function toggleIndex(index: number) {
+    setCheckedIndices(prev => {
       const next = new Set(prev);
-      if (next.has(type)) next.delete(type); else next.add(type);
+      if (next.has(index)) next.delete(index); else next.add(index);
       return next;
     });
   }
@@ -192,7 +185,7 @@ export default function CourseDetailPage() {
     if (reporting) return;
     setReporting(true);
     try {
-      const completed = checkedTaskTypes.size > 0 ? Array.from(checkedTaskTypes) : null;
+      const completed = checkedIndices.size > 0 ? Array.from(checkedIndices) : null;
       await api.completeDayLog(courseId, currentDay, memo || undefined, completed ?? undefined);
       setLogs(prev => ({ ...prev, [currentDay]: { day_number: currentDay, is_completed: true, completed_at: new Date().toISOString(), memo: memo || null } }));
       setReportedDay(currentDay);
@@ -514,32 +507,25 @@ export default function CourseDetailPage() {
                     {/* タスクリスト */}
                     {todayTasks.length > 0 ? (
                       <ul className="flex flex-col gap-2">
-                        {(() => {
-                          const themeParts = today.theme ? today.theme.split("+").map(s => s.trim()) : [];
-                          const useThemeParts = themeParts.length === todayTasks.length;
-                          return todayTasks.map((t, i) => {
-                            const isChecked = checkedTaskTypes.has(t.type);
-                            const label = useThemeParts ? themeParts[i] : (today.theme || TASK_TYPE_LABEL[t.type] || t.type);
-                            const icon = TASK_TYPE_ICON[t.type] || "📌";
-                            return (
-                              <li key={i}>
-                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all" style={{
-                                  background: isChecked ? "color-mix(in srgb, var(--accent) 10%, var(--bg))" : "var(--bg)",
-                                  border: `1.5px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
-                                }}>
-                                  <input type="checkbox" checked={isChecked} onChange={() => toggleTaskType(t.type)}
-                                    className="flex-shrink-0" style={{ width: "1.1rem", height: "1.1rem", accentColor: "var(--accent)" }} />
-                                  <span className="text-base flex-shrink-0">{icon}</span>
-                                  <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{label}</span>
-                                  {t.carryover && (
-                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "var(--accent)", color: "white" }}>繰越</span>
-                                  )}
-                                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--border)", color: "var(--muted)" }}>{t.minutes}分</span>
-                                </label>
-                              </li>
-                            );
-                          });
-                        })()}
+                        {todayTasks.map((t, i) => {
+                          const isChecked = checkedIndices.has(i);
+                          return (
+                            <li key={i}>
+                              <label className="flex items-start gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all" style={{
+                                background: isChecked ? "color-mix(in srgb, var(--accent) 10%, var(--bg))" : "var(--bg)",
+                                border: `1.5px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
+                              }}>
+                                <input type="checkbox" checked={isChecked} onChange={() => toggleIndex(i)}
+                                  className="flex-shrink-0 mt-0.5" style={{ width: "1.1rem", height: "1.1rem", accentColor: "var(--accent)" }} />
+                                <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{t.text}</span>
+                                {t.carryover && (
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>繰越</span>
+                                )}
+                                <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: "var(--border)", color: "var(--muted)" }}>{t.minutes}分</span>
+                              </label>
+                            </li>
+                          );
+                        })}
                       </ul>
                     ) : (
                       <p className="text-sm" style={{ color: "var(--muted)" }}>今日のタスクはありません。</p>
@@ -753,11 +739,11 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: {
           ) : (
             <ul className="flex flex-col gap-2">
               {tasks.map((t, i) => (
-                <li key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: "var(--bg)", border: "1.5px solid var(--border)" }}>
-                  <span className="text-base">{TASK_TYPE_ICON[t.type] || "📌"}</span>
-                  <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{TASK_TYPE_LABEL[t.type] ?? t.type}</span>
-                  {t.carryover && <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "var(--accent)", color: "white" }}>繰越</span>}
-                  <span className="text-xs font-bold" style={{ color: "var(--muted)" }}>{t.minutes}分</span>
+                <li key={i} className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ background: "var(--bg)", border: "1.5px solid var(--border)" }}>
+                  <span className="text-base flex-shrink-0 mt-0.5">📌</span>
+                  <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{t.text}</span>
+                  {t.carryover && <span className="text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>繰越</span>}
+                  <span className="text-xs font-bold flex-shrink-0" style={{ color: "var(--muted)" }}>{t.minutes}分</span>
                 </li>
               ))}
             </ul>

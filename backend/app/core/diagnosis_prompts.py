@@ -6,81 +6,26 @@
 import json
 
 
-WELCOME_MESSAGE_SYSTEM = """あなたは以下の人格プロファイルを持つ英語学習コーチです。
-この口調・励まし方の特徴を反映して、これから初回診断チャットを始める学習者への
-ウェルカムメッセージを1つ生成してください。
-
-以下を含めること:
-- 挨拶
-- これから現状を教えてもらうための質問をする旨の案内
-- 気軽に答えてほしいという一言
-
-200文字程度の自然な会話文のみを出力してください（JSON形式ではなく、メッセージ本文のみ）。
-"""
-
-
-def build_welcome_message_messages(personality_profile: dict) -> list[dict]:
-    return [{
-        "role": "user",
-        "content": f"【人格プロファイル】\n{json.dumps(personality_profile, ensure_ascii=False, indent=2)}",
-    }]
-
-
-ROADMAP_GENERATION_SYSTEM = """あなたは英語学習の専門コーチです。
-以下の学習者の診断データとクリエイターの人格プロファイルをもとに、
-その学習者専用の30日ロードマップを生成してください。
-
-このコースの目標・評価軸は、点数化された試験（TOEIC等）に限らない（会話力・発話量・習慣化など様々な形がある）。
-学習者の回答やコースのゴールから、そのコースに合った現在地・目標の表現方法を自分で判断して使うこと。
-スコアの言及が無いコースに対して、勝手にTOEIC等の試験スコアを想定して出力してはならない。
-
-【生成の3原則】
-1. 具体性: 「リスニングを強化する」ではなく「Part 3のディクテーションを毎日10分」のように
-           教材名・時間・具体的な行動まで落とす
-2. 制約への言及: 学習時間・苦手分野・使用教材などの制約を計画の中で明示的に活かす
-3. 中間目標の提示: 「このペースで続ければWeek6には○○ができるようになる見込み」のように、
-                  そのコースの評価軸に合った中間予測を必ず含める（数値スコアに限らず、
-                  「○分間の会話ができる」「○周完了」など、コースの性質に合った表現でよい）
-
-以下のJSON形式のみで出力してください（説明文は不要）:
-{
-  "level_analysis": {
-    "current_level": "現在地の説明（このコースの評価軸に合った表現。例: TOEIC580点 / 日常会話で詰まらず話せるレベル / 単語帳1周目）",
-    "target_level": "目標の説明（同上の評価軸で）",
-    "gap": "現在地と目標の差を一言で（例: +220点 / あと3段階 / 残り2周）",
-    "trial_date": "約30日後",
-    "strengths": ["得意・既習の分野"],
-    "weaknesses": ["苦手・未着手の分野"],
-    "predicted_milestone": "Week6時点での中間目標の見込み（このコースの評価軸で）"
-  },
-  "roadmap_reason": "なぜこの配分にしたかの理由（学習者の回答の制約を踏まえて）",
-  "weekly_plan": [
-    {
-      "weeks": "1〜2",
-      "theme": "学習習慣の確立・現状把握",
-      "milestone": "毎日30分の継続",
-      "focus_reason": "まず継続を最優先。量より習慣を作る期間"
-    }
-  ],
-  "day1_tasks": [
-    "診断チャットへの回答(完了済み)",
-    "{使用教材名}のPart 1 Set 1を解く",
-    "単語アプリで20語学習"
-  ],
-  "creator_message": "人格プロファイルを適用したメッセージ"
-}
-
-weekly_planは既存の30日コース構造（週単位テーマ）の週数・テーマ構成にできるだけ沿わせつつ、
-学習者の診断結果に応じてfocus_reason（強調ポイント）をパーソナライズしてください
-（カリキュラム自体の大枠は変更せず、声かけと優先順位だけを変える）。
-"""
+def build_welcome_message_messages(personality_profile: dict, subject: str = "english") -> list[dict]:
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
+    return [
+        {"role": "system", "content": config.diagnosis_welcome_system},
+        {
+            "role": "user",
+            "content": f"【人格プロファイル】\n{json.dumps(personality_profile, ensure_ascii=False, indent=2)}",
+        },
+    ]
 
 
 def build_roadmap_generation_messages(
     custom_qa: list[str],
     personality_profile: dict,
     course_week_themes: list[dict],
+    subject: str = "english",
 ) -> list[dict]:
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
     qa_text = "\n".join(custom_qa) if custom_qa else "（クリエイターが診断質問を設定していないため、回答データはありません。人格プロファイルとコース構造から一般的なプランを作成してください）"
     content = (
         f"【学習者の回答（クリエイターが設定した質問への回答）】\n{qa_text}\n\n"
@@ -90,7 +35,10 @@ def build_roadmap_generation_messages(
         f"level_analysisやroadmap_reasonに反映してください。回答に明記されていない項目は、"
         f"人格プロファイルとコース構造から妥当な前提を補って構いません。"
     )
-    return [{"role": "user", "content": content}]
+    return [
+        {"role": "system", "content": config.roadmap_generation_system},
+        {"role": "user", "content": content},
+    ]
 
 
 # 週次レビュー生成プロンプト（要件定義書5.5、詳細設計書2.6）

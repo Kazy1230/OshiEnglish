@@ -183,7 +183,6 @@ _ensure_column("courses", "suspension_reason", "TEXT NULL")
 _ensure_column("question_categories", "status", "VARCHAR(20) NOT NULL DEFAULT 'approved'")
 
 # --- 3層コース生成アーキテクチャへの移行（90日→30日、Layer1/2/3分離） ---
-_ensure_column("course_days", "task_types", "JSON NULL")
 _drop_column("course_days", "tasks")
 _drop_column("course_days", "ai_message_morning")
 _drop_column("course_days", "ai_message_evening")
@@ -200,7 +199,10 @@ _ensure_column("courses", "pace", "VARCHAR(50) NULL")
 _ensure_column("course_textbooks", "target_laps", "INT NOT NULL DEFAULT 1")
 # --- 繰越タスク設計（議論サマリー20260626 15節） ---
 _ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
-_ensure_column("day_logs", "completed_task_types", "JSON NULL")
+# --- マルチドメイン拡張（v1.2）: subject・チェックリスト化 ---
+_ensure_column("courses", "subject", "VARCHAR(20) NOT NULL DEFAULT 'english'")
+_rename_column("course_days", "task_types", "checklist_items", "JSON NULL")
+_rename_column("day_logs", "completed_task_types", "completed_item_indices", "JSON NULL")
 _ensure_column("interview_sessions", "base_type", "VARCHAR(50) NULL")
 _ensure_column("interview_sessions", "gender", "VARCHAR(20) NULL")
 _ensure_column("personality_profiles", "base_type", "VARCHAR(50) NULL")

@@ -105,6 +105,7 @@ def _serialize_course_card(course: Course) -> dict:
         "title": course.title,
         "description": course.description,
         "thumbnail_url": course.thumbnail_url,
+        "subject": course.subject,
         "category": course.category,
         "status": course.status,
         "price": course.price,
@@ -128,7 +129,7 @@ def _serialize_course_day(day: CourseDay) -> dict:
         "day": day.day_number,
         "week_number": day.week_number,
         "theme": day.theme,
-        "task_types": day.task_types,
+        "checklist_items": day.checklist_items,
         "is_rest_day": day.is_rest_day,
         "is_edited_by_creator": day.is_edited_by_creator,
     }
@@ -169,6 +170,7 @@ class CourseCreate(BaseModel):
     title: str
     description: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    subject: str = "english"
     category: Optional[str] = None
     price: int = 0
     is_free: bool = False
@@ -225,7 +227,7 @@ class CourseUpdate(BaseModel):
 
 class CourseDayUpdate(BaseModel):
     theme: Optional[str] = None
-    task_types: Optional[List[dict]] = None
+    checklist_items: Optional[List[dict]] = None
     is_rest_day: Optional[bool] = None
 
 
@@ -441,6 +443,7 @@ def create_course(data: CourseCreate, current_user=Depends(get_current_user), db
         title=data.title,
         description=data.description,
         thumbnail_url=data.thumbnail_url,
+        subject=data.subject,
         category=data.category,
         price=data.price,
         is_free=data.is_free,
@@ -536,9 +539,10 @@ def _check_textbook_coverage(db: Session, course: Course) -> dict:
 
 def _check_goal_intensity_fit(course: Course) -> dict:
     try:
+        _qc_msgs = qc_prompts.build_goal_fit_messages(course.goal, course.target_learner, course.intensity, course.pace, subject=course.subject or "english")
         text = generate_text(
-            qc_prompts.GOAL_FIT_SYSTEM,
-            qc_prompts.build_goal_fit_messages(course.goal, course.target_learner, course.intensity, course.pace),
+            _qc_msgs[0]["content"],
+            _qc_msgs[1:],
             max_tokens=300,
             json_mode=True,
         )
@@ -695,17 +699,13 @@ def _infer_skill_type(ct: "CourseTextbook", name: str | None) -> str:
     return "practice"
 
 
-def _build_day_textbook_plan(db: Session, course_id: int) -> tuple[dict[int, list[dict]], set[str]]:
+def _build_day_textbook_plan(db: Session, course_id: int) -> dict[int, list[dict]]:
     """course_textbooks + textbook_day_assignmentsから、day_number(1〜30)ごとの教材項目割り当てを組み立てる。
-    day_numberがNULL（「やらない」）の項目は含めない。
-    あわせて、登録されている教材から実際に対応可能なタスク種別の集合を返す
-    （リスニング教材を登録していないのにlistningタスクが出力される、といった不整合を防ぐため）。"""
+    day_numberがNULL（「やらない」）の項目は含めない。"""
     course_textbooks = db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).all()
     plan: dict[int, list[dict]] = {}
-    allowed_types: set[str] = set()
     for ct in course_textbooks:
         name = ct.textbook.name if ct.textbook else ct.custom_name
-        allowed_types.add(_infer_skill_type(ct, name))
         for assignment in ct.day_assignments:
             if assignment.day_number is None:
                 continue
@@ -716,7 +716,7 @@ def _build_day_textbook_plan(db: Session, course_id: int) -> tuple[dict[int, lis
                 "daily_words": ct.daily_words,
                 "review_words": ct.review_words,
             })
-    return plan, allowed_types
+    return plan
 
 
 def _run_course_days_generation(course_id: int):
@@ -730,15 +730,22 @@ def _run_course_days_generation(course_id: int):
         if not course:
             return
         personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
-        day_textbook_plan, allowed_task_types = _build_day_textbook_plan(db, course.id)
+        day_textbook_plan = _build_day_textbook_plan(db, course.id)
 
         try:
+            messages = gen_prompts.build_course_day_generation_messages(
+                personality.profile, course.title, course.goal, course.target_learner, course.intensity,
+                subject=course.subject or "english",
+                study_materials=course.study_materials,
+                pace=course.pace,
+                day_textbook_plan=day_textbook_plan,
+            )
+            # messages[0] は system、messages[1] は user
+            system_msg = messages[0]["content"]
+            user_messages = messages[1:]
             text = generate_text(
-                gen_prompts.COURSE_DAY_GENERATION_SYSTEM,
-                gen_prompts.build_course_day_generation_messages(
-                    personality.profile, course.title, course.goal, course.target_learner, course.intensity,
-                    course.study_materials, course.pace, day_textbook_plan, allowed_task_types,
-                ),
+                system_msg,
+                user_messages,
                 max_tokens=4000,
                 json_mode=True,
             )
@@ -753,17 +760,13 @@ def _run_course_days_generation(course_id: int):
 
         for day_data in days_data:
             day_number = day_data.get("day")
-            task_types = day_data.get("task_types") or []
-            if allowed_task_types:
-                # LLMが指示を無視して未登録の教材種別（例: リスニング教材未登録なのにlistening）を
-                # 出力した場合に備え、登録済み教材に対応する種別だけに絞る
-                task_types = [t for t in task_types if t.get("type") in allowed_task_types]
+            checklist_items = day_data.get("checklist_items") or []
             db.add(CourseDay(
                 course_id=course.id,
                 day_number=day_number,
                 week_number=day_data.get("week") or ((day_number - 1) // 7 + 1),
                 theme=day_data.get("theme"),
-                task_types=task_types,
+                checklist_items=checklist_items,
                 is_rest_day=bool(day_data.get("is_rest_day", False)),
             ))
         course.days_generation_status = "completed"
@@ -1089,37 +1092,10 @@ class ParseTocRequest(BaseModel):
 @router.post("/courses/{course_id}/textbooks/parse-toc")
 def parse_toc_chat(course_id: int, data: ParseTocRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """ユーザーが自然言語で説明した教材の目次構成をAIがリスト化し、確認を返す。会話形式で精緻化できる。要(本人)"""
-    _get_owned_course(db, course_id, current_user)
-    SYSTEM = f"""あなたは英語教材の専門家です。
-クリエイターが「{data.textbook_name}」を30日学習カレンダーに組み込むために、
-教材の全章リストと「何日目に何を学習するか」の30日分割り当て計画を作成します。
-
-## 返答形式（JSONのみ・他のテキスト一切不要）
-{{
-  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
-  "toc_items": ["章名1", "章名2", ...],
-  "day_assignments": [
-    {{"day": 1, "items": ["章名1", "章名2"]}},
-    {{"day": 2, "items": ["章名3", "章名4"]}},
-    ...
-  ]
-}}
-
-## ルール
-1. **toc_items**：教材の全章・全セクションを漏れなく配列で返す。
-   - 有名教材（Distinction2000・DUO3.0・速読英単語・システム英単語・英文法ポラリス等）は
-     あなたの知識から全章を即座に提案する（ユーザーに説明させない）
-   - 粒度は「1章 or 1セクション」単位（15〜60分で学習できる単位）
-   - 教材が不明な場合のみtoc_itemsを空配列にして質問する
-
-2. **day_assignments**：toc_itemsを30日間に割り当てる。
-   - ユーザーが「1日Nチャプター」などペースを指定した場合は厳守する
-   - 指定がない場合は全章が均等に収まるよう自動計算する
-   - 教材が30日以内に終わる場合：終了した翌日以降はday_assignmentsに含めない
-   - 教材が30日を超える場合：30日分のみ割り当て、残りは含めない
-   - 学習しない日（休息日候補）はday_assignmentsに含めなくてよい
-
-3. toc_itemsが確定できない場合は両方空配列にして質問する"""
+    course = _get_owned_course(db, course_id, current_user)
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(course.subject or "english")
+    SYSTEM = config.toc_chat_system_template.format(textbook_name=data.textbook_name)
     messages = list(data.history)
     messages.append({"role": "user", "content": data.message})
     try:
@@ -1296,10 +1272,10 @@ def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Se
 
 class DayLogCompleteRequest(BaseModel):
     memo: Optional[str] = None
-    completed_task_types: Optional[List[str]] = None  # 実際に完了したタスク種別。未指定なら全タスク完了とみなす
+    completed_item_indices: Optional[List[int]] = None  # 完了したチェックリスト項目のインデックス。未指定なら全完了とみなす
 
 
-def _adjust_next_day_tasks(db: Session, course_id: int, user_id: int, completed_day: int, completed_task_types: Optional[list[str]], memo: Optional[str]) -> None:
+def _adjust_next_day_tasks(db: Session, course_id: int, user_id: int, completed_day: int, completed_item_indices: Optional[list[int]], memo: Optional[str]) -> None:
     """Layer3: 前日の完了報告をもとに翌日のタスクをAIで微調整する。失敗時は無音でスキップ。"""
     if completed_day >= 30:
         return
@@ -1315,22 +1291,25 @@ def _adjust_next_day_tasks(db: Session, course_id: int, user_id: int, completed_
     if not next_day_record or not next_day_record.adjusted_tasks:
         return
 
-    all_types = [t.get("type") for t in next_day_record.adjusted_tasks if t.get("type")]
+    course = db.query(Course).filter(Course.id == course_id).first()
+    subject = course.subject if course else "english"
 
     from app.core import layer3_prompts as l3
     from app.core.llm import extract_json
     from app.core.config import settings
+    from app.core.subject_config import get_subject_config
     try:
+        all_items = next_day_record.adjusted_tasks or []
         raw = generate_text(
-            l3.DAILY_ADJUST_SYSTEM,
-            l3.build_daily_adjust_messages(completed_task_types, all_types, memo, next_day_record.adjusted_tasks),
+            get_subject_config(subject).daily_adjust_system,
+            l3.build_daily_adjust_messages(completed_item_indices, all_items, memo, all_items, subject=subject),
             max_tokens=400,
             model=settings.DEEPSEEK_MODEL_LITE,
             json_mode=True,
         )
         result = extract_json(raw)
-        if result.get("adjusted_tasks"):
-            next_day_record.adjusted_tasks = result["adjusted_tasks"]
+        if result.get("adjusted_checklist_items"):
+            next_day_record.adjusted_tasks = result["adjusted_checklist_items"]
             reason = result.get("reason", "")
             if reason:
                 existing = next_day_record.personalize_reason or ""
@@ -1339,10 +1318,9 @@ def _adjust_next_day_tasks(db: Session, course_id: int, user_id: int, completed_
         pass
 
 
-def _apply_carryover(db: Session, course_id: int, user_id: int, day_number: int, completed_task_types: Optional[list[str]]) -> None:
-    """完了報告された日のタスクのうち未完了だった分を、翌日のcarryover_tasksに反映する（議論サマリー15節）。
-    completed_task_typesがNone（未指定）の場合は全タスク完了とみなし、繰越は発生させない。"""
-    if completed_task_types is None or day_number >= 30:
+def _apply_carryover(db: Session, course_id: int, user_id: int, day_number: int, completed_item_indices: Optional[list[int]]) -> None:
+    """未チェック項目を翌日のcarryover_tasksに追加する。completed_item_indicesがNoneなら全完了とみなし繰越なし。"""
+    if completed_item_indices is None or day_number >= 30:
         return
     profile = db.query(LearnerProfile).filter(
         LearnerProfile.user_id == user_id, LearnerProfile.course_id == course_id
@@ -1354,14 +1332,17 @@ def _apply_carryover(db: Session, course_id: int, user_id: int, day_number: int,
     ).first()
     if not today_learner_day:
         return
-    skipped_tasks = [t for t in (today_learner_day.adjusted_tasks or []) if t.get("type") not in completed_task_types]
+    all_items = today_learner_day.adjusted_tasks or []
+    skipped_tasks = [
+        item for i, item in enumerate(all_items)
+        if i not in completed_item_indices
+    ]
 
     next_day = db.query(LearnerCourseDay).filter(
         LearnerCourseDay.learner_profile_id == profile.id, LearnerCourseDay.day_number == day_number + 1,
     ).first()
     if not next_day:
         return
-    # 同じ日からの繰越を複数回送信されても重複加算しないよう、この日からの分は一旦除いて再構成する
     other_carryover = [t for t in (next_day.carryover_tasks or []) if t.get("carryover_from_day") != day_number]
     new_carryover = [{**t, "carryover_from_day": day_number} for t in skipped_tasks]
     next_day.carryover_tasks = other_carryover + new_carryover if new_carryover else other_carryover or None
@@ -1370,7 +1351,7 @@ def _apply_carryover(db: Session, course_id: int, user_id: int, day_number: int,
 @router.put("/courses/{course_id}/day-logs/{day_number}/complete")
 def complete_day_log(course_id: int, day_number: int, data: DayLogCompleteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """指定日の学習完了を記録する（学習者が「完了」と報告した時に呼ぶ）。
-    completed_task_typesを指定すると、未完了だったタスク種別が翌日に繰越タスクとして引き継がれる。要(購入済み学習者)"""
+    completed_item_indicesを指定すると、未完了だったチェックリスト項目が翌日に繰越される。要(購入済み学習者)"""
     from datetime import datetime, timezone
 
     course = db.query(Course).filter(Course.id == course_id).first()
@@ -1391,9 +1372,9 @@ def complete_day_log(course_id: int, day_number: int, data: DayLogCompleteReques
     log.completed_at = datetime.now(timezone.utc)
     if data.memo is not None:
         log.memo = data.memo
-    log.completed_task_types = data.completed_task_types
-    _apply_carryover(db, course_id, current_user.id, day_number, data.completed_task_types)
-    _adjust_next_day_tasks(db, course_id, current_user.id, day_number, data.completed_task_types, data.memo)
+    log.completed_item_indices = data.completed_item_indices
+    _apply_carryover(db, course_id, current_user.id, day_number, data.completed_item_indices)
+    _adjust_next_day_tasks(db, course_id, current_user.id, day_number, data.completed_item_indices, data.memo)
     db.commit()
     return {"day_number": day_number, "is_completed": True, "completed_at": log.completed_at, "memo": log.memo}
 
@@ -1524,3 +1505,21 @@ def delete_diagnosis_question(question_id: int, current_user=Depends(get_current
     db.delete(question)
     db.commit()
     return {"message": "削除しました"}
+
+
+@router.get("/subjects")
+def get_subject_choices():
+    """利用可能な科目の一覧と、科目→カテゴリのマッピングを返す。"""
+    from app.core.subject_config import SUBJECT_CHOICES, SUBJECT_CATEGORY_MAP
+    return {"subjects": SUBJECT_CHOICES, "category_map": SUBJECT_CATEGORY_MAP}
+
+
+@router.get("/subjects/{subject}/default-diagnosis-questions")
+def get_default_diagnosis_questions(subject: str):
+    """指定した科目のデフォルト診断質問テンプレートを返す。"""
+    from app.core.subject_config import get_subject_config
+    try:
+        config = get_subject_config(subject)
+        return {"questions": config.default_diagnosis_questions}
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unknown subject: {subject}")

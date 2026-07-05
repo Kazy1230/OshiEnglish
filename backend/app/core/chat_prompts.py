@@ -35,48 +35,33 @@ def select_answer_model(message_type: str, question_body: str, haiku_model: str,
     return sonnet_model
 
 
-CLASSIFY_SYSTEM = """あなたは英語学習サービスの質問分類アシスタントです。
-学習者からの相談・質問を読み、以下の2つを判定してJSON形式で返してください。
-
-1. category_name: 質問の学習コンテンツ軸での分類名（例：「仮定法」「リスニングPart3」「単語の覚え方」「モチベーション維持」「学習時間の確保」など）。
-   既存カテゴリ一覧に当てはまるものがあれば、必ずその名称をそのまま使ってください（表記揺れを避けるため）。
-   当てはまるものがなければ、新しい分類名を簡潔に提案してください。
-
-2. message_type: 以下のいずれか一つ
-   - "emotion": 感情・モチベーション系の相談（「続けられるか不安」「モチベがない」等）
-   - "content": 学習内容についての質問（「仮定法ってどう覚えればいい?」等）
-   - "report": 状況報告・雑談系（「今日30分やりました」等）
-
-JSON以外の文章は出力しないでください。出力形式:
-{"category_name": "...", "message_type": "emotion" | "content" | "report"}
-"""
-
-
-def build_classify_messages(question_body: str, existing_category_names: list[str]) -> list[dict]:
+def build_classify_messages(question_body: str, existing_category_names: list[str], subject: str = "english") -> list[dict]:
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
+    classify_system = config.classify_system
     categories_text = "、".join(existing_category_names) if existing_category_names else "（まだ登録されていません）"
-    return [{
-        "role": "user",
-        "content": f"既存カテゴリ一覧: {categories_text}\n\n質問:\n{question_body}",
-    }]
+    return [
+        {"role": "system", "content": classify_system},
+        {
+            "role": "user",
+            "content": f"既存カテゴリ一覧: {categories_text}\n\n質問:\n{question_body}",
+        },
+    ]
 
 
-ANSWER_STYLE_BY_TYPE = {
-    "emotion": "まず学習者の気持ちに共感し、次に原因を一緒に整理し、最後に今日からできる小さな行動を1つ提案する",
-    "content": "結論を最初に伝え、理由を説明し、具体例を1つ挙げ、最後に次にとるべきアクションを示す",
-    "report": "学習者の取り組みを労い、明日への橋渡しになる一言で締める",
-}
-
-
-def build_answer_system(personality_profile: dict, message_type: str, tone_profile: dict | None = None) -> list[dict]:
+def build_answer_system(personality_profile: dict, message_type: str, tone_profile: dict | None = None, subject: str = "english") -> list[dict]:
     """人格プロファイル部分（同じコースの全チャットで不変）とメッセージ種別ごとの回答スタイル（可変）を
     別々のcontent blockに分け、人格プロファイル側にcache_controlを付けてPrompt Cachingを有効化する
     （詳細設計書2.5節：システムプロンプトのキャッシュでAPIコストを削減）。
     tone_profileはCharacterのtone_profile（first_person/speech_style/personality/catchphrase/ng_expressions）。
     personality_profileが空でもtone_profileから人格を組み立てられるようにする。"""
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
+    answer_style_by_type = config.answer_style_by_type
     comm = personality_profile.get("communication", {})
     coaching = personality_profile.get("coaching_style", {})
     tp = tone_profile or {}
-    style = ANSWER_STYLE_BY_TYPE.get(message_type, ANSWER_STYLE_BY_TYPE["content"])
+    style = answer_style_by_type.get(message_type, answer_style_by_type.get("content", ""))
 
     # tone_profileから補完（personality_profileが空の場合のフォールバック）
     first_person = comm.get("first_person") or tp.get("first_person", "")
@@ -121,7 +106,7 @@ def build_answer_system(personality_profile: dict, message_type: str, tone_profi
         samples_list = "\n".join(f'  「{s}」' for s in speaking_samples if s)
         samples_block = f"\n【このキャラクターの実際のセリフ例（この口調・雰囲気で返答すること）】\n{samples_list}"
 
-    preamble = f"""あなたは英語学習コーチです。以下の人格でチャットしています。
+    preamble = f"""あなたは学習コーチです。以下の人格でチャットしています。
 学習者と友人のように自然に会話し、絶対に一貫した人格・口調を保ってください。
 返答は短くテンポよく。前後の文脈を踏まえて会話を続けてください。
 
@@ -174,7 +159,7 @@ def build_today_message_system(personality_profile: dict, message_kind: str) -> 
     comm = personality_profile.get("communication", {})
     coaching = personality_profile.get("coaching_style", {})
     kind_label = "朝の声かけ" if message_kind == "morning" else "夜のリマインド"
-    return f"""あなたは英語学習コーチとして、以下の人格で学習者に{kind_label}メッセージを送ってください。
+    return f"""あなたは学習コーチとして、以下の人格で学習者に{kind_label}メッセージを送ってください。
 
 【人格設定】
 - 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）
@@ -204,7 +189,7 @@ def build_reminder_message_system(personality_profile: dict, tier: int) -> str:
         2: "促進トーン。昨日できなかった分を一緒に取り戻そうと前向きに励ます。",
         3: "感情に寄り添うトーン。プレッシャーをかけず「少しだけでもいいから開いてみて」という温かい呼びかけにする。",
     }[tier]
-    return f"""あなたは英語学習コーチとして、以下の人格で学習者にリマインドメッセージを送ってください。
+    return f"""あなたは学習コーチとして、以下の人格で学習者にリマインドメッセージを送ってください。
 
 【人格設定】
 - 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）

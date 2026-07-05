@@ -75,9 +75,10 @@ def get_welcome_message(course_id: int, current_user=Depends(get_current_user), 
     course = _get_purchased_course(db, course_id, current_user)
     personality = _get_personality_profile(db, course)
     try:
+        _welcome_msgs = prompts.build_welcome_message_messages(personality.profile, subject=course.subject or "english")
         message = generate_text(
-            prompts.WELCOME_MESSAGE_SYSTEM,
-            prompts.build_welcome_message_messages(personality.profile),
+            _welcome_msgs[0]["content"],
+            _welcome_msgs[1:],
             max_tokens=300,
         )
     except LLMError as e:
@@ -144,9 +145,10 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     custom_qa = _build_custom_qa_summary(db, course, profile)
 
     try:
+        _roadmap_msgs = prompts.build_roadmap_generation_messages(custom_qa, personality.profile, week_themes, subject=course.subject or "english")
         text = generate_text(
-            prompts.ROADMAP_GENERATION_SYSTEM,
-            prompts.build_roadmap_generation_messages(custom_qa, personality.profile, week_themes),
+            _roadmap_msgs[0]["content"],
+            _roadmap_msgs[1:],
             max_tokens=3000,
             json_mode=True,
         )
@@ -167,7 +169,7 @@ def submit_diagnosis(course_id: int, data: DiagnosisSubmitRequest, current_user=
     db.commit()
     db.refresh(roadmap)
 
-    _generate_learner_course_days(db, profile, personality, course_days, custom_qa)
+    _generate_learner_course_days(db, profile, personality, course_days, custom_qa, course)
 
     return _serialize_roadmap(roadmap)
 
@@ -247,21 +249,22 @@ def _build_textbook_progress_summary(db: Session, profile: LearnerProfile) -> li
     return summary
 
 
-def _generate_learner_course_days(db: Session, profile: LearnerProfile, personality: PersonalityProfile, course_days: list[CourseDay], custom_qa: list[str]) -> None:
+def _generate_learner_course_days(db: Session, profile: LearnerProfile, personality: PersonalityProfile, course_days: list[CourseDay], custom_qa: list[str], course: "Course" = None) -> None:
     """Layer2: 学習者専用の30日タスク配分を生成し learner_course_days に保存する。
-    生成に失敗した場合はLayer1のtask_typesをそのままコピーして処理を継続する（学習者を止めない）。"""
+    生成に失敗した場合はLayer1のchecklist_itemsをそのままコピーして処理を継続する（学習者を止めない）。"""
     db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id == profile.id).delete()
 
     course_days_brief = [
-        {"day": d.day_number, "theme": d.theme, "task_types": d.task_types, "is_rest_day": d.is_rest_day}
+        {"day": d.day_number, "theme": d.theme, "checklist_items": d.checklist_items, "is_rest_day": d.is_rest_day}
         for d in course_days
     ]
     textbook_progress_summary = _build_textbook_progress_summary(db, profile)
     adjusted_by_day: dict[int, dict] = {}
     try:
+        _personalize_msgs = personalize_prompts.build_personalize_messages(custom_qa, personality.profile, course_days_brief, textbook_progress_summary, subject=(course.subject if course else None) or "english")
         text = generate_text(
-            personalize_prompts.PERSONALIZE_SYSTEM,
-            personalize_prompts.build_personalize_messages(custom_qa, personality.profile, course_days_brief, textbook_progress_summary),
+            _personalize_msgs[0]["content"],
+            _personalize_msgs[1:],
             max_tokens=4000,
             json_mode=True,
         )
@@ -273,11 +276,11 @@ def _generate_learner_course_days(db: Session, profile: LearnerProfile, personal
     for d in course_days:
         item = adjusted_by_day.get(d.day_number)
         if item:
-            adjusted_tasks = item.get("adjusted_tasks", [])
+            adjusted_tasks = item.get("adjusted_checklist_items", [])
             reason = item.get("personalize_reason")
         else:
-            # フォールバック: Layer1の標準タスクをそのまま使う
-            adjusted_tasks = [{"type": t.get("type"), "minutes": t.get("base_minutes")} for t in (d.task_types or [])]
+            # フォールバック: Layer1のチェックリスト項目をそのままコピー
+            adjusted_tasks = list(d.checklist_items or [])
             reason = "標準プランを使用"
         db.add(LearnerCourseDay(
             learner_profile_id=profile.id,

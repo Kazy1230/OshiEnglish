@@ -17,6 +17,6 @@ class DayLog(Base):
     is_completed = Column(Boolean, nullable=False, default=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     memo = Column(Text, nullable=True)
-    # 実際に完了したタスク種別（議論サマリー15節の繰越タスク計算に使用）。未指定（null）の場合は全タスク完了とみなす
-    completed_task_types = Column(JSON, nullable=True)
+    # 完了したチェックリスト項目のインデックス（0始まり）。未指定（null）の場合は全完了とみなす
+    completed_item_indices = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

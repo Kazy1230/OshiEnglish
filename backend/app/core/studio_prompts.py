@@ -1,47 +1,19 @@
 # AIコンテンツ生成スタジオ（二段階生成エンジン）のプロンプト構築ヘルパー。
 # 詳細設計書 Section 3.2 のプロンプト設計に準拠する。
 
-CHARACTER_CONCEPT_SYSTEM = """あなたはアニメ・ライトノベル風キャラクターの設定デザイナーです。
-ユーザーが入力したキャラクターのイメージをもとに、英語学習コンテンツに使用するキャラクター設定を提案してください。
-著作権で保護された既存キャラクターをそのまま模倣することなく、オリジナルのキャラクター設定を作成してください。
-以下のJSON形式のみで返答してください。
-
-{
-  "name_suggestions": ["名前案1", "名前案2", "名前案3"],
-  "first_person": "一人称(例: 私、僕、俺、あたし)",
-  "tone": "口調の説明(例: 少し上から目線だが丁寧。敬語は使わない)",
-  "personality": "性格の説明(例: ツンデレ。本当は親切だが素直に表現できない)",
-  "sentence_ending": "語尾の特徴(例: 〜でしょ、〜じゃない、〜だけど？)",
-  "catchphrase": "口癖(例: 「別に教えてあげてもいいけど」「感謝しなさいよ」)",
-  "ng_words": ["使ってはいけない表現1", "使ってはいけない表現2"],
-  "sample_lines": ["サンプルセリフ1", "サンプルセリフ2", "サンプルセリフ3"]
-}"""
+def build_character_concept_messages(character_concept: str, subject: str = "english") -> list[dict]:
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
+    return [
+        {"role": "system", "content": config.character_concept_system},
+        {"role": "user", "content": f"キャラクターのイメージ: {character_concept}"},
+    ]
 
 
-def build_character_concept_messages(character_concept: str) -> list[dict]:
-    return [{"role": "user", "content": f"キャラクターのイメージ: {character_concept}"}]
-
-
-TONE_PROFILE_SYSTEM = """あなたはアニメ・ライトノベル風キャラクターの設定デザイナーです。
-すでに名前や説明が決まっているキャラクターについて、英語学習コンテンツで使う口調設定を提案してください。
-既に決まっている項目があれば、その内容と矛盾しないように残りの項目を補ってください。
-以下のJSON形式のみで返答してください。
-
-{
-  "first_person": "一人称(例: 私、僕、俺、あたし)",
-  "tone": "口調の説明(例: 少し上から目線だが丁寧。敬語は使わない)",
-  "personality": "性格の説明(例: ツンデレ。本当は親切だが素直に表現できない)",
-  "sentence_ending": "語尾の特徴(例: 〜でしょ、〜じゃない、〜だけど？)",
-  "catchphrase": "口癖(例: 「別に教えてあげてもいいけど」「感謝しなさいよ」)",
-  "ng_words": ["使ってはいけない表現1", "使ってはいけない表現2"],
-  "background": "キャラクターの背景設定・世界観(例: 元落ちこぼれ英語学習者で苦労して習得した。自分の経験を活かして学習者を励ます)",
-  "reaction_patterns": "感情・リアクションパターン(例: 褒められると「べ、別に嬉しくないし」と照れる。学習者が失敗すると「また？まあ、しょうがないか」と呆れながらも優しくフォローする)",
-  "speaking_samples": ["実際のチャットでこのキャラが送るメッセージ例1", "メッセージ例2", "メッセージ例3"]
-}"""
-
-
-def build_tone_profile_messages(name: str, description: str, tone_profile: dict) -> list[dict]:
+def build_tone_profile_messages(name: str, description: str, tone_profile: dict, subject: str = "english") -> list[dict]:
     from app.core.character_voice import render_tone_profile
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
 
     lines = [f"名前: {name}"]
     if description.strip():
@@ -49,7 +21,10 @@ def build_tone_profile_messages(name: str, description: str, tone_profile: dict)
     tone_block = render_tone_profile(tone_profile)
     if tone_block:
         lines.append(f"既存の口調設定:\n{tone_block}")
-    return [{"role": "user", "content": "\n".join(lines)}]
+    return [
+        {"role": "system", "content": config.tone_profile_system},
+        {"role": "user", "content": "\n".join(lines)},
+    ]
 
 
 CONSULT_SYSTEM = """あなたは英語教育コンテンツの企画アドバイザーです。

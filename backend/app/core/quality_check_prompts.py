@@ -4,24 +4,9 @@
 import json
 import re
 
-GOAL_FIT_SYSTEM = """あなたは英語学習コースの設計アドバイザーです。
-クリエイターが設定したコースのゴール・対象者・1日の学習時間・進行速度を見て、
-そのペースでゴールに到達するのが現実的かどうかを判定してください。
-
-【判定基準】
-- 学習時間に対してゴールが過大（例: 1日15分でTOEIC800点等）な場合は低い点数にする
-- 逆に学習時間に対してゴールが控えめすぎる場合も、もったいない旨を軽く指摘してよい（ただし減点は小さく）
-- 妥当な場合は満点に近い点数にする
-
-必ず以下のJSON形式のオブジェクトのみで出力してください（説明文・前置き・コードフェンスは一切不要）:
-{
-  "score": 0から20の整数,
-  "feedback": "学習者・クリエイター向けの改善提案コメント（1〜2文、具体的な数値の代替案を含める）"
-}
-"""
-
-
-def build_goal_fit_messages(goal: str, target_learner: str, intensity: str, pace: str | None) -> list[dict]:
+def build_goal_fit_messages(goal: str, target_learner: str, intensity: str, pace: str | None, subject: str = "english") -> list[dict]:
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
     content = (
         f"ゴール: {goal}\n"
         f"対象者: {target_learner}\n"
@@ -29,7 +14,10 @@ def build_goal_fit_messages(goal: str, target_learner: str, intensity: str, pace
         f"進行速度: {pace or '標準'}\n\n"
         f"上記の整合性を判定してください。"
     )
-    return [{"role": "user", "content": content}]
+    return [
+        {"role": "system", "content": config.quality_check_system},
+        {"role": "user", "content": content},
+    ]
 
 
 def extract_goal_fit_result(text: str) -> dict:

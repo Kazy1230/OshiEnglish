@@ -9,8 +9,6 @@
 import json
 import re
 
-TASK_TYPES = ["vocabulary", "listening", "grammar", "reading", "shadowing", "practice"]
-
 WEEK_PHASES = [
     (1, 1, "基礎"),
     (2, 2, "強化"),
@@ -26,53 +24,21 @@ def phase_label_for_week(week_number: int) -> str:
     return "学習期"
 
 
-COURSE_DAY_GENERATION_SYSTEM = """あなたは英語学習コースの設計専門家です。
-クリエイターの人格プロファイルとコース基本情報をもとに、30日分のコース骨格をJSON配列で生成してください。
-メッセージ文は生成しません。タスクの「型」（種別と標準学習時間）のみを生成してください。
-
-必ず以下のJSON形式のオブジェクトのみで出力してください（説明文・前置き・コードフェンスは一切不要）。
-"days"配列の要素数は必ず30にしてください:
-{
-  "days": [
-    {
-      "day": 1,
-      "week": 1,
-      "theme": "その日の学習テーマ（15文字以内）",
-      "task_types": [
-        {"type": "vocabulary", "label": "単語学習", "base_minutes": 15}
-      ],
-      "is_rest_day": false
-    }
-  ]
-}
-
-【制約】
-- themeは15文字以内
-- task_typesのtypeはvocabulary/listening/grammar/reading/shadowing/practiceから選ぶ
-- base_minutesは各タスクの標準学習時間(分)。1日の標準学習時間を超えないこと
-- 週の流れ: Week1=基礎 Week2=強化 Week3=実践 Week4=仕上げ
-- 休息日は7日ごとに1日程度設ける（is_rest_day=true、その日はtask_typesを空配列にする）
-- 必ず人格プロファイルの方向性（指導方針・専門分野）を反映したテーマ選定にすること
-- 指定された「使用する教材」を前提にテーマ・タスクを組み立てること（汎用的な内容にしない）
-- 指定された「進行速度」に応じて難易度カーブの傾き・1日あたりのタスク量を調整すること
-- 「日程割り当て」が指定されている日は、その日のthemeとtask_typesを必ずその割り当て内容に基づいて作成すること
-  （割り当てられた教材の章・項目名をthemeに反映し、その項目を学習するタスクをtask_typesに含める。
-   割り当てが無い日は人格プロファイル・ゴールに基づき自由に設計してよい）
-- 単語帳タイプの割り当てがある日は、daily_words/review_wordsの語数に応じたvocabularyタスクを設定すること
-"""
-
-
 def build_course_day_generation_messages(
     personality_profile: dict,
     course_title: str,
     goal: str,
     target_learner: str,
     intensity: str,
+    subject: str = "english",
     study_materials: str | None = None,
     pace: str | None = None,
     day_textbook_plan: dict[int, list[dict]] | None = None,
-    allowed_task_types: set[str] | None = None,
 ) -> list[dict]:
+    from app.core.subject_config import get_subject_config
+    config = get_subject_config(subject)
+    system = config.course_day_generation_system
+
     plan_text = "指定なし（人格プロファイルとゴールに基づき自由に設計してください）"
     if day_textbook_plan:
         lines = []
@@ -87,16 +53,6 @@ def build_course_day_generation_messages(
             lines.append(f"  Day{day}: " + " / ".join(entry_descriptions))
         plan_text = "\n".join(lines)
 
-    if allowed_task_types:
-        allowed_text = "、".join(sorted(allowed_task_types))
-        allowed_instruction = (
-            f"\n\n【重要】task_typesのtypeは必ず次のいずれかのみを使用してください: {allowed_text}\n"
-            f"クリエイターが登録した教材に対応しない種別（例: リスニング教材を登録していないのにlistening）は"
-            f"一切出力しないでください。"
-        )
-    else:
-        allowed_instruction = ""
-
     content = (
         f"【人格プロファイル】\n{json.dumps(personality_profile, ensure_ascii=False, indent=2)}\n\n"
         f"【コース情報】\n"
@@ -108,12 +64,12 @@ def build_course_day_generation_messages(
         f"進行速度: {pace or '標準'}\n\n"
         f"【日程割り当て（クリエイターが指定した、教材の各章をどの日にやるか）】\n{plan_text}\n\n"
         f"上記のコース情報で30日分のコース骨格を生成してください。"
-        f"日程割り当てが指定されている日は必ずその教材項目に基づいてtheme・task_typesを作成し、"
-        f"指定が無い日は登録されている教材全体を使う前提で人格プロファイルとゴールに沿って自由に設計してください。"
-        f"進行速度（ゆっくり/標準/速め等）を週ごとの難易度カーブと1日あたりのタスク量に反映してください。"
-        f"{allowed_instruction}"
+        f"checklist_itemsは自然な日本語で具体的なタスクを書いてください。"
     )
-    return [{"role": "user", "content": content}]
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": content},
+    ]
 
 
 def extract_json_array(text: str) -> list:

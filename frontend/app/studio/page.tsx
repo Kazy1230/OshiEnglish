@@ -25,7 +25,13 @@ const FORMATS: Format[] = [
   { key: "youtube", label: "YouTube動画", icon: "▶", mediaType: "video", defaultVal: 480, unit: "秒", minVal: 120, maxVal: 1800, hint: "じっくり解説・信頼構築に最適" },
 ];
 
-type Step = "format" | "ideas" | "angles" | "generating" | "result";
+type Step = "subject" | "format" | "ideas" | "angles" | "generating" | "result";
+
+const STUDIO_SUBJECT_OPTIONS = [
+  { key: "english", label: "英語", icon: "📚", description: "TOEIC・英会話・英文法など" },
+  { key: "it", label: "IT・プログラミング", icon: "💻", description: "Python・AWS・Web開発など" },
+  { key: "music", label: "音楽", icon: "🎵", description: "ピアノ・ギター・音楽理論など" },
+];
 
 export default function StudioPage() {
   const { me, loading } = useRoleGuard(["creator", "admin"]);
@@ -33,7 +39,8 @@ export default function StudioPage() {
   const [character, setCharacter] = useState<{ id: number; name: string } | null>(null);
   const [loadingCharacter, setLoadingCharacter] = useState(true);
 
-  const [step, setStep] = useState<Step>("format");
+  const [subject, setSubject] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("subject");
   const [format, setFormat] = useState<Format | null>(null);
   const [paramVal, setParamVal] = useState(0); // 文字数 or 秒数
 
@@ -75,6 +82,11 @@ export default function StudioPage() {
   if (loading || loadingCharacter) return <Skeleton />;
 
   // ── ハンドラ ──────────────────────────────────────────────────
+
+  function selectSubject(key: string) {
+    setSubject(key);
+    setStep("format");
+  }
 
   function selectFormat(f: Format) {
     setFormat(f);
@@ -143,6 +155,7 @@ export default function StudioPage() {
           hook: angle.hook,
           duration_sec: durationSec,
           char_limit: charLimit,
+          subject: subject ?? undefined,
         }),
       });
       if (!res.ok) {
@@ -192,7 +205,8 @@ export default function StudioPage() {
   }
 
   function restart() {
-    setStep("format");
+    setSubject(null);
+    setStep("subject");
     setFormat(null);
     setIdeas([]);
     setSelectedIdea(null);
@@ -206,6 +220,7 @@ export default function StudioPage() {
   // ── レンダリング ─────────────────────────────────────────────
 
   const progressSteps = [
+    { key: "subject", label: "分野" },
     { key: "format", label: "フォーマット" },
     { key: "ideas", label: "ネタ選び" },
     { key: "angles", label: "切り口" },
@@ -256,9 +271,42 @@ export default function StudioPage() {
               })}
             </div>
 
-            {/* STEP 0: フォーマット選択 */}
+            {/* STEP 0: 分野選択 */}
+            {step === "subject" && (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="font-bold" style={{ color: "var(--text)" }}>どの分野のコンテンツを作りますか？</p>
+                  <p className="text-sm mt-0.5" style={{ color: "var(--muted)" }}>分野に合ったネタ・切り口をご提案します</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {STUDIO_SUBJECT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => selectSubject(opt.key)}
+                      className="card p-5 flex flex-col gap-2 text-left hover-lift transition-all"
+                      style={{ background: "var(--card)" }}
+                    >
+                      <span className="text-2xl">{opt.icon}</span>
+                      <span className="text-sm font-bold" style={{ color: "var(--primary)" }}>{opt.label}</span>
+                      <span className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{opt.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: フォーマット選択 */}
             {step === "format" && (
               <div className="flex flex-col gap-4">
+                {subject && (
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--primary) 20%, transparent)" }}>
+                    <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: "var(--primary)" }}>
+                      {STUDIO_SUBJECT_OPTIONS.find(o => o.key === subject)?.icon}{" "}
+                      {STUDIO_SUBJECT_OPTIONS.find(o => o.key === subject)?.label}
+                    </span>
+                    <button type="button" onClick={() => { setSubject(null); setStep("subject"); }} className="text-xs underline" style={{ color: "var(--muted)" }}>変更</button>
+                  </div>
+                )}
                 <div>
                   <p className="font-bold" style={{ color: "var(--text)" }}>どのフォーマットで投稿しますか？</p>
                   <p className="text-sm mt-0.5" style={{ color: "var(--muted)" }}>フォーマットを選ぶと、最適な長さ・構成でコンテンツを生成します</p>

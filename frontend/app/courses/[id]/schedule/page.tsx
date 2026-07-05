@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
-type AdjustedTask = { type: string; minutes: number };
+type AdjustedTask = { text: string; minutes: number };
 type Day = {
   day: number;
   week_number: number;
@@ -15,10 +15,6 @@ type Day = {
 };
 type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
-
-const TASK_TYPE_LABEL: Record<string, string> = {
-  vocabulary: "単語学習", listening: "リスニング練習", grammar: "文法確認", reading: "リーディング", shadowing: "シャドーイング", practice: "演習",
-};
 
 const REST_DAY_TIPS = [
   "お気に入りの音楽を聴いてリラックス！",
@@ -184,7 +180,7 @@ export default function CourseSchedulePage() {
                     {todayTasks.length > 0 ? (
                       todayTasks.map((t, i) => (
                         <div key={i} className="flex justify-between text-sm">
-                          <span style={{ color: "var(--text)" }}>{TASK_TYPE_LABEL[t.type] ?? t.type}</span>
+                          <span style={{ color: "var(--text)" }}>{t.text}</span>
                           <span style={{ color: "var(--muted)" }}>{t.minutes}分</span>
                         </div>
                       ))
@@ -243,7 +239,7 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { cours
             {day.theme && <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{day.theme}</p>}
             {tasks.length > 0 && (
               <ul className="text-sm list-disc pl-5" style={{ color: "var(--text)" }}>
-                {tasks.map((t, i) => <li key={i}>{TASK_TYPE_LABEL[t.type] ?? t.type}（{t.minutes}分）</li>)}
+                {tasks.map((t, i) => <li key={i}>{t.text}（{t.minutes}分）</li>)}
               </ul>
             )}
           </>

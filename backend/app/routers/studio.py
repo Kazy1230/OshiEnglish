@@ -61,6 +61,7 @@ def _get_owned_draft(db: Session, draft_id: int, current_user) -> ContentDraft:
 
 class CharacterConceptRequest(BaseModel):
     character_concept: str
+    subject: str = "english"
 
 
 @router.post("/generate/character")
@@ -68,11 +69,11 @@ def generate_character_concept(
     data: CharacterConceptRequest,
     current_user=Depends(get_current_creator_or_admin),
 ):
-    messages = prompts.build_character_concept_messages(data.character_concept)
+    messages = prompts.build_character_concept_messages(data.character_concept, subject=data.subject)
     last_error: LLMError | None = None
     for _ in range(2):  # DeepSeekがjson_mode指定でも稀に壊れたJSONを返すため1回だけ自動リトライ
         try:
-            text = generate_text(prompts.CHARACTER_CONCEPT_SYSTEM, messages, max_tokens=1500, json_mode=True)
+            text = generate_text(messages[0]["content"], messages[1:], max_tokens=1500, json_mode=True)
             return extract_json(text)
         except LLMError as e:
             last_error = e
@@ -83,6 +84,7 @@ class ToneProfileRequest(BaseModel):
     name: str
     description: str = ""
     tone_profile: dict = {}
+    subject: str = "english"
 
 
 @router.post("/generate/tone-profile")
@@ -92,11 +94,11 @@ def generate_tone_profile(
 ):
     if not data.name.strip():
         raise HTTPException(status_code=400, detail="キャラクター名を入力してください")
-    messages = prompts.build_tone_profile_messages(data.name, data.description, data.tone_profile)
+    messages = prompts.build_tone_profile_messages(data.name, data.description, data.tone_profile, subject=data.subject)
     last_error: LLMError | None = None
     for _ in range(2):
         try:
-            text = generate_text(prompts.TONE_PROFILE_SYSTEM, messages, max_tokens=800, json_mode=True)
+            text = generate_text(messages[0]["content"], messages[1:], max_tokens=800, json_mode=True)
             return extract_json(text)
         except LLMError as e:
             last_error = e

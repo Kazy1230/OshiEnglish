@@ -105,6 +105,12 @@ export const api = {
   removeFavorite: (creatorId: number) => apiFetch(`/favorites/${creatorId}`, { method: "DELETE" }),
   listFavorites: () => apiFetch("/favorites/"),
 
+  // 分野・カテゴリ
+  getSubjectChoices: (): Promise<{ subjects: { key: string; label: string }[]; category_map: Record<string, string[]> }> =>
+    apiFetch("/subjects"),
+  getDefaultDiagnosisQuestions: (subject: string): Promise<{ questions: unknown[] }> =>
+    apiFetch(`/subjects/${subject}/default-diagnosis-questions`),
+
   // マーケットプレイス：コース・レッスン
   listCourses: (category?: string) => apiFetch(`/courses${category ? `?category=${encodeURIComponent(category)}` : ""}`),
   getPublicStats: () => apiFetch("/stats/public"),
@@ -229,10 +235,10 @@ export const api = {
 
   // 30日伴走コース：日次学習ログ
   listDayLogs: (courseId: number) => apiFetch(`/courses/${courseId}/day-logs`),
-  completeDayLog: (courseId: number, dayNumber: number, memo?: string, completedTaskTypes?: string[]) =>
+  completeDayLog: (courseId: number, dayNumber: number, memo?: string, completedItemIndices?: number[]) =>
     apiFetch(`/courses/${courseId}/day-logs/${dayNumber}/complete`, {
       method: "PUT",
-      body: JSON.stringify({ memo: memo ?? null, completed_task_types: completedTaskTypes ?? null }),
+      body: JSON.stringify({ memo: memo ?? null, completed_item_indices: completedItemIndices ?? null }),
     }),
 
   // デイリー伴走チャット
