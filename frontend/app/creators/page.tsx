@@ -21,6 +21,7 @@ const SUBJECT_TABS = [
   { key: "english", label: "英語" },
   { key: "it", label: "IT・プログラミング" },
   { key: "music", label: "音楽" },
+  { key: "japanese", label: "日本語" },
 ];
 
 export default function CreatorsPage() {

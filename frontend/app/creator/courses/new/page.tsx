@@ -13,12 +13,14 @@ const SUBJECT_OPTIONS = [
   { key: "english", label: "英語", icon: "📚", description: "TOEIC・英会話・英文法など" },
   { key: "it", label: "IT・プログラミング", icon: "💻", description: "Python・AWS・Web開発など" },
   { key: "music", label: "音楽", icon: "🎵", description: "ピアノ・ギター・音楽理論など" },
+  { key: "japanese", label: "日本語", icon: "🗾", description: "JLPT・日常会話・ビジネス日本語など" },
 ];
 
 const CATEGORY_MAP: Record<string, string[]> = {
   english: ["TOEIC", "TOEFL", "IELTS", "英検", "英会話", "ビジネス英語", "英文法", "英作文"],
   it: ["Python", "JavaScript", "TypeScript", "AWS", "データベース", "アルゴリズム", "Web開発", "モバイル開発"],
   music: ["ピアノ", "ギター", "DTM", "音楽理論", "ボーカル", "ドラム", "ベース", "作曲・編曲"],
+  japanese: ["JLPT N5", "JLPT N4", "JLPT N3", "JLPT N2", "JLPT N1", "日常会話", "ビジネス日本語", "読み書き"],
 };
 
 export default function NewCoursePage() {

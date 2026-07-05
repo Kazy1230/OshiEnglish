@@ -757,23 +757,258 @@ MUSIC_CONFIG = SubjectConfig(
 )
 
 
+# ===== 日本語 ==========================================================
+_JAPANESE_COURSE_DAY_SYSTEM = """あなたは日本語学習コースの設計専門家です。
+クリエイターの人格プロファイルとコース基本情報をもとに、30日分のコース骨格をJSON配列で生成してください。
+
+必ず以下のJSON形式のオブジェクトのみで出力してください（説明文・前置き・コードフェンスは一切不要）。
+"days"配列の要素数は必ず30にしてください:
+{
+  "days": [
+    {
+      "day": 1,
+      "week": 1,
+      "theme": "その日の学習テーマ（15文字以内）",
+      "checklist_items": [
+        {"text": "具体的な学習タスク（例: ひらがな50音を書いて練習する）", "minutes": 20}
+      ],
+      "is_rest_day": false
+    }
+  ]
+}
+
+【制約】
+- theme は15文字以内
+- checklist_items は各日のやることを自然な日本語の文で列挙。1日2〜5項目が目安
+- minutes は各タスクの標準学習時間(分)。1日の標準学習時間を超えないこと
+- 週の流れ: Week1=基礎 Week2=強化 Week3=実践 Week4=仕上げ
+- 休息日は7日ごとに1日程度設ける（is_rest_day=true、その日は checklist_items を空配列にする）
+- 人格プロファイルの専門分野・指導方針を反映したテーマ選定にすること
+- 使用する教材を前提にテーマ・タスクを組み立てること（教材名・章・ページまで具体的に）
+- 進行速度に応じて難易度カーブ・1日あたりのタスク量を調整すること
+"""
+
+_JAPANESE_CLASSIFY_SYSTEM = """あなたは日本語学習サービスの質問分類アシスタントです。
+学習者からの相談・質問を読み、以下の2つを判定してJSON形式で返してください。
+
+1. category_name: 質問の学習コンテンツ軸での分類名（例：「ひらがな」「漢字」「敬語の使い方」「JLPT対策」「モチベーション」）。
+   既存カテゴリ一覧に当てはまるものがあれば、必ずその名称をそのまま使ってください。
+   当てはまるものがなければ、新しい分類名を簡潔に提案してください。
+2. message_type: "emotion" | "content" | "report"
+   - emotion: 感情・モチベーション系（「続けられるか不安」等）
+   - content: 学習内容の質問（「〜という文法はどう使う？」等）
+   - report: 進捗報告・完了報告（「今日は〜を終わらせました」等）
+
+既存カテゴリ一覧:
+{existing_categories}
+
+以下のJSON形式のみで出力してください（説明文は不要）:
+{"category_name": "カテゴリ名", "message_type": "content"}
+"""
+
+_JAPANESE_ANSWER_STYLE = {
+    "emotion":  "感情的な共感と励ましを大切に。日本語学習の難しさを認めつつ、小さな進歩を喜ぶ温かいトーンで返してください。",
+    "content":  "日本語の文法・語彙・文化的背景を丁寧に説明してください。例文を交えて、なぜそう使うのかまで伝えてください。",
+    "report":   "進捗報告への短い承認と、次のステップへの一言アドバイスを返してください。",
+}
+
+_JAPANESE_WELCOME_SYSTEM = """あなたは日本語学習コースのクリエイターです。
+以下の人格プロファイルに従った口調・キャラクターで、学習者へのウェルカムメッセージを生成してください。
+
+【出力形式】
+- 200文字以内
+- 学習者の日本語学習への動機づけができる内容
+- クリエイターの個性が伝わる文体
+- 説明文・前置き不要（メッセージ本文のみ出力）
+"""
+
+_JAPANESE_ROADMAP_SYSTEM = """あなたは日本語学習の専門家です。
+学習者の診断回答・クリエイターの人格プロファイル・30日コース構造をもとに、
+個人化された30日ロードマップをJSON形式で生成してください。
+
+以下のJSON形式のみで出力してください（説明文・コードフェンス不要）:
+{
+  "level_analysis": {
+    "current_level": "現在のレベル（例: 完全初心者/ひらがな習得済み/N5相当/N3相当）",
+    "target_level": "目標レベル（例: 日常会話/JLPT N3合格/ビジネス日本語）",
+    "strengths": ["得意な点"],
+    "weaknesses": ["苦手な点・課題"]
+  },
+  "roadmap_reason": "このロードマップを提案する理由（100字以内）",
+  "week_plans": [
+    {
+      "week_number": 1,
+      "focus": "週のメインテーマ（例: 文字・発音の基礎）",
+      "key_tasks": ["主要タスク1", "主要タスク2"]
+    }
+  ],
+  "day1_message": "クリエイター口調の激励メッセージ（50字以内）"
+}
+"""
+
+_JAPANESE_TOC_CHAT_TEMPLATE = """あなたは日本語学習コースのクリエイターです。
+教材「{textbook_name}」の目次について、学習者からの質問に答えてください。
+どの章から始めるべきか、各章の学習のポイント、つまずきやすい箇所などを
+クリエイターの人格に基づいた口調でアドバイスしてください。
+"""
+
+_JAPANESE_QUALITY_CHECK_SYSTEM = """あなたは日本語学習コースの品質審査員です。
+コースのゴール・対象者・学習時間・進行速度の整合性を評価してください。
+
+以下のJSON形式のみで出力してください（説明文は不要）:
+{
+  "score": 0から20の整数,
+  "feedback": "改善点または合格理由（100字以内）"
+}
+
+評価基準:
+- 20点: ゴールと学習時間が完全に整合している（例: JLPT N3合格目標で1日45分・標準ペース）
+- 15点: おおむね整合しているが、軽微な調整が望ましい
+- 10点: ゴールに対して学習時間が過不足。改善が必要
+- 5点: ゴールと学習時間・ペースが大きくミスマッチ
+"""
+
+_JAPANESE_SELF_INTRO_SYSTEM = """あなたは日本語学習クリエイターです。
+以下の人格プロファイル・専門分野・実績をもとに、学習者向けの自己紹介文を生成してください。
+
+【出力形式】
+- 150〜250文字
+- クリエイターの日本語学習指導の強みが伝わる内容
+- 学習者が「このクリエイターと一緒に学びたい」と思えるような文体
+- 説明文不要（自己紹介文本文のみ出力）
+"""
+
+_JAPANESE_CHARACTER_CONCEPT_SYSTEM = """あなたは日本語学習コンテンツのキャラクター設計専門家です。
+以下のキャラクターコンセプトをもとに、日本語学習に最適なAIキャラクター設定をJSON形式で生成してください。
+
+以下のJSON形式のみで出力してください（説明文不要）:
+{
+  "name": "キャラクター名（ひらがな・カタカナ・漢字）",
+  "gender": "female / male / neutral",
+  "age_image": "年齢イメージ（例: 20代前半・30代・中性的）",
+  "personality": "性格の概要（100字以内）",
+  "background": "キャラクターの背景設定（150字以内）",
+  "teaching_style": "指導スタイルの特徴（100字以内）",
+  "speaking_style": "話し方・口調の特徴（100字以内）",
+  "catchphrase": "キャッチフレーズ（30字以内）",
+  "reactions": {
+    "praise": "褒め言葉の例",
+    "encourage": "励ましの例",
+    "correct": "訂正・フィードバックの例"
+  }
+}
+"""
+
+_JAPANESE_TONE_PROFILE_SYSTEM = """あなたは日本語学習AIキャラクターのトーンプロファイル設計専門家です。
+キャラクター情報をもとに、日本語学習者への返答スタイルをJSON形式で定義してください。
+
+以下のJSON形式のみで出力してください（説明文不要）:
+{
+  "first_person": "一人称（例: 私・僕・わたし・先生）",
+  "tone": "口調の特徴（例: 丁寧語ベースで温かみがある・フレンドリーで親しみやすい）",
+  "personality_traits": ["特徴1", "特徴2", "特徴3"],
+  "verbal_tics": ["口癖1", "口癖2"],
+  "forbidden_expressions": ["NG表現1", "NG表現2"],
+  "sample_replies": {
+    "greeting": "挨拶の例文",
+    "praise": "褒め言葉の例文",
+    "correction": "訂正時の例文",
+    "encouragement": "励ましの例文"
+  }
+}
+"""
+
+_JAPANESE_PERSONALIZE_SYSTEM = """あなたは日本語学習の個別コーチです。
+学習者の診断結果（現在のレベル・目標・学習環境）と30日コース骨格をもとに、
+各日のチェックリスト項目を学習者に合わせて調整してください。
+
+以下のJSON形式で30日分を出力してください（days配列の要素数は30）:
+{
+  "days": [
+    {
+      "day": 1,
+      "adjusted_checklist_items": [
+        {"text": "具体的なタスク（例: ひらがな行ア行〜カ行を書いて練習する）", "minutes": 20}
+      ],
+      "personalize_reason": "調整理由（30字以内）"
+    }
+  ]
+}
+
+調整の方針:
+- 初級者: 文字・発音・基礎文法を重点的に。1日のタスク量を少なめに
+- 中級者: 語彙・読解・会話表現を強化。ペースを上げる
+- 上級者: 敬語・ビジネス日本語・ニュアンス理解を深める
+- JLPTを目標とする場合: 試験対策（語彙・文法・読解・聴解）を各日に組み込む
+"""
+
+_JAPANESE_DAILY_ADJUST_SYSTEM = """あなたは日本語学習の伴走コーチです。
+前日の学習完了状況と学習者のメモをもとに、翌日のチェックリスト項目を微調整してください。
+
+以下のJSON形式のみで出力してください（説明文不要）:
+{
+  "adjusted_checklist_items": [
+    {"text": "具体的なタスク", "minutes": 20}
+  ],
+  "adjust_reason": "調整理由（50字以内）",
+  "message": "クリエイター口調の短い激励メッセージ（50字以内）"
+}
+
+調整の方針:
+- 全タスク完了の場合: 翌日の難易度を少し上げるか、応用課題を追加する
+- 未完了タスクがある場合: 未完了分を翌日の最初に組み込む（繰越）
+- メモに困難の記述がある場合: そのポイントを翌日に復習するタスクを追加する
+- メモに余裕の記述がある場合: 追加の練習・先取り学習を提案する
+"""
+
+_JAPANESE_DEFAULT_QUESTIONS = [
+    {"question_text": "日本語を学ぶ目的を教えてください（例: JLPT合格・仕事・旅行・趣味）", "answer_type": "text", "options": None, "is_required": True},
+    {"question_text": "現在の日本語レベルはどのくらいですか？", "answer_type": "radio", "options": ["完全初心者（ひらがなも知らない）", "ひらがな・カタカナは読める", "N5〜N4レベル（基礎会話ができる）", "N3〜N2レベル（日常会話ができる）", "N1レベル（上級）"], "is_required": True},
+    {"question_text": "1日に確保できる学習時間はどのくらいですか？", "answer_type": "radio", "options": ["15分未満", "15〜30分", "30〜60分", "60〜90分", "90分以上"], "is_required": True},
+    {"question_text": "特に強化したいスキルはどれですか？（複数可）", "answer_type": "text", "options": None, "is_required": False},
+    {"question_text": "日本語学習で今一番困っていることは何ですか？", "answer_type": "text", "options": None, "is_required": False},
+]
+
+JAPANESE_CONFIG = SubjectConfig(
+    key="japanese",
+    label="日本語",
+    task_types=[],
+    course_day_generation_system=_JAPANESE_COURSE_DAY_SYSTEM,
+    classify_system=_JAPANESE_CLASSIFY_SYSTEM,
+    answer_style_by_type=_JAPANESE_ANSWER_STYLE,
+    diagnosis_welcome_system=_JAPANESE_WELCOME_SYSTEM,
+    roadmap_generation_system=_JAPANESE_ROADMAP_SYSTEM,
+    toc_chat_system_template=_JAPANESE_TOC_CHAT_TEMPLATE,
+    quality_check_system=_JAPANESE_QUALITY_CHECK_SYSTEM,
+    self_intro_system=_JAPANESE_SELF_INTRO_SYSTEM,
+    character_concept_system=_JAPANESE_CHARACTER_CONCEPT_SYSTEM,
+    tone_profile_system=_JAPANESE_TONE_PROFILE_SYSTEM,
+    personalize_system=_JAPANESE_PERSONALIZE_SYSTEM,
+    daily_adjust_system=_JAPANESE_DAILY_ADJUST_SYSTEM,
+    default_diagnosis_questions=_JAPANESE_DEFAULT_QUESTIONS,
+)
+
+
 # ===== レジストリ =====================================================
 SUBJECT_REGISTRY: dict[str, SubjectConfig] = {
     "english": ENGLISH_CONFIG,
     "it": IT_CONFIG,
     "music": MUSIC_CONFIG,
+    "japanese": JAPANESE_CONFIG,
 }
 
 SUBJECT_CHOICES = [
     {"key": "english", "label": "英語"},
     {"key": "it", "label": "IT・プログラミング"},
     {"key": "music", "label": "音楽"},
+    {"key": "japanese", "label": "日本語"},
 ]
 
 SUBJECT_CATEGORY_MAP: dict[str, list[str]] = {
     "english": ["TOEIC", "TOEFL", "IELTS", "英検", "英会話", "ビジネス英語", "英文法", "英作文"],
     "it": ["Python", "JavaScript", "TypeScript", "AWS", "データベース", "アルゴリズム", "セキュリティ", "Web開発", "モバイル開発"],
     "music": ["ピアノ", "ギター", "DTM", "音楽理論", "ボーカル", "ドラム", "ベース", "作曲・編曲"],
+    "japanese": ["JLPT N5", "JLPT N4", "JLPT N3", "JLPT N2", "JLPT N1", "日常会話", "ビジネス日本語", "読み書き"],
 }
 
 

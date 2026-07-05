@@ -29,6 +29,7 @@ type Step = "subject" | "format" | "ideas" | "angles" | "generating" | "result";
 
 const STUDIO_SUBJECT_OPTIONS = [
   { key: "english", label: "英語", icon: "📚", description: "TOEIC・英会話・英文法など" },
+  { key: "japanese", label: "日本語", icon: "🗾", description: "JLPT・日常会話・ビジネス日本語など" },
   { key: "it", label: "IT・プログラミング", icon: "💻", description: "Python・AWS・Web開発など" },
   { key: "music", label: "音楽", icon: "🎵", description: "ピアノ・ギター・音楽理論など" },
 ];
