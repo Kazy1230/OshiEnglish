@@ -199,6 +199,9 @@ _ensure_column("courses", "pace", "VARCHAR(50) NULL")
 _ensure_column("course_textbooks", "target_laps", "INT NOT NULL DEFAULT 1")
 # --- 繰越タスク設計（議論サマリー20260626 15節） ---
 _ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
+# --- コンテンツスタジオ: content_draftsテーブルのカラム追加 ---
+_ensure_column("content_drafts", "creator_id", "INT NULL")
+_ensure_column("content_drafts", "character_id", "INT NULL")
 # --- マルチドメイン拡張（v1.2）: subject・チェックリスト化 ---
 _ensure_column("courses", "subject", "VARCHAR(20) NOT NULL DEFAULT 'english'")
 _rename_column("course_days", "task_types", "checklist_items", "JSON NULL")
