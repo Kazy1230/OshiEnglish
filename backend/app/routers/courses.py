@@ -905,12 +905,29 @@ def search_textbooks(query: Optional[str] = None, current_user=Depends(get_curre
 
 
 def _serialize_course_textbook(ct: CourseTextbook) -> dict:
+    if ct.type == "content" and ct.content:
+        return {
+            "id": ct.id,
+            "course_id": ct.course_id,
+            "textbook_id": None,
+            "content_id": ct.content_id,
+            "name": ct.content.title,
+            "type": "content",
+            "content_type": ct.content.content_type,
+            "url": ct.content.url,
+            "thumbnail_url": ct.content.thumbnail_url,
+            "daily_words": None,
+            "review_words": None,
+            "target_laps": 1,
+            "day_assignments": [],
+        }
     toc = ct.textbook.toc if ct.textbook else ct.custom_toc
     assignments_by_item = {a.toc_item: a.day_number for a in ct.day_assignments}
     return {
         "id": ct.id,
         "course_id": ct.course_id,
         "textbook_id": ct.textbook_id,
+        "content_id": None,
         "name": ct.textbook.name if ct.textbook else ct.custom_name,
         "type": ct.type,
         "daily_words": ct.daily_words,
@@ -925,16 +942,20 @@ def _serialize_course_textbook(ct: CourseTextbook) -> dict:
 
 class CourseTextbookCreate(BaseModel):
     textbook_id: Optional[int] = None
+    content_id: Optional[int] = None
     custom_name: Optional[str] = None
     custom_toc: Optional[List[dict]] = None
-    type: str = "textbook"  # textbook / vocabulary
+    type: str = "textbook"  # textbook / vocabulary / content
     daily_words: Optional[int] = None
     review_words: Optional[int] = None
-    target_laps: int = 1  # コース完了条件として求める周回数
+    target_laps: int = 1
 
     @model_validator(mode="after")
     def _validate(self):
-        if not self.textbook_id and not (self.custom_name and self.custom_toc):
+        if self.type == "content":
+            if not self.content_id:
+                raise ValueError("type=contentの場合はcontent_idが必要です")
+        elif not self.textbook_id and not (self.custom_name and self.custom_toc):
             raise ValueError("textbook_id、またはcustom_name+custom_tocのいずれかを指定してください")
         return self
 
@@ -949,22 +970,33 @@ def list_course_textbooks(course_id: int, current_user=Depends(get_current_user)
 
 @router.post("/courses/{course_id}/textbooks", status_code=status.HTTP_201_CREATED)
 def add_course_textbook(course_id: int, data: CourseTextbookCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """コースに教材を追加する（プリセット選択 or 手入力）。要(本人)"""
+    """コースに教材を追加する（プリセット選択 or 手入力 or コンテンツプール）。要(本人)"""
+    from app.models.creator_content import CreatorContent
     course = _get_owned_course(db, course_id, current_user)
-    if data.textbook_id and not db.query(Textbook).filter(Textbook.id == data.textbook_id).first():
-        raise HTTPException(status_code=404, detail="教材が見つかりません")
-    if data.textbook_id and db.query(CourseTextbook).filter(
-        CourseTextbook.course_id == course_id, CourseTextbook.textbook_id == data.textbook_id
-    ).first():
-        raise HTTPException(status_code=400, detail="この教材は既にこのコースに追加されています")
-    if data.custom_name and db.query(CourseTextbook).filter(
-        CourseTextbook.course_id == course_id, CourseTextbook.custom_name == data.custom_name
-    ).first():
-        raise HTTPException(status_code=400, detail="同じ名前の教材が既にこのコースに追加されています")
+
+    if data.type == "content":
+        if not db.query(CreatorContent).filter(CreatorContent.id == data.content_id).first():
+            raise HTTPException(status_code=404, detail="コンテンツが見つかりません")
+        if db.query(CourseTextbook).filter(
+            CourseTextbook.course_id == course_id, CourseTextbook.content_id == data.content_id
+        ).first():
+            raise HTTPException(status_code=400, detail="このコンテンツは既にこのコースに追加されています")
+    else:
+        if data.textbook_id and not db.query(Textbook).filter(Textbook.id == data.textbook_id).first():
+            raise HTTPException(status_code=404, detail="教材が見つかりません")
+        if data.textbook_id and db.query(CourseTextbook).filter(
+            CourseTextbook.course_id == course_id, CourseTextbook.textbook_id == data.textbook_id
+        ).first():
+            raise HTTPException(status_code=400, detail="この教材は既にこのコースに追加されています")
+        if data.custom_name and db.query(CourseTextbook).filter(
+            CourseTextbook.course_id == course_id, CourseTextbook.custom_name == data.custom_name
+        ).first():
+            raise HTTPException(status_code=400, detail="同じ名前の教材が既にこのコースに追加されています")
 
     course_textbook = CourseTextbook(
         course_id=course.id,
         textbook_id=data.textbook_id,
+        content_id=data.content_id,
         custom_name=data.custom_name,
         custom_toc=data.custom_toc,
         type=data.type,

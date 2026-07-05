@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
+import { ContentItem, ContentEmbed } from "@/components/ContentEmbed";
 
 type TextbookSearchResult = { id: number; name: string; publisher: string | null; type: string; target: string | null; toc: { item: string }[] | null };
 type DayAssignment = { toc_item: string; day_number: number | null };
@@ -71,8 +72,38 @@ export default function CourseTextbooksPage() {
   const [planning, setPlanning] = useState(false);
   const [applyingPlan, setApplyingPlan] = useState(false);
 
+  const [addTab, setAddTab] = useState<"textbook" | "content">("textbook");
+  const [myContents, setMyContents] = useState<ContentItem[]>([]);
+  const [loadingContents, setLoadingContents] = useState(false);
+  const [addingContent, setAddingContent] = useState(false);
+
   function reload() {
     return api.listCourseTextbooks(courseId).then(setTextbooks).catch(() => {});
+  }
+
+  function handleContentTabClick() {
+    setAddTab("content");
+    if (myContents.length === 0 && !loadingContents) {
+      setLoadingContents(true);
+      api.listMyContents().then(setMyContents).catch(() => {}).finally(() => setLoadingContents(false));
+    }
+  }
+
+  async function handleAddContent(c: ContentItem) {
+    if (textbooks.some((t) => (t as unknown as { content_id?: number }).content_id === c.id)) {
+      toast("このコンテンツは既に追加されています", "error");
+      return;
+    }
+    setAddingContent(true);
+    try {
+      const added = await api.addCourseTextbook(courseId, { content_id: c.id, type: "content" });
+      setTextbooks((prev) => [...prev, added]);
+      toast(`「${c.title}」を追加しました`, "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "追加に失敗しました", "error");
+    } finally {
+      setAddingContent(false);
+    }
   }
 
   useEffect(() => {
@@ -241,6 +272,58 @@ export default function CourseTextbooksPage() {
         {/* ① 教材を追加 */}
         <div className="card flex flex-col gap-3">
           <p className="font-bold text-sm" style={{ color: "var(--primary)" }}>① 使う教材を追加する</p>
+
+          {/* タブ切り替え */}
+          <div className="flex gap-2">
+            {(["textbook", "content"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => { if (tab === "content") handleContentTabClick(); else setAddTab("textbook"); }}
+                className="text-sm px-3 py-1.5 rounded-full font-bold transition-all"
+                style={{
+                  background: addTab === tab ? "var(--primary)" : "var(--bg)",
+                  color: addTab === tab ? "white" : "var(--muted)",
+                  border: `1.5px solid ${addTab === tab ? "var(--primary)" : "var(--border)"}`,
+                }}
+              >
+                {tab === "textbook" ? "📚 テキスト教材" : "🗂️ コンテンツプール"}
+              </button>
+            ))}
+          </div>
+
+          {addTab === "content" ? (
+            <div className="flex flex-col gap-3">
+              {loadingContents ? (
+                <p className="text-sm" style={{ color: "var(--muted)" }}>読み込み中…</p>
+              ) : myContents.length === 0 ? (
+                <p className="text-sm" style={{ color: "var(--muted)" }}>
+                  まだコンテンツプールにコンテンツがありません。
+                  <a href="/creator/contents" style={{ color: "var(--accent)" }}>コンテンツプール</a>からURLを登録してください。
+                </p>
+              ) : (
+                myContents.map((c) => {
+                  const added = textbooks.some((t) => (t as unknown as { content_id?: number }).content_id === c.id);
+                  return (
+                    <div key={c.id} className="flex flex-col gap-2 p-3 rounded-xl" style={{ border: "1px solid var(--border)", background: "var(--bg)" }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div style={{ minWidth: 0 }}>
+                          <p className="text-sm font-bold truncate" style={{ color: "var(--text)" }}>{c.title}</p>
+                          <p className="text-xs" style={{ color: "var(--muted)" }}>{c.content_type} · {c.subject}</p>
+                        </div>
+                        {added
+                          ? <span className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>追加済み</span>
+                          : <button className="btn-primary text-xs flex-shrink-0" disabled={addingContent} onClick={() => handleAddContent(c)}>追加</button>
+                        }
+                      </div>
+                      <ContentEmbed item={c} />
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+          <>
           <form onSubmit={handleSearch} className="flex gap-2">
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="書籍名で検索（例：TOEFL ITP）" className="flex-1" />
             <button type="submit" className="btn-ghost px-4" disabled={searching}>{searching ? "検索中…" : "検索"}</button>
@@ -381,6 +464,8 @@ export default function CourseTextbooksPage() {
               </button>
             </div>
           )}
+          </>
+          )}
 
           {/* 追加済み教材リスト */}
           {textbooks.length > 0 && (
@@ -389,11 +474,14 @@ export default function CourseTextbooksPage() {
               {textbooks.map(t => {
                 const assignedCount = t.day_assignments.filter(a => a.day_number != null).length;
                 const total = t.day_assignments.length;
+                const typeLabel = t.type === "vocabulary" ? "単語帳" : t.type === "content" ? "コンテンツ" : "教材";
+                const typeBg = t.type === "vocabulary" ? "color-mix(in srgb, var(--accent) 15%, transparent)" : t.type === "content" ? "color-mix(in srgb, #805ad5 15%, transparent)" : "color-mix(in srgb, var(--primary) 12%, transparent)";
+                const typeColor = t.type === "vocabulary" ? "var(--accent)" : t.type === "content" ? "#805ad5" : "var(--primary)";
                 return (
                   <div key={t.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{ background: t.type === "vocabulary" ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "color-mix(in srgb, var(--primary) 12%, transparent)", color: t.type === "vocabulary" ? "var(--accent)" : "var(--primary)" }}>
-                      {t.type === "vocabulary" ? "単語帳" : "教材"}
+                      style={{ background: typeBg, color: typeColor }}>
+                      {typeLabel}
                     </span>
                     <span className="flex-1 text-sm font-bold" style={{ color: "var(--text)" }}>{t.name}</span>
                     {total > 0 && (

@@ -31,3 +31,5 @@ from app.models.textbook_day_assignment import TextbookDayAssignment
 from app.models.learner_textbook_progress import LearnerTextbookProgress
 from app.models.course_diagnosis_question import CourseDiagnosisQuestion
 from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
+from app.models.creator_content import CreatorContent
+from app.models.content_like import ContentLike

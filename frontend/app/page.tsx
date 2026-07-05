@@ -8,6 +8,7 @@ import { useDarkMode } from "@/lib/darkMode";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ContentCard, ContentItem } from "@/components/ContentEmbed";
 
 type CourseCard = {
   id: number;
@@ -65,6 +66,9 @@ export default function Home() {
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
   const [achieversCount, setAchieversCount] = useState(0);
+  const [feedContents, setFeedContents] = useState<ContentItem[]>([]);
+  const [feedSubject, setFeedSubject] = useState("");
+  const [feedLiked, setFeedLiked] = useState<Record<number, { liked: boolean; count: number }>>({});
 
   useEffect(() => {
     if (!getToken()) {
@@ -87,7 +91,28 @@ export default function Home() {
   useEffect(() => {
     api.listCourses().then(setAllCourses).catch(() => { });
     api.getPublicStats().then(s => setAchieversCount(s.achievers_count)).catch(() => { });
+    api.listPublicContentsNoAuth(undefined, 6).then(setFeedContents).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    api.listPublicContentsNoAuth(feedSubject || undefined, 6).then(setFeedContents).catch(() => {});
+  }, [feedSubject]);
+
+  async function handleFeedLike(id: number) {
+    try {
+      const res = await api.toggleContentLike(id);
+      setFeedLiked(prev => ({ ...prev, [id]: { liked: res.liked, count: res.like_count } }));
+      setFeedContents(prev => prev.map(c => c.id === id ? { ...c, liked: res.liked, like_count: res.like_count } : c));
+    } catch {}
+  }
+
+  const FEED_SUBJECT_TABS = [
+    { key: "", label: "すべて" },
+    { key: "english", label: "英語" },
+    { key: "it", label: "IT" },
+    { key: "music", label: "音楽" },
+    { key: "japanese", label: "日本語" },
+  ];
 
   const categories = useMemo(
     () => Array.from(new Set(allCourses.map(c => c.category).filter(Boolean))) as string[],
@@ -265,6 +290,44 @@ export default function Home() {
             )}
           </div>
         </section>
+
+        {/* ===== コンテンツフィード ===== */}
+        {feedContents.length > 0 && (
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+              <div>
+                <p className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>CONTENT FEED</p>
+                <h2 className="text-2xl font-black mt-0.5" style={{ color: "var(--primary)" }}>クリエイターのコンテンツ</h2>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {FEED_SUBJECT_TABS.map(t => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setFeedSubject(t.key)}
+                    className="text-sm px-3 py-1.5 rounded-full font-bold transition-all"
+                    style={{
+                      background: feedSubject === t.key ? "var(--primary)" : "var(--card)",
+                      color: feedSubject === t.key ? "white" : "var(--muted)",
+                      border: `1.5px solid ${feedSubject === t.key ? "var(--primary)" : "var(--border)"}`,
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {feedContents.map(c => (
+                <ContentCard
+                  key={c.id}
+                  item={c}
+                  onLike={loggedIn ? handleFeedLike : undefined}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ===== 始め方：タイムライン ===== */}
         <section id="how-it-works" style={{ background: "color-mix(in srgb, var(--card) 60%, var(--bg))" }}>

@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, customers, characters, payments, courses, creators, favorites, studio, notifications, interview, diagnosis, chat, admin
+from app.routers import auth, customers, characters, payments, courses, creators, favorites, studio, notifications, interview, diagnosis, chat, admin, contents
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,8 @@ _ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
 # --- コンテンツスタジオ: content_draftsテーブルのカラム追加 ---
 _ensure_column("content_drafts", "creator_id", "INT NULL")
 _ensure_column("content_drafts", "character_id", "INT NULL")
+# --- コンテンツプール ---
+_ensure_column("course_textbooks", "content_id", "INT NULL")
 # --- マルチドメイン拡張（v1.2）: subject・チェックリスト化 ---
 _ensure_column("courses", "subject", "VARCHAR(20) NOT NULL DEFAULT 'english'")
 _rename_column("course_days", "task_types", "checklist_items", "JSON NULL")
@@ -375,6 +377,7 @@ app.include_router(interview.router)
 app.include_router(diagnosis.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
+app.include_router(contents.router)
 
 
 @app.get("/health")

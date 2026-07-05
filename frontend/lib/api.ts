@@ -211,6 +211,19 @@ export const api = {
   getDraft: (id: number) => apiFetch(`/studio/drafts/${id}`),
   deleteDraft: (id: number) => apiFetch(`/studio/drafts/${id}`, { method: "DELETE" }),
 
+  // コンテンツプール
+  listMyContents: () => apiFetch("/contents/my"),
+  listPublicContents: (subject?: string, limit = 20, offset = 0) =>
+    apiFetch(`/contents/?limit=${limit}&offset=${offset}${subject ? `&subject=${subject}` : ""}`),
+  listPublicContentsNoAuth: (subject?: string, limit = 20, offset = 0) =>
+    fetch(`${API_BASE}/contents/public?limit=${limit}&offset=${offset}${subject ? `&subject=${subject}` : ""}`).then((r) => r.json()),
+  getContentRecommendations: (subject: string, limit = 10) =>
+    apiFetch(`/contents/recommendations?subject=${subject}&limit=${limit}`),
+  createContent: (data: { url: string; subject: string; tags?: string[]; is_public?: boolean }) =>
+    apiFetch("/contents/", { method: "POST", body: JSON.stringify(data) }),
+  deleteContent: (id: number) => apiFetch(`/contents/${id}`, { method: "DELETE" }),
+  toggleContentLike: (id: number) => apiFetch(`/contents/${id}/like`, { method: "POST" }),
+
   // リテンション機能：通知
   listNotifications: () => apiFetch("/notifications/"),
   markNotificationRead: (id: number) => apiFetch(`/notifications/${id}/read`, { method: "PUT" }),
