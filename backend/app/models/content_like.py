@@ -10,7 +10,7 @@ class ContentLike(Base):
 
     id = Column(Integer, primary_key=True)
     content_id = Column(Integer, ForeignKey("creator_contents.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint("content_id", "user_id", name="uq_content_likes"),)
