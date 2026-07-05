@@ -1,6 +1,7 @@
 """分野（Subject）別設定レジストリ。
 拡張方法: SubjectConfig を定義して SUBJECT_REGISTRY に追加するだけ。既存コードへの変更不要。
 """
+from __future__ import annotations
 from dataclasses import dataclass, field
 
 

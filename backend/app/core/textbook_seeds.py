@@ -85,7 +85,7 @@ IT_PRESET_TEXTBOOKS = [
         "name": "独習Python 第2版",
         "publisher": "翔泳社",
         "type": "textbook",
-        "subject": "it",
+
         "target": "Python基礎〜中級",
         "toc": [
             {"item": "Chapter 1: Python入門・環境構築"},
@@ -105,7 +105,7 @@ IT_PRESET_TEXTBOOKS = [
         "name": "AWS認定ソリューションアーキテクト アソシエイト教科書",
         "publisher": "翔泳社",
         "type": "textbook",
-        "subject": "it",
+
         "target": "AWS SAA",
         "toc": [
             {"item": "Chapter 1: AWSの基礎・IAM"},
@@ -123,7 +123,7 @@ IT_PRESET_TEXTBOOKS = [
         "name": "改訂新版 JavaScript本格入門",
         "publisher": "技術評論社",
         "type": "textbook",
-        "subject": "it",
+
         "target": "JavaScript基礎",
         "toc": [
             {"item": "Chapter 1: JavaScriptの概要"},
@@ -146,7 +146,7 @@ MUSIC_PRESET_TEXTBOOKS = [
         "name": "バイエルピアノ教則本",
         "publisher": "全音楽譜出版社",
         "type": "textbook",
-        "subject": "music",
+
         "target": "ピアノ初心者",
         "toc": (
             [{"item": f"No.{i}: 練習曲（初級）"} for i in range(1, 25)]
@@ -158,7 +158,7 @@ MUSIC_PRESET_TEXTBOOKS = [
         "name": "ハノン ピアニストのための60の練習曲",
         "publisher": "全音楽譜出版社",
         "type": "textbook",
-        "subject": "music",
+
         "target": "ピアノ基礎テクニック",
         "toc": (
             [{"item": f"No.{i}: 指の独立練習"} for i in range(1, 21)]
@@ -170,7 +170,7 @@ MUSIC_PRESET_TEXTBOOKS = [
         "name": "楽典―理論と実習",
         "publisher": "音楽之友社",
         "type": "textbook",
-        "subject": "music",
+
         "target": "音楽理論全般",
         "toc": [
             {"item": "第1章: 音・音名・階名"},
@@ -189,7 +189,7 @@ MUSIC_PRESET_TEXTBOOKS = [
         "name": "コード進行で覚える! ギター入門",
         "publisher": "リットーミュージック",
         "type": "textbook",
-        "subject": "music",
+
         "target": "ギター初心者",
         "toc": [
             {"item": "Chapter 1: ギターの持ち方・チューニング"},
