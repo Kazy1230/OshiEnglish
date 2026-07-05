@@ -166,6 +166,7 @@ def generate_content(data: GenerateContentRequest, current_user=Depends(get_curr
     _require_active_creator(db, current_user)
     character = _get_owned_character(db, data.character_id, current_user)
     creator_id = _get_own_creator_profile_id(db, current_user)
+    character_id_val = character.id  # セッション外のストリームで参照するため先に取り出す
 
     raw_system = prompts.build_format_content_system(data.format, data.duration_sec, data.char_limit, subject=data.subject)
     raw_messages = [{"role": "user", "content": f"テーマ: {data.idea}\n切り口・フック: {data.hook}"}]
@@ -206,7 +207,7 @@ def generate_content(data: GenerateContentRequest, current_user=Depends(get_curr
             if d:
                 d.raw_content = raw_text
                 d.voiced_content = voiced_text
-                d.character_id = character.id
+                d.character_id = character_id_val
                 gen_db.commit()
 
         yield f"data: {json_lib.dumps({'done': True, 'draft_id': draft_id})}\n\n"
