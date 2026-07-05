@@ -5,7 +5,6 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
-import { SectionHeading } from "@/components/SectionHeading";
 
 type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null; tone_profile?: Record<string, unknown> | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
@@ -21,6 +20,15 @@ function toneCompleteness(tone?: Record<string, unknown> | null): number {
   }).length;
   return Math.round((filled / TONE_FIELDS.length) * 100);
 }
+
+const TILES = [
+  { href: "/creator/courses/new", icon: "📅", label: "コース作成", desc: "30日伴走コース", needsApproval: true },
+  { href: "/studio", icon: "🎬", label: "スタジオ", desc: "コンテンツ生成AI", needsApproval: true },
+  { href: "/creator/contents", icon: "🗂️", label: "コンテンツプール", desc: "教材URLを管理", needsApproval: true },
+  { href: "/creator/analytics", icon: "📊", label: "分析", desc: "質問・進捗ダッシュボード", needsApproval: true },
+  { href: "/creator/revenue", icon: "💰", label: "収益", desc: "売上・報酬管理", needsApproval: false },
+  { href: "/creator/courses", icon: "📚", label: "コース一覧", desc: "作成したコース", needsApproval: false },
+];
 
 export default function DashboardPage() {
   const { me, loading } = useRoleGuard(["creator", "admin"]);
@@ -43,134 +51,178 @@ export default function DashboardPage() {
   }, [loading, me]);
 
   const isApproved = me?.role === "admin" || profileStatus === "active";
+  const completeness = toneCompleteness(character?.tone_profile);
 
   if (loading) return <Skeleton />;
 
-  const completeness = toneCompleteness(character?.tone_profile);
-
-  const tiles: { href: string; icon: string; label: string; locked?: boolean }[] = [
-    { href: "/creator/courses/new", icon: "📅", label: "30日伴走コースを作る", locked: !isApproved },
-    { href: "/studio", icon: "🎬", label: "AIコンテンツ生成スタジオ", locked: !isApproved },
-    { href: "/creator/contents", icon: "🗂️", label: "コンテンツプール", locked: !isApproved },
-    ...(character ? [] : [{ href: "/creator/interview", icon: "🧠", label: "AIインタビュー" }]),
-    { href: "/creator/analytics", icon: "📊", label: "質問分析ダッシュボード", locked: !isApproved },
-    { href: "/creator/revenue", icon: "💰", label: "収益" },
-  ];
-
   return (
     <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="creator" title="クリエイターダッシュボード" overdueCount={overdueCount} />
+      <AppHeader role="creator" title="ダッシュボード" overdueCount={overdueCount} />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
-        {/* ヒーロー領域：キャラクター中心 */}
-        <div className="card flex flex-col sm:flex-row gap-5 sm:items-center" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+      {/* ヒーローバナー */}
+      <section style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", padding: "28px 16px" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+          {/* アバター */}
           {loadingChars ? (
-            <p className="text-white/80 text-sm">読み込み中…</p>
-          ) : !character ? (
-            <div className="flex flex-col gap-3 w-full">
-              <p className="text-white text-sm font-bold">
-                {me?.display_name || me?.username} さん、ようこそ。
-              </p>
-              <p className="text-white/80 text-sm">
-                まだキャラクター(人格)が作成されていません。AIインタビューを完了すると自動的に作成されます。
-              </p>
-              <Link href="/creator/interview" className="self-start px-4 py-2 rounded-full text-sm font-bold" style={{ background: "white", color: "var(--primary)" }}>
+            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(255,255,255,0.2)" }} />
+          ) : character?.image_url ? (
+            <img src={character.image_url} alt="" style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,0.5)", flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, flexShrink: 0, border: "3px solid rgba(255,255,255,0.3)" }}>
+              {character ? "🎭" : "👋"}
+            </div>
+          )}
+
+          {/* 挨拶＋キャラクター情報 */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: "0 0 2px" }}>クリエイターダッシュボード</p>
+            <h1 style={{ color: "white", fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>
+              {me?.display_name || me?.username}
+            </h1>
+            {character && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Link href={`/dashboard/characters/${character.id}`} style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                  人格: {character.name}
+                </Link>
+                <div style={{ flex: 1, maxWidth: 120, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.25)" }}>
+                  <div style={{ height: 4, borderRadius: 999, background: "white", width: `${completeness}%` }} />
+                </div>
+                <span style={{ color: "rgba(255,255,255,0.8)", fontSize: 11 }}>{completeness}%</span>
+              </div>
+            )}
+            {!character && !loadingChars && (
+              <Link href="/creator/interview" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, background: "white", color: "var(--primary)", padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
                 🧠 AIインタビューを始める
               </Link>
-            </div>
-          ) : (
-            <>
-              {character.image_url ? (
-                <img src={character.image_url} alt="" className="w-24 h-24 rounded-full object-cover ring-4 ring-white/40 flex-shrink-0" />
-              ) : (
-                <div className="w-24 h-24 rounded-full flex items-center justify-center text-4xl ring-4 ring-white/40 flex-shrink-0" style={{ background: "rgba(255,255,255,0.2)" }}>🎭</div>
-              )}
-              <div className="flex-1 flex flex-col gap-2">
-                <div>
-                  <p className="text-xs text-white/70">{me?.display_name || me?.username} さんの人格</p>
-                  <Link href={`/dashboard/characters/${character.id}`} className="text-xl font-black text-white hover:underline">
-                    {character.name}
-                  </Link>
-                  {character.description && <p className="text-xs text-white/80 mt-0.5 line-clamp-2">{character.description}</p>}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full max-w-[200px]" style={{ background: "rgba(255,255,255,0.3)" }}>
-                      <div className="h-1.5 rounded-full" style={{ background: "white", width: `${completeness}%` }} />
-                    </div>
-                    <span className="text-xs text-white/90 whitespace-nowrap">プロフィール完成度 {completeness}%</span>
-                  </div>
-                  {completeness < 100 && (
-                    <Link href={character ? `/dashboard/characters/${character.id}` : "/creator/interview"} className="text-xs text-white underline mt-1 inline-block">人格プロファイルを充実させる →</Link>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* 今すぐ対応リング */}
-        {(overdueCount > 0 || (!isApproved && profileStatus) || reviewCourseCount > 0) && (
-          <div className="flex flex-wrap gap-3">
+          {/* ステータスバッジ */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {isApproved ? (
+              <span style={{ background: "rgba(255,255,255,0.2)", color: "white", padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.3)" }}>
+                ✓ 承認済み
+              </span>
+            ) : profileStatus ? (
+              <span style={{ background: "rgba(255,200,0,0.3)", color: "white", padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700, border: "1px solid rgba(255,200,0,0.5)" }}>
+                ⏳ 審査中
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {/* アラートバナー */}
+        {(overdueCount > 0 || reviewCourseCount > 0) && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {overdueCount > 0 && (
-              <Link href="/creator/inbox" className="card flex items-center gap-2 flex-1 min-w-[200px]" style={{ borderColor: "#e53e3e" }}>
-                <span className="text-xl">⚠</span>
-                <p className="text-sm font-bold" style={{ color: "#e53e3e" }}>未対応のTier B質問 {overdueCount}件</p>
+              <Link href="/creator/inbox" style={{ textDecoration: "none", flex: 1, minWidth: 200, display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "#fff5f5", border: "1.5px solid #feb2b2" }}>
+                <span style={{ fontSize: 22 }}>⚠️</span>
+                <div>
+                  <p style={{ fontWeight: 800, color: "#e53e3e", margin: 0, fontSize: 14 }}>Tier B質問 {overdueCount}件未対応</p>
+                  <p style={{ color: "#c53030", fontSize: 12, margin: 0 }}>クリックして対応する</p>
+                </div>
+                <span style={{ marginLeft: "auto", color: "#e53e3e", fontSize: 18 }}>→</span>
               </Link>
             )}
-            {!isApproved && profileStatus && (
-              <div className="card flex items-center gap-2 flex-1 min-w-[200px]" style={{ borderColor: "#f5a623" }}>
-                <span className="text-xl">⏳</span>
-                <p className="text-sm font-bold" style={{ color: "#b8770f" }}>クリエイター申請審査中</p>
-              </div>
-            )}
             {reviewCourseCount > 0 && (
-              <Link href="/creator/courses" className="card flex items-center gap-2 flex-1 min-w-[200px]" style={{ borderColor: "var(--accent)" }}>
-                <span className="text-xl">📝</span>
-                <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>運営確認中のコース {reviewCourseCount}件</p>
+              <Link href="/creator/courses" style={{ textDecoration: "none", flex: 1, minWidth: 200, display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "#fffbeb", border: "1.5px solid #f6c90e" }}>
+                <span style={{ fontSize: 22 }}>📋</span>
+                <div>
+                  <p style={{ fontWeight: 800, color: "#92400e", margin: 0, fontSize: 14 }}>審査中コース {reviewCourseCount}件</p>
+                  <p style={{ color: "#78350f", fontSize: 12, margin: 0 }}>運営が確認中です</p>
+                </div>
               </Link>
             )}
           </div>
         )}
 
-        {/* 機能タイル */}
+        {/* 機能タイルグリッド */}
         <div>
-          <SectionHeading>機能</SectionHeading>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {tiles.map(t => (
-              t.locked ? (
-                <span key={t.href} className="card flex flex-col items-center gap-1 py-5 text-center opacity-50 cursor-not-allowed" title="承認後に利用できます">
-                  <span className="text-2xl">{t.icon}</span>
-                  <span className="text-xs font-bold" style={{ color: "var(--text)" }}>{t.label}</span>
-                </span>
-              ) : (
-                <Link key={t.href} href={t.href} className="card flex flex-col items-center gap-1 py-5 text-center hover-lift">
-                  <span className="text-2xl">{t.icon}</span>
-                  <span className="text-xs font-bold" style={{ color: "var(--text)" }}>{t.label}</span>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>機能メニュー</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+            {/* AIインタビュー（キャラなし時） */}
+            {!character && !loadingChars && (
+              <Link href="/creator/interview" style={{ textDecoration: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 12px", borderRadius: 14, background: "var(--card)", border: "2px solid var(--primary)", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 0 0 3px rgba(var(--primary-rgb, 0,100,255), 0.08)" }}>
+                <span style={{ fontSize: 28 }}>🧠</span>
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "var(--primary)", margin: 0 }}>AIインタビュー</p>
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>人格を作成する</p>
+                </div>
+              </Link>
+            )}
+
+            {TILES.map(t => {
+              const locked = t.needsApproval && !isApproved;
+              if (locked) return (
+                <div key={t.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 12px", borderRadius: 14, background: "var(--card)", border: "1px solid var(--border)", opacity: 0.45, cursor: "not-allowed" }} title="承認後に利用できます">
+                  <span style={{ fontSize: 28 }}>{t.icon}</span>
+                  <div style={{ textAlign: "center" }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", margin: 0 }}>{t.label}</p>
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>{t.desc}</p>
+                  </div>
+                </div>
+              );
+              return (
+                <Link key={t.href} href={t.href} style={{ textDecoration: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 12px", borderRadius: 14, background: "var(--card)", border: "1px solid var(--border)", transition: "all 0.2s", cursor: "pointer" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 24px rgba(0,0,0,0.10)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = ""; (e.currentTarget as HTMLElement).style.transform = ""; }}
+                >
+                  <span style={{ fontSize: 28 }}>{t.icon}</span>
+                  <div style={{ textAlign: "center" }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", margin: 0 }}>{t.label}</p>
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0" }}>{t.desc}</p>
+                  </div>
                 </Link>
-              )
-            ))}
+              );
+            })}
           </div>
         </div>
 
+        {/* 人格プロフィール補完 */}
+        {character && completeness < 100 && (
+          <div style={{ padding: "16px 20px", borderRadius: 14, background: "var(--card)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ fontSize: 28, flexShrink: 0 }}>🎭</div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", margin: "0 0 4px" }}>人格プロフィールを充実させましょう</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1, height: 6, borderRadius: 999, background: "var(--border)" }}>
+                  <div style={{ height: 6, borderRadius: 999, background: "var(--primary)", width: `${completeness}%`, transition: "width 0.5s" }} />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{completeness}% 完成</span>
+              </div>
+            </div>
+            <Link href={`/dashboard/characters/${character.id}`} className="btn-primary" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+              編集する →
+            </Link>
+          </div>
+        )}
+
+        {/* 学習中コース */}
         {purchasedCourses.length > 0 && (
           <div>
-            <SectionHeading>学習中コース</SectionHeading>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {purchasedCourses.map(c => (
-                <Link key={c.course_id} href={`/courses/${c.course_id}`} className="card flex flex-col gap-2 hover-lift">
-                  <p className="font-bold" style={{ color: "var(--primary)" }}>{c.title}</p>
-                  <p className="text-sm" style={{ color: "var(--accent)" }}>
-                    {c.completed_count}/{c.total_lessons} レッスン完了
-                  </p>
-                  <div className="h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
-                    <div
-                      className="h-2 rounded-full"
-                      style={{ background: "var(--accent)", width: `${c.total_lessons ? Math.round((c.completed_count / c.total_lessons) * 100) : 0}%` }}
-                    />
-                  </div>
-                </Link>
-              ))}
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>学習中のコース</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+              {purchasedCourses.map(c => {
+                const pct = c.total_lessons ? Math.round((c.completed_count / c.total_lessons) * 100) : 0;
+                return (
+                  <Link key={c.course_id} href={`/courses/${c.course_id}`} style={{ textDecoration: "none", display: "flex", flexDirection: "column", gap: 8, padding: "16px", borderRadius: 14, background: "var(--card)", border: "1px solid var(--border)", transition: "all 0.2s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = ""; (e.currentTarget as HTMLElement).style.transform = ""; }}
+                  >
+                    <p style={{ fontWeight: 800, color: "var(--primary)", margin: 0, fontSize: 14 }}>{c.title}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ flex: 1, height: 5, borderRadius: 999, background: "var(--border)" }}>
+                        <div style={{ height: 5, borderRadius: 999, background: "var(--accent)", width: `${pct}%` }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{pct}%</span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>{c.completed_count}/{c.total_lessons} レッスン完了</p>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
