@@ -139,15 +139,19 @@ export default function CreatorContentsPage() {
 
             <form onSubmit={handleAdd} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", display: "block", marginBottom: 6 }}>URL *</label>
-                <input
+                <label style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", display: "block", marginBottom: 6 }}>URL または埋め込みコード *</label>
+                <textarea
                   className="input w-full"
-                  type="url"
-                  placeholder="https://youtube.com/watch?v=..."
+                  placeholder={"https://youtube.com/watch?v=...\nまたはInstagramの埋め込みコード（<blockquote ...>）をそのまま貼り付けてください"}
                   value={url}
-                  onChange={e => setUrl(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const match = val.match(/data-instgrm-permalink="([^"]+)"/);
+                    setUrl(match ? match[1].split("?")[0].replace(/\/$/, "") : val);
+                  }}
+                  rows={3}
                   required
-                  style={{ fontSize: 14 }}
+                  style={{ fontSize: 13, resize: "vertical" }}
                 />
               </div>
 
