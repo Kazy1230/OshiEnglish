@@ -69,6 +69,31 @@ function YouTubeEmbed({ url }: { url: string }) {
   );
 }
 
+function InstagramEmbed({ url }: { url: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const cleanUrl = url.split("?")[0].replace(/\/$/, "");
+  useEffect(() => {
+    if (!ref.current) return;
+    if (ref.current.querySelector("blockquote")) return;
+    const bq = document.createElement("blockquote");
+    bq.className = "instagram-media";
+    bq.setAttribute("data-instgrm-permalink", cleanUrl + "/");
+    bq.setAttribute("data-instgrm-version", "14");
+    bq.style.width = "100%";
+    ref.current.appendChild(bq);
+    const w = window as unknown as Record<string, unknown>;
+    if (w.instgrm) {
+      (w.instgrm as { Embeds: { process: () => void } }).Embeds.process();
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://www.instagram.com/embed.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, [cleanUrl]);
+  return <div ref={ref} style={{ minHeight: 400, width: "100%" }} />;
+}
+
 function XEmbed({ url }: { url: string }) {
   const tweetId = extractTweetId(url);
   const ref = useRef<HTMLDivElement>(null);
@@ -141,6 +166,7 @@ function LinkCard({ url, title, thumbnail, description }: { url: string; title?:
 export function ContentEmbed({ item }: { item: ContentItem }) {
   if (item.content_type === "youtube") return <YouTubeEmbed url={item.url} />;
   if (item.content_type === "x") return <XEmbed url={item.url} />;
+  if (item.content_type === "instagram") return <InstagramEmbed url={item.url} />;
   return <LinkCard url={item.url} title={item.title} thumbnail={item.thumbnail_url} description={item.description} />;
 }
 
