@@ -139,43 +139,53 @@ export default function Home() {
       </header>
 
       <main>
-        {/* ===== ヒーロー：メッシュグラデーション＋波形ディバイダー ===== */}
-        <section className="relative overflow-hidden" style={{ background: "linear-gradient(160deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 40%, var(--accent)) 65%, var(--accent) 100%)" }}>
-          <div
-            className="pointer-events-none absolute inset-0 opacity-70"
-            style={{
-              background:
-                "radial-gradient(circle at 12% 18%, rgba(255,255,255,0.16), transparent 38%)," +
-                "radial-gradient(circle at 88% 8%, rgba(255,255,255,0.12), transparent 42%)," +
-                "radial-gradient(circle at 75% 85%, rgba(0,0,0,0.18), transparent 45%)",
-            }}
-          />
-          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-24 sm:pb-32 grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-10 lg:gap-12 items-center">
-            <div className="flex flex-col gap-7">
-              <div className="flex flex-wrap gap-2">
-                <span className="pill backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.16)", color: "white", border: "1px solid rgba(255,255,255,0.25)" }}>
-                  ✨ 30日伴走コース
-                </span>
-                <span className="pill backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.2)" }}>
-                  クリエイターメソッド
-                </span>
+        {/* ===== ヒーロー：エディトリアル ===== */}
+        <section className="relative overflow-hidden" style={{ background: "var(--primary)" }}>
+          {/* ノイズテクスチャ風オーバーレイ */}
+          <div className="pointer-events-none absolute inset-0" style={{
+            backgroundImage: "radial-gradient(circle at 70% 30%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 55%), radial-gradient(circle at 15% 80%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 45%)",
+          }} />
+          {/* 細いゴールドラインアクセント */}
+          <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "var(--accent)", opacity: 0.5 }} />
+
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-28 sm:pb-36 grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-12 lg:gap-16 items-center">
+            <div className="flex flex-col gap-8">
+              <div className="flex items-center gap-3">
+                <div className="h-px w-10 flex-shrink-0" style={{ background: "var(--accent)" }} />
+                <span className="text-xs font-bold tracking-[0.2em] uppercase" style={{ color: "var(--accent)" }}>Mentor Platform</span>
               </div>
-              <h1 className="text-4xl sm:text-6xl font-black leading-[1.1] text-white tracking-tight">
+              <h1 style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "clamp(3rem, 7vw, 5.5rem)",
+                fontWeight: 600,
+                lineHeight: 1.05,
+                letterSpacing: "-0.02em",
+                color: "var(--bg)",
+              }}>
                 学ぶ人に、<br />
-                <span style={{ background: "linear-gradient(120deg, #fff, rgba(255,255,255,0.6))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-                  メンターを。
-                </span>
+                <em style={{ fontStyle: "italic", color: "var(--accent)" }}>メンター</em>を。
               </h1>
-              <p className="text-base sm:text-xl leading-relaxed max-w-xl text-white/85">
-                誰と挑戦するかで、未来は変わる。ひとりじゃない。
-                <br />
+              <p style={{ fontSize: "1.05rem", lineHeight: 1.85, color: "color-mix(in srgb, var(--bg) 70%, transparent)", maxWidth: "34rem" }}>
+                誰と挑戦するかで、未来は変わる。<br />
                 その一歩を、最後まで支えるために。
               </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <a href="#courses" className="btn-cta text-center shadow-lg" style={{ background: "white", color: "var(--primary)" }}>
+              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                <a href="#courses" style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  padding: "0.85rem 2.2rem", borderRadius: 4, fontWeight: 600,
+                  background: "var(--accent)", color: "var(--bg)",
+                  fontSize: "0.95rem", letterSpacing: "0.04em", transition: "opacity 0.2s",
+                  boxShadow: "0 4px 24px color-mix(in srgb, var(--accent) 40%, transparent)",
+                }}>
                   コースを探す →
                 </a>
-                <Link href="/creator/apply" className="text-center px-6 py-3 rounded-full font-bold border-2 transition-colors hover:bg-white/10" style={{ borderColor: "rgba(255,255,255,0.5)", color: "white" }}>
+                <Link href="/creator/apply" style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  padding: "0.85rem 2.2rem", borderRadius: 4, fontWeight: 600,
+                  border: "1px solid color-mix(in srgb, var(--bg) 25%, transparent)",
+                  color: "color-mix(in srgb, var(--bg) 80%, transparent)",
+                  fontSize: "0.95rem", letterSpacing: "0.04em", transition: "border-color 0.2s, color 0.2s",
+                }}>
                   クリエイターとして参加
                 </Link>
               </div>
@@ -185,29 +195,37 @@ export default function Home() {
               {featured ? (
                 <FeaturedCourse course={featured} />
               ) : (
-                <div className="rounded-3xl p-6 sm:p-8 min-h-[320px] flex flex-col justify-between shadow-2xl" style={{ background: "var(--card)" }}>
+                <div className="p-8 min-h-[320px] flex flex-col justify-between" style={{
+                  background: "color-mix(in srgb, var(--bg) 5%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--bg) 12%, transparent)",
+                  borderRadius: 8,
+                }}>
                   <div>
-                    <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>コース準備中</p>
-                    <h2 className="text-2xl font-black mt-3" style={{ color: "var(--primary)" }}>公開コースがここに表示されます</h2>
-                    <p className="text-sm mt-3 leading-relaxed" style={{ color: "var(--muted)" }}>
-                      クリエイターのコースが公開されると、サムネイル、価格、伴走タイプが確認できます。
+                    <p className="text-xs font-bold tracking-widest uppercase mb-4" style={{ color: "var(--accent)" }}>Coming Soon</p>
+                    <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", fontWeight: 600, color: "var(--bg)", lineHeight: 1.3 }}>
+                      公開コースがここに<br />表示されます
+                    </h2>
+                    <p className="text-sm mt-4 leading-relaxed" style={{ color: "color-mix(in srgb, var(--bg) 55%, transparent)" }}>
+                      クリエイターのコースが公開されると、サムネイル・価格・伴走タイプが確認できます。
                     </p>
                   </div>
-                  <Link href="/creator/apply" className="btn-primary self-start">コースを作る</Link>
+                  <Link href="/creator/apply" style={{
+                    display: "inline-flex", alignItems: "center",
+                    padding: "0.7rem 1.8rem", borderRadius: 4, fontWeight: 600, alignSelf: "flex-start",
+                    background: "var(--accent)", color: "var(--bg)", fontSize: "0.9rem",
+                  }}>コースを作る</Link>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 波形ディバイダー */}
-          <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 80" fill="none" preserveAspectRatio="none" style={{ height: "60px" }}>
-            <path d="M0 40C240 80 480 0 720 24C960 48 1200 88 1440 32V80H0V40Z" fill="var(--bg)" />
-          </svg>
+          {/* ボトムライン */}
+          <div className="absolute bottom-0 left-0 right-0" style={{ height: 1, background: "var(--border)", opacity: 0.3 }} />
         </section>
 
-        {/* ===== 統計バー：ヒーローと次セクションの境界に浮かせる ===== */}
-        <div className="relative -mt-10 sm:-mt-14 z-10 max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="rounded-2xl shadow-2xl grid grid-cols-3" style={{ background: "var(--card)" }}>
+        {/* ===== 統計バー ===== */}
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-0">
+          <div className="grid grid-cols-3 border-b" style={{ borderColor: "var(--border)" }}>
             <StatCell value="30日" label="伴走学習プラン" />
             <StatCell value="毎日" label="タスクと相談チャット" border />
             <StatCell value={achieversCount > 0 ? `${achieversCount.toLocaleString()}名+` : "A / B"} label={achieversCount > 0 ? "コース完走者" : "選べるTier"} border />
@@ -219,8 +237,11 @@ export default function Home() {
           <div className="flex flex-col gap-5">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
               <div>
-                <p className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>COURSES</p>
-                <h2 className="text-2xl sm:text-3xl font-black mt-1" style={{ color: "var(--primary)" }}>伴走コースを探す</h2>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-px w-6 flex-shrink-0" style={{ background: "var(--accent)" }} />
+                  <p className="text-xs font-bold tracking-[0.18em] uppercase" style={{ color: "var(--accent)" }}>Courses</p>
+                </div>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.6rem, 3vw, 2.4rem)", fontWeight: 600, color: "var(--primary)" }}>伴走コースを探す</h2>
                 <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
                   {loading ? "コースを読み込んでいます。" : `${filtered.length}件のコースが見つかりました。`}
                 </p>
@@ -269,22 +290,24 @@ export default function Home() {
         {/* ===== 始め方：タイムライン ===== */}
         <section id="how-it-works" style={{ background: "color-mix(in srgb, var(--card) 60%, var(--bg))" }}>
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
-            <div className="text-center mb-12">
-              <p className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>HOW IT WORKS</p>
-              <h2 className="text-2xl sm:text-3xl font-black mt-1" style={{ color: "var(--primary)" }}>始め方はシンプルです</h2>
+            <div className="text-center mb-14">
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <div className="h-px w-8 flex-shrink-0" style={{ background: "var(--accent)" }} />
+                <p className="text-xs font-bold tracking-[0.18em] uppercase" style={{ color: "var(--accent)" }}>How It Works</p>
+                <div className="h-px w-8 flex-shrink-0" style={{ background: "var(--accent)" }} />
+              </div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.8rem, 3.5vw, 2.6rem)", fontWeight: 600, color: "var(--primary)" }}>始め方はシンプルです</h2>
             </div>
             <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-5">
               <div className="hidden md:block absolute top-7 left-[16.6%] right-[16.6%] h-0.5" style={{ background: "var(--border)" }} />
               {STEPS.map((step, index) => (
                 <div key={step.title} className="relative flex flex-col items-center text-center gap-3">
-                  <span
-                    className="relative w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-soft"
-                    style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}
-                  >
+                  <span className="relative w-14 h-14 flex items-center justify-center text-2xl"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4 }}>
                     {step.icon}
                   </span>
-                  <h3 className="font-black" style={{ color: "var(--primary)" }}>
-                    <span style={{ color: "var(--accent)" }}>{index + 1}.</span> {step.title}
+                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: "1.1rem", fontWeight: 600, color: "var(--primary)" }}>
+                    <span style={{ color: "var(--accent)", marginRight: 4 }}>{index + 1}.</span>{step.title}
                   </h3>
                   <p className="text-sm leading-relaxed max-w-xs" style={{ color: "var(--muted)" }}>{step.desc}</p>
                 </div>
@@ -295,19 +318,28 @@ export default function Home() {
 
         {/* ===== クリエイター向けCTA ===== */}
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
-          <div className="relative overflow-hidden rounded-3xl p-8 sm:p-12 flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-2xl" style={{ background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 30%, var(--accent)))" }}>
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{ background: "radial-gradient(circle at 85% 20%, rgba(255,255,255,0.14), transparent 50%)" }}
-            />
+          <div className="relative overflow-hidden p-10 sm:p-16 flex flex-col md:flex-row md:items-center md:justify-between gap-8"
+            style={{ background: "var(--primary)", border: "1px solid var(--border)" }}>
+            {/* ゴールドアクセントライン */}
+            <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "var(--accent)" }} />
             <div className="relative">
-              <p className="text-xs font-black tracking-widest text-white/70">FOR CREATORS</p>
-              <h2 className="text-2xl sm:text-3xl font-black mt-2 text-white">あなたのメソッドを、<br className="sm:hidden" />30日伴走コースに。</h2>
-              <p className="text-sm leading-relaxed mt-3 text-white/78 max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-px w-6 flex-shrink-0" style={{ background: "var(--accent)" }} />
+                <p className="text-xs font-bold tracking-[0.18em] uppercase" style={{ color: "var(--accent)" }}>For Creators</p>
+              </div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", fontWeight: 600, lineHeight: 1.2, color: "var(--bg)" }}>
+                あなたのメソッドを、<br />30日伴走コースに。
+              </h2>
+              <p className="text-sm leading-relaxed mt-4 max-w-xl" style={{ color: "color-mix(in srgb, var(--bg) 60%, transparent)" }}>
                 インタビューで指導スタイルを整理し、教材と30日プランを組み合わせてコースを公開できます。
               </p>
             </div>
-            <Link href="/creator/apply" className="relative btn-cta text-center flex-shrink-0 shadow-lg" style={{ background: "white", color: "var(--primary)" }}>
+            <Link href="/creator/apply" className="relative flex-shrink-0" style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              padding: "0.9rem 2.4rem", borderRadius: 4, fontWeight: 600,
+              background: "var(--accent)", color: "var(--bg)",
+              fontSize: "0.95rem", letterSpacing: "0.04em", whiteSpace: "nowrap",
+            }}>
               クリエイター申請へ
             </Link>
           </div>
@@ -333,9 +365,9 @@ export default function Home() {
 
 function StatCell({ value, label, border = false }: { value: string; label: string; border?: boolean }) {
   return (
-    <div className="px-3 sm:px-6 py-5 sm:py-6 text-center" style={border ? { borderLeft: "1px solid var(--border)" } : undefined}>
-      <p className="text-xl sm:text-2xl font-black" style={{ color: "var(--primary)" }}>{value}</p>
-      <p className="text-[11px] sm:text-xs mt-1" style={{ color: "var(--muted)" }}>{label}</p>
+    <div className="px-4 sm:px-8 py-6 sm:py-8 text-center" style={border ? { borderLeft: "1px solid var(--border)" } : undefined}>
+      <p style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.4rem,3vw,2rem)", fontWeight: 600, color: "var(--primary)", letterSpacing: "-0.02em" }}>{value}</p>
+      <p className="text-[11px] sm:text-xs mt-1.5 tracking-wide uppercase" style={{ color: "var(--muted)" }}>{label}</p>
     </div>
   );
 }
@@ -370,8 +402,8 @@ function CourseTile({ course }: { course: CourseCard }) {
   return (
     <Link
       href={`/courses/${course.id}`}
-      className="rounded-2xl overflow-hidden hover-lift shadow-soft flex flex-col min-h-full"
-      style={{ background: "var(--card)" }}
+      className="overflow-hidden hover-lift flex flex-col min-h-full"
+      style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 6 }}
     >
       <div className="relative">
         <CourseImage course={course} className="h-40" />
@@ -385,7 +417,7 @@ function CourseTile({ course }: { course: CourseCard }) {
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div>
           {course.category && <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>{course.category}</p>}
-          <h3 className="font-black line-clamp-2" style={{ color: "var(--primary)" }}>{course.title}</h3>
+          <h3 className="line-clamp-2" style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem", fontWeight: 600, color: "var(--primary)" }}>{course.title}</h3>
           {course.description && (
             <p className="text-sm leading-relaxed mt-2 line-clamp-2" style={{ color: "var(--muted)" }}>{course.description}</p>
           )}

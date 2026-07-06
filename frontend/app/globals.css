@@ -1,24 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600;700;900&display=swap');
 @import "tailwindcss";
 
 :root {
-  --bg: #f7f5ff;
+  --bg: #f9f7f3;
   --card: #ffffff;
-  --primary: #2d1b69;
-  --accent: #f97316;
-  --text: #1a0f3d;
-  --muted: #6b5fa6;
-  --border: #e0d9f5;
+  --primary: #0f0e0a;
+  --accent: #b5803a;
+  --text: #1c1a14;
+  --muted: #7c7060;
+  --border: #e5dfd4;
+  --surface: #f3ede4;
+  --font-display: 'Cormorant Garamond', 'Georgia', serif;
+  --font-body: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
 }
 
 /* ダークモード（<html class="dark"> が付与されたときに上書き） */
 :root.dark {
-  --bg: #0d0a1a;
-  --card: #1a1535;
-  --primary: #a78bfa;
-  --accent: #fb923c;
-  --text: #ede8ff;
-  --muted: #8b7ec8;
-  --border: #2e2554;
+  --bg: #0c0b08;
+  --card: #18160f;
+  --primary: #f0e8d8;
+  --accent: #d4a055;
+  --text: #f2ead8;
+  --muted: #9a8870;
+  --border: #2e2820;
+  --surface: #201d14;
 }
 
 /* 管理者画面専用テーマ（サイト全体とは異なる配色で識別性を上げる） */
@@ -44,8 +49,15 @@
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  font-family: var(--font-body);
   transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.01em;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 .card {
