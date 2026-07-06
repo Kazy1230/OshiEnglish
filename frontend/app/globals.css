@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f3f5f8;
+  --bg: #f7f5ff;
   --card: #ffffff;
-  --primary: #233347;
-  --accent: #0a7e76;
-  --text: #1c2128;
-  --muted: #5c6573;
-  --border: #d8dce3;
+  --primary: #2d1b69;
+  --accent: #f97316;
+  --text: #1a0f3d;
+  --muted: #6b5fa6;
+  --border: #e0d9f5;
 }
 
 /* ダークモード（<html class="dark"> が付与されたときに上書き） */
 :root.dark {
-  --bg: #15171b;
-  --card: #1f2228;
-  --primary: #6f9bd6;
-  --accent: #3fc5b8;
-  --text: #e7e8ec;
-  --muted: #9a9ea8;
-  --border: #34373f;
+  --bg: #0d0a1a;
+  --card: #1a1535;
+  --primary: #a78bfa;
+  --accent: #fb923c;
+  --text: #ede8ff;
+  --muted: #8b7ec8;
+  --border: #2e2554;
 }
 
 /* 管理者画面専用テーマ（サイト全体とは異なる配色で識別性を上げる） */
