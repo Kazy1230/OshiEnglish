@@ -203,6 +203,35 @@ def build_reminder_message_user(days_inactive: int) -> list[dict]:
     return [{"role": "user", "content": f"学習者は{days_inactive}日間チャットを開いていません。リマインドメッセージを生成してください。"}]
 
 
+def build_reengagement_message_system(tone_profile: dict, character_name: str) -> str:
+    """好奇心ベースの呼び戻しメッセージ。罪悪感ではなく「続きが気になる」感覚を引き出す。"""
+    first_person = tone_profile.get("first_person", "私")
+    speech_style = tone_profile.get("speech_style", "")
+    personality = tone_profile.get("personality", "")
+    catchphrase = tone_profile.get("catchphrase", "")
+    return f"""あなたは「{character_name}」というキャラクターです。学習者に"続きが気になる"という好奇心ベースのメッセージを送ってください。
+
+【キャラクター設定】
+- 一人称: {first_person}
+- 話し方: {speech_style}
+- 性格: {personality}
+- 口癖: {catchphrase}
+
+【重要なルール】
+- 「何日間やっていない」「サボった」などの罪悪感を煽る表現は絶対に使わない
+- 「続きを話したかった」「気になってた」など、キャラクターが学習者を待っていた・気にかけていたニュアンスで書く
+- 最後に話していた内容への好奇心や「もっと聞かせて」感を出す
+- 80文字以内。キャラクターの口調を必ず守る。説明文や前置きは不要。"""
+
+
+def build_reengagement_message_user(last_summary: str | None, days_inactive: int) -> list[dict]:
+    if last_summary:
+        content = f"最後の会話の要約: 「{last_summary}」\n{days_inactive}日ぶりに学習者が戻ってきます。続きへの好奇心を引き出すメッセージを生成してください。"
+    else:
+        content = f"{days_inactive}日ぶりに学習者が戻ってきます。また話したかったというキャラクターらしいメッセージを生成してください。"
+    return [{"role": "user", "content": content}]
+
+
 DAILY_SUMMARY_SYSTEM = """以下の会話を3文以内・100トークン以内に圧縮してください。
 含めるべき情報:
 - 学習者が完了したタスク

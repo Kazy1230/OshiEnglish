@@ -8,6 +8,7 @@ from app.core.email import send_email
 from app.core.config import settings as app_settings
 from app.core.llm import generate_text, LLMError
 from app.core import chat_prompts as prompts
+from app.models.character import Character
 from app.models.notification_setting import NotificationSetting
 from app.models.learner_profile import LearnerProfile
 from app.models.learner_course_day import LearnerCourseDay
@@ -159,7 +160,7 @@ def _notify_creator_of_inactive_learner(db: Session, course: Course, learner_use
 
 
 def check_inactive_reminders():
-    """改善提案書5節: チャット未開封日数に応じた3段階リマインドメールを送信する（1日1コースあたり1通まで）。"""
+    """好奇心ベースの呼び戻し通知。罪悪感ではなくキャラクターが「続きを話したかった」ニュアンスで送信する。"""
     db = SessionLocal()
     try:
         now = datetime.now(JST)
@@ -181,39 +182,73 @@ def check_inactive_reminders():
             if _already_sent_reminder_today(db, learner_profile.user_id, course.id, now):
                 continue
 
-            personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
-            if not personality or not personality.profile:
-                continue
             user = db.query(Customer).filter(Customer.id == learner_profile.user_id).first()
-            if not user or not user.email:
+            if not user:
                 continue
 
-            tier = min(3, days_inactive)
-            try:
-                message = generate_text(
-                    prompts.build_reminder_message_system(personality.profile, tier),
-                    prompts.build_reminder_message_user(days_inactive),
-                    max_tokens=200,
-                    model=app_settings.DEEPSEEK_MODEL_LITE,
-                )
-            except LLMError:
-                logger.exception(f"[InactivityReminder] メッセージ生成に失敗しました: user_id={user.id}, course_id={course.id}")
-                continue
+            # キャラクターのtone_profileを取得（なければpersonality_profileにフォールバック）
+            character = db.query(Character).filter(Character.creator_id == course.character.creator_id).first() if course.character else None
+            tone_profile = character.tone_profile if character and character.tone_profile else None
+            character_name = character.name if character else None
+            character_image = character.image_url if character else None
+
+            if tone_profile and character_name:
+                # 最後の日次サマリーを取得して「続きの話」感を出す
+                last_summary_row = db.query(DailySummary).filter(
+                    DailySummary.user_id == user.id, DailySummary.course_id == course.id,
+                ).order_by(DailySummary.day_number.desc()).first()
+                last_summary = last_summary_row.summary if last_summary_row else None
+
+                try:
+                    message = generate_text(
+                        prompts.build_reengagement_message_system(tone_profile, character_name),
+                        prompts.build_reengagement_message_user(last_summary, days_inactive),
+                        max_tokens=150,
+                        model=app_settings.DEEPSEEK_MODEL_LITE,
+                    )
+                except LLMError:
+                    logger.exception(f"[ReengagementReminder] メッセージ生成に失敗: user_id={user.id}, course_id={course.id}")
+                    continue
+            else:
+                # tone_profileがない場合はpersonality_profileでフォールバック
+                personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+                if not personality or not personality.profile:
+                    continue
+                tier = min(3, days_inactive)
+                try:
+                    message = generate_text(
+                        prompts.build_reminder_message_system(personality.profile, tier),
+                        prompts.build_reminder_message_user(days_inactive),
+                        max_tokens=200,
+                        model=app_settings.DEEPSEEK_MODEL_LITE,
+                    )
+                except LLMError:
+                    logger.exception(f"[InactivityReminder] メッセージ生成に失敗: user_id={user.id}, course_id={course.id}")
+                    continue
+                character_name = None
+                character_image = None
 
             db.add(Notification(
                 user_id=user.id,
                 type="inactivity_reminder",
-                payload={"course_id": course.id, "days_inactive": days_inactive, "message": message},
+                payload={
+                    "course_id": course.id,
+                    "days_inactive": days_inactive,
+                    "message": message,
+                    "character_name": character_name,
+                    "character_image": character_image,
+                    "course_title": course.title,
+                },
             ))
             db.commit()
 
-            subject_tone = {1: "今日の学習はどう？", 2: "昨日できなかった分、今日一緒に取り戻そう", 3: f"{days_inactive}日ぶりだね"}[tier]
-            send_email(
-                user.email,
-                f"【ManaVillage】{subject_tone}",
-                f"<p>{message}</p>"
-                f'<p><a href="https://manavillage.app/courses/{course.id}/chat">チャット画面へ戻る</a></p>',
-            )
+            if user.email:
+                send_email(
+                    user.email,
+                    f"【{character_name or 'ManaVillage'}】{character_name or 'あなたのコーチ'}からメッセージが届いています",
+                    f"<p>{message}</p>"
+                    f'<p><a href="https://manavillage.app/courses/{course.id}/chat">チャット画面へ戻る</a></p>',
+                )
 
             if days_inactive >= 4:
                 _notify_creator_of_inactive_learner(db, course, user, days_inactive)

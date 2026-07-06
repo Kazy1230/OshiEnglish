@@ -7,7 +7,6 @@ import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 import { SectionHeading } from "@/components/SectionHeading";
 
-
 type PurchasedCourse = {
   course_id: number;
   title: string;
@@ -19,18 +18,100 @@ type PurchasedCourse = {
   character?: { name?: string | null; avatar_url?: string | null } | null;
 };
 
+type ReengagementNotif = {
+  id: number;
+  payload: {
+    course_id: number;
+    message: string;
+    character_name?: string | null;
+    character_image?: string | null;
+    course_title?: string | null;
+    days_inactive?: number;
+  };
+};
+
 function progressPercent(c: PurchasedCourse) {
   return c.total_lessons ? Math.round((c.completed_count / c.total_lessons) * 100) : 0;
+}
+
+function CharacterMessageBanner({ notif, onDismiss }: { notif: ReengagementNotif; onDismiss: () => void }) {
+  const { message, character_name, character_image, course_id, course_title } = notif.payload;
+  return (
+    <div style={{
+      background: "var(--card)",
+      border: "1.5px solid var(--primary)",
+      borderRadius: 16,
+      padding: "16px 20px",
+      display: "flex",
+      gap: 14,
+      alignItems: "flex-start",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+      position: "relative",
+    }}>
+      {/* アバター */}
+      <div style={{ flexShrink: 0 }}>
+        {character_image ? (
+          <img src={character_image} alt="" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--primary)" }} />
+        ) : (
+          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, var(--primary), var(--accent))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+            🎭
+          </div>
+        )}
+      </div>
+
+      {/* メッセージ */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {character_name && (
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", marginBottom: 4 }}>{character_name}</p>
+        )}
+        <p style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.6, marginBottom: 10 }}>
+          {message}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link
+            href={`/courses/${course_id}/chat`}
+            onClick={onDismiss}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 13, fontWeight: 700, color: "white",
+              background: "var(--primary)", padding: "6px 16px",
+              borderRadius: 999, textDecoration: "none",
+            }}
+          >
+            {course_title ? `「${course_title}」の続きへ` : "続きから始める"} →
+          </Link>
+        </div>
+      </div>
+
+      {/* 閉じるボタン */}
+      <button
+        onClick={onDismiss}
+        style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 18, lineHeight: 1, padding: 4 }}
+        aria-label="閉じる"
+      >×</button>
+    </div>
+  );
 }
 
 export default function MyPage() {
   const { me, loading } = useRoleGuard(["learner", "admin"]);
   const [courses, setCourses] = useState<PurchasedCourse[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
+  const [reengagementNotifs, setReengagementNotifs] = useState<ReengagementNotif[]>([]);
+
   useEffect(() => {
     if (loading) return;
     api.getMyPurchasedCourses().then(setCourses).catch(() => {}).finally(() => setLoadingCourses(false));
+    api.listNotifications().then((data: { notifications: Array<{ id: number; type: string; payload: ReengagementNotif["payload"]; is_read: boolean }> }) => {
+      const unread = data.notifications.filter(n => n.type === "inactivity_reminder" && !n.is_read);
+      setReengagementNotifs(unread);
+    }).catch(() => {});
   }, [loading]);
+
+  async function dismissNotif(id: number) {
+    setReengagementNotifs(prev => prev.filter(n => n.id !== id));
+    await api.markNotificationRead(id).catch(() => {});
+  }
 
   if (loading) return <Skeleton />;
 
@@ -71,6 +152,15 @@ export default function MyPage() {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <Link href="/change-password" className="btn-ghost text-xs self-end">🔒 パスワードを変更</Link>
+
+        {/* キャラクターからの呼び戻しメッセージ */}
+        {reengagementNotifs.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {reengagementNotifs.map(n => (
+              <CharacterMessageBanner key={n.id} notif={n} onDismiss={() => dismissNotif(n.id)} />
+            ))}
+          </div>
+        )}
 
         <div>
           <SectionHeading>学習中のコース</SectionHeading>
@@ -148,7 +238,6 @@ export default function MyPage() {
             </div>
           )}
         </div>
-
       </main>
     </div>
   );
