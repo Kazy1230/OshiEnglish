@@ -8,7 +8,6 @@ import { useDarkMode } from "@/lib/darkMode";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ContentCard, ContentItem } from "@/components/ContentEmbed";
 
 type CourseCard = {
   id: number;
@@ -66,9 +65,6 @@ export default function Home() {
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
   const [achieversCount, setAchieversCount] = useState(0);
-  const [feedContents, setFeedContents] = useState<ContentItem[]>([]);
-  const [feedSubject, setFeedSubject] = useState("");
-  const [feedLiked, setFeedLiked] = useState<Record<number, { liked: boolean; count: number }>>({});
 
   useEffect(() => {
     if (!getToken()) {
@@ -91,28 +87,7 @@ export default function Home() {
   useEffect(() => {
     api.listCourses().then(setAllCourses).catch(() => { });
     api.getPublicStats().then(s => setAchieversCount(s.achievers_count)).catch(() => { });
-    api.listPublicContentsNoAuth(undefined, 6).then(setFeedContents).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    api.listPublicContentsNoAuth(feedSubject || undefined, 6).then(setFeedContents).catch(() => {});
-  }, [feedSubject]);
-
-  async function handleFeedLike(id: number) {
-    try {
-      const res = await api.toggleContentLike(id);
-      setFeedLiked(prev => ({ ...prev, [id]: { liked: res.liked, count: res.like_count } }));
-      setFeedContents(prev => prev.map(c => c.id === id ? { ...c, liked: res.liked, like_count: res.like_count } : c));
-    } catch {}
-  }
-
-  const FEED_SUBJECT_TABS = [
-    { key: "", label: "すべて" },
-    { key: "english", label: "英語" },
-    { key: "it", label: "IT" },
-    { key: "music", label: "音楽" },
-    { key: "japanese", label: "日本語" },
-  ];
 
   const categories = useMemo(
     () => Array.from(new Set(allCourses.map(c => c.category).filter(Boolean))) as string[],
@@ -288,94 +263,6 @@ export default function Home() {
                 ))}
               </div>
             )}
-          </div>
-        </section>
-
-        {/* ===== コンテンツフィード ===== */}
-        <section style={{ background: "color-mix(in srgb, var(--card) 40%, var(--bg))", borderTop: "1px solid var(--border)" }}>
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-            <div className="flex items-center gap-3 mb-2">
-              <span style={{ width: 4, height: 22, borderRadius: 2, background: "var(--accent)", display: "inline-block" }} />
-              <p className="text-xs font-black tracking-widest" style={{ color: "var(--accent)" }}>CONTENT FEED</p>
-            </div>
-            <div className="flex items-end justify-between mb-6 gap-4">
-              <h2 className="text-2xl sm:text-3xl font-black" style={{ color: "var(--primary)" }}>クリエイターのコンテンツ</h2>
-              <p className="text-sm hidden sm:block" style={{ color: "var(--muted)" }}>日々の学びを発信しています</p>
-            </div>
-
-            <div className="flex gap-6 lg:gap-8" style={{ alignItems: "flex-start" }}>
-              {/* サイドバー（デスクトップのみ） */}
-              <aside className="hidden lg:flex flex-col gap-2 flex-shrink-0" style={{ width: 160, position: "sticky", top: 72 }}>
-                <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>分野で絞る</p>
-                {FEED_SUBJECT_TABS.map(t => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setFeedSubject(t.key)}
-                    style={{
-                      textAlign: "left",
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      fontWeight: feedSubject === t.key ? 700 : 500,
-                      fontSize: 13,
-                      background: feedSubject === t.key ? "var(--primary)" : "transparent",
-                      color: feedSubject === t.key ? "white" : "var(--muted)",
-                      border: "none",
-                      cursor: "pointer",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </aside>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* モバイル用タブ */}
-                <div className="flex gap-2 overflow-x-auto pb-3 lg:hidden" style={{ scrollbarWidth: "none" }}>
-                  {FEED_SUBJECT_TABS.map(t => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setFeedSubject(t.key)}
-                      className="whitespace-nowrap text-sm px-4 py-1.5 rounded-full font-bold flex-shrink-0"
-                      style={{
-                        background: feedSubject === t.key ? "var(--primary)" : "var(--card)",
-                        color: feedSubject === t.key ? "white" : "var(--muted)",
-                        border: `1.5px solid ${feedSubject === t.key ? "var(--primary)" : "var(--border)"}`,
-                      }}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                {feedContents.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "48px 0", color: "var(--muted)" }}>
-                    <p style={{ fontSize: 32, marginBottom: 8 }}>📭</p>
-                    <p style={{ fontSize: 14 }}>この分野のコンテンツはまだありません</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {feedContents.map(c => (
-                      <ContentCard
-                        key={c.id}
-                        item={c}
-                        onLike={loggedIn ? handleFeedLike : undefined}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {feedContents.length > 0 && (
-                  <div style={{ textAlign: "center", marginTop: 24 }}>
-                    <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--accent)", padding: "8px 20px", border: "1px solid var(--accent)", borderRadius: 999, textDecoration: "none" }}>
-                      もっと見る →
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </section>
 

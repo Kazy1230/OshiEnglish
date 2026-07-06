@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 import { SectionHeading } from "@/components/SectionHeading";
-import { ContentCard, ContentItem } from "@/components/ContentEmbed";
+
 
 type PurchasedCourse = {
   course_id: number;
@@ -27,25 +27,10 @@ export default function MyPage() {
   const { me, loading } = useRoleGuard(["learner", "admin"]);
   const [courses, setCourses] = useState<PurchasedCourse[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
-  const [recContents, setRecContents] = useState<ContentItem[]>([]);
-
   useEffect(() => {
     if (loading) return;
-    api.getMyPurchasedCourses().then((list) => {
-      setCourses(list);
-      const subject = list[0]?.subject;
-      if (subject) {
-        api.getContentRecommendations(subject, 6).then(setRecContents).catch(() => {});
-      }
-    }).catch(() => {}).finally(() => setLoadingCourses(false));
+    api.getMyPurchasedCourses().then(setCourses).catch(() => {}).finally(() => setLoadingCourses(false));
   }, [loading]);
-
-  async function handleRecLike(id: number) {
-    try {
-      const res = await api.toggleContentLike(id);
-      setRecContents(prev => prev.map(c => c.id === id ? { ...c, liked: res.liked, like_count: res.like_count } : c));
-    } catch {}
-  }
 
   if (loading) return <Skeleton />;
 
@@ -164,17 +149,6 @@ export default function MyPage() {
           )}
         </div>
 
-        {/* おすすめコンテンツ */}
-        {recContents.length > 0 && (
-          <div className="flex flex-col gap-4 mt-2">
-            <SectionHeading>おすすめコンテンツ</SectionHeading>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {recContents.map(c => (
-                <ContentCard key={c.id} item={c} onLike={handleRecLike} />
-              ))}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
