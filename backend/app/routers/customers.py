@@ -30,6 +30,7 @@ from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
+from app.models.card_progress import CardProgress
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,7 @@ def _cascade_delete_learner_data(db: Session, user_id: int) -> None:
     db.query(Favorite).filter(Favorite.user_id == user_id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
     db.query(NotificationSetting).filter(NotificationSetting.user_id == user_id).delete(synchronize_session=False)
+    db.query(CardProgress).filter(CardProgress.user_id == user_id).delete(synchronize_session=False)
     db.query(LessonProgress).filter(LessonProgress.user_id == user_id).delete(synchronize_session=False)
     db.query(DayLog).filter(DayLog.user_id == user_id).delete(synchronize_session=False)
     db.query(DailySummary).filter(DailySummary.user_id == user_id).delete(synchronize_session=False)
