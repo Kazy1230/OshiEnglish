@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.purchase import Purchase
 from app.models.course_subscription import CourseSubscription
 from app.models.personality_profile import PersonalityProfile
+from app.models.interview_session import InterviewSession
 
 router = APIRouter(prefix="/creators", tags=["クリエイター"])
 
@@ -301,8 +302,11 @@ def generate_my_intro(current_user=Depends(get_current_creator_or_admin), db: Se
     if not personality or not personality.profile:
         raise HTTPException(status_code=400, detail="先にAIインタビューで人格プロファイルを作成してください")
 
+    interview_session = db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).first()
+    subject = (interview_session.subject if interview_session else None) or "english"
+
     try:
-        _intro_msgs = creator_prompts.build_self_intro_messages(personality.profile, profile.speciality, profile.experience)
+        _intro_msgs = creator_prompts.build_self_intro_messages(personality.profile, profile.speciality, profile.experience, subject=subject)
         intro = generate_text(
             _intro_msgs[0]["content"],
             _intro_msgs[1:],

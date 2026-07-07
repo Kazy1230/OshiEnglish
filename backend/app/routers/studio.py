@@ -220,6 +220,7 @@ def generate_content(data: GenerateContentRequest, current_user=Depends(get_curr
 
 class ConsultRequest(BaseModel):
     theme: str
+    subject: str = "english"
 
 
 @router.post("/consult")
@@ -230,7 +231,7 @@ def consult(
 ):
     _require_active_creator(db, current_user)
     try:
-        text = generate_text(prompts.CONSULT_SYSTEM, prompts.build_consult_messages(data.theme), json_mode=True)
+        text = generate_text(prompts.build_consult_system(data.subject), prompts.build_consult_messages(data.theme), json_mode=True)
         return extract_json(text)
     except LLMError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -242,6 +243,7 @@ class GenerateRawRequest(BaseModel):
     theme: str
     structure: list[str]
     target_level: Optional[str] = None
+    subject: str = "english"
 
 
 @router.post("/generate/raw")
@@ -267,7 +269,7 @@ def generate_raw(
         chunks: list[str] = []
         try:
             for chunk in stream_text(
-                prompts.RAW_CONTENT_SYSTEM,
+                prompts.build_raw_content_system(data.subject),
                 prompts.build_raw_content_messages(data.theme, data.structure, data.target_level),
             ):
                 chunks.append(chunk)

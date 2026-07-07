@@ -27,16 +27,32 @@ def build_tone_profile_messages(name: str, description: str, tone_profile: dict,
     ]
 
 
-CONSULT_SYSTEM = """あなたは英語教育コンテンツの企画アドバイザーです。
-講師が入力したテーマをもとに、英語学習者向けコンテンツの企画案を提案してください。
+_CONSULT_SYSTEM_TEMPLATE = """あなたは{expert_label}コンテンツの企画アドバイザーです。
+講師が入力したテーマをもとに、{learner_label}向けコンテンツの企画案を提案してください。
 以下のJSON形式のみで返答してください。
 
-{
+{{
   "titles": ["タイトル案1", "タイトル案2", "タイトル案3"],
   "structure": ["セクション1", "セクション2", "セクション3"],
   "target_level": "初級 | 中級 | 上級",
   "target_audience": "想定学習者の説明"
-}"""
+}}"""
+
+_CONSULT_LEARNER_LABELS = {
+    "english": "英語学習者",
+    "it": "IT・プログラミング学習者",
+    "music": "音楽学習者",
+    "japanese": "日本語学習者",
+}
+
+
+def build_consult_system(subject: str = "english") -> str:
+    expert_label = _SUBJECT_EXPERT_LABELS.get(subject, "学習コンテンツ")
+    learner_label = _CONSULT_LEARNER_LABELS.get(subject, "学習者")
+    return _CONSULT_SYSTEM_TEMPLATE.format(expert_label=expert_label, learner_label=learner_label)
+
+# 後方互換
+CONSULT_SYSTEM = build_consult_system("english")
 
 
 def build_consult_messages(theme: str) -> list[dict]:
@@ -145,9 +161,16 @@ def build_format_content_system(format_key: str, duration_sec: int | None, char_
     )
 
 
-RAW_CONTENT_SYSTEM = """あなたは英語教育の専門家です。
-与えられたテーマと構成に従い、正確でわかりやすい英語学習教材を作成してください。
-口調・キャラクター性は一切加えず、事実と解説のみをプレーンな文章で書いてください。"""
+def build_raw_content_system(subject: str = "english") -> str:
+    expert_label = _SUBJECT_EXPERT_LABELS.get(subject, "学習コンテンツ")
+    return (
+        f"あなたは{expert_label}の専門家です。"
+        "与えられたテーマと構成に従い、正確でわかりやすい学習教材を作成してください。"
+        "口調・キャラクター性は一切加えず、事実と解説のみをプレーンな文章で書いてください。"
+    )
+
+# 後方互換
+RAW_CONTENT_SYSTEM = build_raw_content_system("english")
 
 
 def build_raw_content_messages(theme: str, structure: list[str], target_level: str | None) -> list[dict]:
