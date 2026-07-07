@@ -35,6 +35,23 @@ type Progress = {
   completion_video_url: string | null;
 };
 
+type NextCourse = {
+  id: number;
+  title: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  price: number;
+  is_free: boolean;
+  is_purchased: boolean;
+};
+
+type Review = {
+  id: number;
+  content_rating: number;
+  coaching_rating: number;
+  body: string | null;
+};
+
 const PACE_OPTIONS = [
   { value: "2weeks", label: "2週間で完走" },
   { value: "1month", label: "1ヶ月で完走" },
@@ -64,6 +81,22 @@ function YouTubeEmbed({ url }: { url: string }) {
   );
 }
 
+function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          onClick={() => onChange(n)}
+          style={{ fontSize: "1.5rem", color: n <= value ? "#f59e0b" : "var(--border)", lineHeight: 1 }}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function LearnPage() {
   const params = useParams();
   const router = useRouter();
@@ -76,17 +109,39 @@ export default function LearnPage() {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [completing, setCompleting] = useState(false);
   const [graduated, setGraduated] = useState(false);
+  const [nextCourses, setNextCourses] = useState<NextCourse[]>([]);
+
+  // レビュー
+  const [myReview, setMyReview] = useState<Review | null>(null);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [contentRating, setContentRating] = useState(0);
+  const [coachingRating, setCoachingRating] = useState(0);
+  const [reviewBody, setReviewBody] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!courseId) return;
     Promise.all([
       api.getLearnerCurriculum(courseId),
       api.getLearnerProgress(courseId),
-    ]).then(([chs, prog]) => {
+      api.getMyReview(courseId).catch(() => null),
+    ]).then(([chs, prog, review]) => {
       setChapters(chs.chapters ?? chs);
       setProgress(prog);
       if (!prog.target_pace) setShowPaceModal(true);
-      if (prog.is_graduated) setGraduated(true);
+      if (prog.is_graduated) {
+        setGraduated(true);
+        // 卒業済みなら卒業APIから次コース取得
+        api.graduateCourse(courseId).then(res => {
+          setNextCourses(res.next_courses ?? []);
+        }).catch(() => {});
+      }
+      if (review) {
+        setMyReview(review);
+        setContentRating(review.content_rating);
+        setCoachingRating(review.coaching_rating);
+        setReviewBody(review.body ?? "");
+      }
     }).catch(() => router.push(`/courses/${courseId}`))
       .finally(() => setFetching(false));
   }, [courseId]);
@@ -117,7 +172,9 @@ export default function LearnPage() {
         const newCompleted = p.completed_cards + 1;
         const isNowGraduated = newCompleted >= p.total_cards;
         if (isNowGraduated) {
-          api.graduateCourse(courseId).catch(() => {});
+          api.graduateCourse(courseId).then(res => {
+            setNextCourses(res.next_courses ?? []);
+          }).catch(() => {});
           setGraduated(true);
         }
         return { ...p, completed_cards: newCompleted, is_graduated: isNowGraduated };
@@ -130,26 +187,129 @@ export default function LearnPage() {
     }
   }
 
-  if (fetching) return <Skeleton />;
-
-  if (graduated && progress?.completion_video_url) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: "var(--bg)" }}>
-        <div className="card max-w-lg w-full flex flex-col gap-6 text-center">
-          <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>
-            おめでとうございます！
-          </h1>
-          <p style={{ color: "var(--text)" }}>コースを修了しました。卒業動画をご覧ください。</p>
-          <YouTubeEmbed url={progress.completion_video_url} />
-          <Link href="/mypage" className="btn-primary self-center">マイページへ戻る</Link>
-        </div>
-      </div>
-    );
+  async function submitReview() {
+    if (contentRating === 0 || coachingRating === 0) {
+      toast("両方の評価を選択してください");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const res = await api.createReview(courseId, {
+        content_rating: contentRating,
+        coaching_rating: coachingRating,
+        body: reviewBody.trim() || undefined,
+      });
+      setMyReview(res);
+      setShowReviewForm(false);
+      toast("レビューを投稿しました");
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmittingReview(false);
+    }
   }
+
+  if (fetching) return <Skeleton />;
 
   const completionPct = progress && progress.total_cards > 0
     ? Math.round((progress.completed_cards / progress.total_cards) * 100)
     : 0;
+
+  const canReview = graduated || completionPct >= 50;
+
+  // 卒業画面
+  if (graduated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" style={{ background: "var(--bg)" }}>
+        <div className="max-w-lg w-full flex flex-col gap-6">
+
+          {/* 卒業メッセージ */}
+          <div className="card flex flex-col gap-4 text-center">
+            <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>
+              🎓 おめでとうございます！
+            </h1>
+            <p style={{ color: "var(--text)" }}>コースを修了しました。</p>
+            {progress?.completion_video_url && (
+              <YouTubeEmbed url={progress.completion_video_url} />
+            )}
+          </div>
+
+          {/* レビューセクション */}
+          <div className="card flex flex-col gap-4">
+            <h2 className="font-bold text-sm" style={{ color: "var(--primary)" }}>感想を書く</h2>
+            {myReview && !showReviewForm ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4 text-sm" style={{ color: "var(--muted)" }}>
+                  <span>講座内容: {myReview.content_rating}★</span>
+                  <span>AIコーチング: {myReview.coaching_rating}★</span>
+                </div>
+                {myReview.body && <p className="text-sm" style={{ color: "var(--text)" }}>{myReview.body}</p>}
+                <button className="text-xs self-start" style={{ color: "var(--accent)" }} onClick={() => setShowReviewForm(true)}>
+                  編集する
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>講座内容</label>
+                  <StarRating value={contentRating} onChange={setContentRating} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>AIコーチング</label>
+                  <StarRating value={coachingRating} onChange={setCoachingRating} />
+                </div>
+                <textarea
+                  className="w-full rounded border px-3 py-2 text-sm"
+                  style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)", minHeight: 80, resize: "vertical" }}
+                  placeholder="感想・コメント（任意）"
+                  value={reviewBody}
+                  onChange={e => setReviewBody(e.target.value)}
+                />
+                <div className="flex gap-2 justify-end">
+                  {myReview && (
+                    <button className="btn-ghost text-sm" onClick={() => setShowReviewForm(false)}>キャンセル</button>
+                  )}
+                  <button className="btn-primary text-sm" onClick={submitReview} disabled={submittingReview}>
+                    {submittingReview ? "送信中..." : "投稿する"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ネクストコース */}
+          {nextCourses.length > 0 && (
+            <div className="card flex flex-col gap-3">
+              <h2 className="font-bold text-sm" style={{ color: "var(--primary)" }}>次のコース</h2>
+              <div className="flex flex-col gap-2">
+                {nextCourses.map(c => (
+                  <Link
+                    key={c.id}
+                    href={`/courses/${c.id}`}
+                    className="flex items-center gap-3 rounded-lg p-3 transition-colors"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                  >
+                    {c.thumbnail_url && (
+                      <img src={c.thumbnail_url} alt={c.title} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate" style={{ color: "var(--text)" }}>{c.title}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
+                        {c.is_purchased ? "購入済み" : c.is_free ? "無料" : `¥${c.price.toLocaleString()}`}
+                      </p>
+                    </div>
+                    <span style={{ color: "var(--accent)", fontSize: "0.8rem" }}>→</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Link href="/mypage" className="btn-primary text-center">マイページへ戻る</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -241,7 +401,7 @@ export default function LearnPage() {
                     className="flex items-center gap-3 px-3 py-2 rounded text-left transition-colors"
                     style={{
                       background: card.is_completed ? "var(--surface)" : "transparent",
-                      border: `1px solid ${card.is_completed ? "var(--border)" : "var(--border)"}`,
+                      border: "1px solid var(--border)",
                       opacity: card.youtube_available === false ? 0.6 : 1,
                     }}
                     onClick={() => setSelectedCard(card)}
@@ -262,11 +422,50 @@ export default function LearnPage() {
           );
         })}
 
-        {progress?.is_graduated && !progress.completion_video_url && (
-          <div className="card text-center flex flex-col gap-2">
-            <p className="text-xl font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>🎉 コース修了！</p>
-            <p className="text-sm" style={{ color: "var(--muted)" }}>すべてのカードを完了しました。おめでとうございます。</p>
-            <Link href="/mypage" className="btn-primary self-center mt-2">マイページへ</Link>
+        {/* 進捗50%以上でレビュー促進 */}
+        {canReview && !graduated && (
+          <div className="card flex flex-col gap-3">
+            <h2 className="font-bold text-sm" style={{ color: "var(--primary)" }}>
+              {myReview ? "あなたのレビュー" : "感想を書く（任意）"}
+            </h2>
+            {myReview && !showReviewForm ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4 text-sm" style={{ color: "var(--muted)" }}>
+                  <span>講座内容: {myReview.content_rating}★</span>
+                  <span>AIコーチング: {myReview.coaching_rating}★</span>
+                </div>
+                {myReview.body && <p className="text-sm" style={{ color: "var(--text)" }}>{myReview.body}</p>}
+                <button className="text-xs self-start" style={{ color: "var(--accent)" }} onClick={() => setShowReviewForm(true)}>
+                  編集する
+                </button>
+              </div>
+            ) : showReviewForm || !myReview ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>講座内容</label>
+                  <StarRating value={contentRating} onChange={setContentRating} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>AIコーチング</label>
+                  <StarRating value={coachingRating} onChange={setCoachingRating} />
+                </div>
+                <textarea
+                  className="w-full rounded border px-3 py-2 text-sm"
+                  style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)", minHeight: 80, resize: "vertical" }}
+                  placeholder="感想・コメント（任意）"
+                  value={reviewBody}
+                  onChange={e => setReviewBody(e.target.value)}
+                />
+                <div className="flex gap-2 justify-end">
+                  {myReview && (
+                    <button className="btn-ghost text-sm" onClick={() => setShowReviewForm(false)}>キャンセル</button>
+                  )}
+                  <button className="btn-primary text-sm" onClick={submitReview} disabled={submittingReview}>
+                    {submittingReview ? "送信中..." : "投稿する"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

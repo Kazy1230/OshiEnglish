@@ -16,6 +16,8 @@ from app.models.purchase import Purchase
 from app.models.creator_profile import CreatorProfile
 from app.models.course_subscription import CourseSubscription
 from app.models.notification import Notification
+from app.models.course_review import CourseReview
+from app.models.character import Character
 
 router = APIRouter(tags=["カリキュラム"])
 
@@ -554,10 +556,37 @@ def graduate(
     db.add(notif)
     db.commit()
 
+    # 同クリエイターの次コース（未購入・公開済み・自分以外）
+    character = db.query(Character).filter(Character.id == course.character_id).first()
+    next_courses = []
+    if character:
+        siblings = db.query(Course).filter(
+            Course.character_id == character.id,
+            Course.id != course_id,
+            Course.status == "published",
+        ).order_by(Course.created_at).all()
+        purchased_ids = {
+            r[0] for r in db.query(Purchase.course_id).filter(
+                Purchase.user_id == current_user.id,
+                Purchase.status == "succeeded",
+            ).all()
+        }
+        for c in siblings:
+            next_courses.append({
+                "id": c.id,
+                "title": c.title,
+                "description": c.description,
+                "thumbnail_url": c.thumbnail_url,
+                "price": c.price,
+                "is_free": c.is_free,
+                "is_purchased": c.id in purchased_ids,
+            })
+
     return {
         "graduated": True,
         "completion_video_url": course.completion_video_url,
         "course_title": course.title,
+        "next_courses": next_courses,
     }
 
 
@@ -585,4 +614,122 @@ def get_progress(
         "progress_pct": round(completed / total * 100) if total > 0 else 0,
         "target_pace": purchase.target_pace if purchase else None,
         "is_graduated": purchase.is_graduated if purchase else False,
+    }
+
+
+# ── 学習者: コースレビュー ────────────────────────────────────────
+
+class ReviewCreate(BaseModel):
+    content_rating: int   # 1〜5
+    coaching_rating: int  # 1〜5
+    body: Optional[str] = None
+
+
+@router.post("/courses/{course_id}/reviews")
+def create_review(
+    course_id: int,
+    data: ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """コースレビューを投稿する。進捗50%以上または卒業済みが条件。"""
+    purchase = _require_purchase(db, current_user.id, course_id)
+    if data.content_rating < 1 or data.content_rating > 5:
+        raise HTTPException(status_code=400, detail="content_ratingは1〜5で指定してください")
+    if data.coaching_rating < 1 or data.coaching_rating > 5:
+        raise HTTPException(status_code=400, detail="coaching_ratingは1〜5で指定してください")
+
+    total = _card_count(db, course_id)
+    completed = _completed_card_count(db, current_user.id, course_id)
+    pct = round(completed / total * 100) if total > 0 else 0
+    if not purchase.is_graduated and pct < 50:
+        raise HTTPException(status_code=400, detail="レビューは進捗50%以上から投稿できます")
+
+    existing = db.query(CourseReview).filter(
+        CourseReview.user_id == current_user.id,
+        CourseReview.course_id == course_id,
+    ).first()
+    if existing:
+        existing.content_rating = data.content_rating
+        existing.coaching_rating = data.coaching_rating
+        existing.body = data.body
+        db.commit()
+        db.refresh(existing)
+        return _review_dict(existing, current_user)
+
+    review = CourseReview(
+        user_id=current_user.id,
+        course_id=course_id,
+        content_rating=data.content_rating,
+        coaching_rating=data.coaching_rating,
+        body=data.body,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return _review_dict(review, current_user)
+
+
+@router.get("/courses/{course_id}/reviews")
+def list_reviews(
+    course_id: int,
+    db: Session = Depends(get_db),
+):
+    """コースのレビュー一覧（公開）。卒業済みレビューを上位表示。"""
+    from app.models.customer import Customer
+    reviews = db.query(CourseReview).filter(
+        CourseReview.course_id == course_id,
+    ).order_by(CourseReview.created_at.desc()).all()
+
+    purchase_map = {
+        r[0]: r[1] for r in db.query(Purchase.user_id, Purchase.is_graduated).filter(
+            Purchase.course_id == course_id,
+            Purchase.status == "succeeded",
+        ).all()
+    }
+    user_map = {
+        u.id: u for u in db.query(Customer).filter(
+            Customer.id.in_([r.user_id for r in reviews])
+        ).all()
+    }
+
+    result = []
+    for r in reviews:
+        u = user_map.get(r.user_id)
+        result.append({
+            **_review_dict(r, u),
+            "is_graduated": purchase_map.get(r.user_id, False),
+        })
+    # 卒業済みを先に
+    result.sort(key=lambda x: (0 if x["is_graduated"] else 1, x["created_at"]), reverse=False)
+    result.sort(key=lambda x: not x["is_graduated"])
+    return result
+
+
+@router.get("/courses/{course_id}/reviews/mine")
+def get_my_review(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """自分のレビューを取得。"""
+    review = db.query(CourseReview).filter(
+        CourseReview.user_id == current_user.id,
+        CourseReview.course_id == course_id,
+    ).first()
+    if not review:
+        return None
+    return _review_dict(review, current_user)
+
+
+def _review_dict(review: CourseReview, user) -> dict:
+    from app.core.character_voice import customer_display_name
+    name = customer_display_name(user) if user else "匿名"
+    return {
+        "id": review.id,
+        "user_name": name,
+        "content_rating": review.content_rating,
+        "coaching_rating": review.coaching_rating,
+        "body": review.body,
+        "created_at": review.created_at.isoformat() if review.created_at else None,
     }

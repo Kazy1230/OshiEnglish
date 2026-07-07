@@ -350,4 +350,11 @@ export const api = {
   graduateCourse: (courseId: number) =>
     apiFetch(`/courses/${courseId}/graduate`, { method: "POST" }),
 
+  // レビュー
+  listCourseReviews: (courseId: number) =>
+    apiFetch(`/courses/${courseId}/reviews`),
+  getMyReview: (courseId: number) =>
+    apiFetch(`/courses/${courseId}/reviews/mine`),
+  createReview: (courseId: number, data: { content_rating: number; coaching_rating: number; body?: string }) =>
+    apiFetch(`/courses/${courseId}/reviews`, { method: "POST", body: JSON.stringify(data) }),
 };
