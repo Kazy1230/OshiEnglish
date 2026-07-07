@@ -247,25 +247,6 @@ def _migrate_legacy_characters_to_creator():
         db.close()
 
 
-def _ensure_preset_characters():
-    """公式キャラクターが characters テーブルに存在することを保証する。"""
-    from app.models.character import Character
-    presets = [
-        {"name": "白河雪菜"},
-        {"name": "蒼井零"},
-        {"name": "Chloe"},
-        {"name": "Frederick"},
-    ]
-    db = SessionLocal()
-    try:
-        for p in presets:
-            char = db.query(Character).filter(Character.name == p["name"]).first()
-            if char is None:
-                db.add(Character(name=p["name"]))
-        db.commit()
-    finally:
-        db.close()
-
 
 def _dedupe_characters_per_creator():
     from app.core.creator_migration import dedupe_characters_per_creator
@@ -290,7 +271,6 @@ def _ensure_preset_textbooks():
         db.close()
 
 
-_ensure_preset_characters()
 _ensure_preset_textbooks()
 _migrate_legacy_characters_to_creator()
 # 1クリエイター=1人格(キャラクター)の制約を追加する前に、既存の重複データを統合しておく
