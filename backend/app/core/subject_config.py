@@ -1012,15 +1012,153 @@ SUBJECT_CATEGORY_MAP: dict[str, list[str]] = {
 }
 
 
+def _make_generic_config(subject: str) -> SubjectConfig:
+    """登録外のフリーテキスト分野用に汎用設定を動的生成する。"""
+    label = subject or "スキル学習"
+    return SubjectConfig(
+        key=subject,
+        label=label,
+        task_types=[],
+        course_day_generation_system=f"""あなたは{label}コースの設計専門家です。
+クリエイターの人格プロファイルとコース基本情報をもとに、30日分のコース骨格をJSON配列で生成してください。
+
+必ず以下のJSON形式のオブジェクトのみで出力してください（説明文・前置き・コードフェンスは一切不要）。
+"days"配列の要素数は必ず30にしてください:
+{{
+  "days": [
+    {{
+      "day": 1,
+      "week": 1,
+      "theme": "その日の学習テーマ（15文字以内）",
+      "checklist_items": [
+        {{"text": "具体的な学習タスク", "minutes": 20}}
+      ],
+      "is_rest_day": false
+    }}
+  ]
+}}
+
+【制約】
+- theme は15文字以内
+- checklist_items は各日のやることを自然な日本語の文で列挙。1日2〜5項目が目安
+- minutes は各タスクの標準学習時間(分)
+- 週の流れ: Week1=基礎 Week2=強化 Week3=実践 Week4=仕上げ
+- 休息日は7日ごとに1日程度設ける（is_rest_day=true、checklist_itemsは空配列）
+- 人格プロファイルの専門分野・指導方針を反映すること
+""",
+        classify_system=f"""あなたは{label}サービスの質問分類アシスタントです。
+学習者からの相談・質問を読み、以下の2つを判定してJSON形式で返してください。
+
+1. category_name: 質問の学習コンテンツ軸での分類名。既存カテゴリ一覧に当てはまるものがあれば必ずその名称をそのまま使ってください。
+2. message_type: "emotion" | "content" | "report"
+
+既存カテゴリ一覧:
+{{existing_categories}}
+
+以下のJSON形式のみで出力してください（説明文は不要）:
+{{"category_name": "カテゴリ名", "message_type": "content"}}
+""",
+        answer_style_by_type={
+            "emotion": f"まず学習者の気持ちに共感し、{label}における自信回復につながる言葉をかけ、今日からできる小さな行動を1つ提案する",
+            "content": "結論を最初に伝え、具体例を1つ挙げ、次にとるべき学習アクションを示す",
+            "report": "学習の取り組みを労い、翌日の学習への橋渡しになる一言で締める",
+        },
+        diagnosis_welcome_system=f"""あなたは以下の人格プロファイルを持つ{label}コーチです。
+この口調・励まし方の特徴を忠実に再現して、初回診断チャットの最初のメッセージを生成してください。
+
+メッセージの要件:
+- 学習者への温かい歓迎
+- これから一緒に学ぶことへの期待感
+- 学習者のことをもっと知りたいという姿勢
+- 100〜150文字程度の自然な会話文
+- 絵文字は使わない
+
+本文のみを出力してください（JSON形式不要）。""",
+        roadmap_generation_system=f"""あなたは{label}の専門コーチです。
+学習者の診断回答と30日コース構造をもとに、その学習者専用の30日ロードマップを作成してください。
+
+以下のJSON形式のみで出力してください（説明文は不要）:
+{{
+  "level_analysis": {{"current": "現在のレベル", "target": "目標レベル", "gap": "ギャップの説明"}},
+  "roadmap_reason": "このロードマップを組んだ理由（2〜3文）",
+  "week_focus": [{{"week": 1, "focus": "週のフォーカス", "key_action": "具体的なアクション"}}]
+}}""",
+        toc_chat_system_template=f"あなたは{label}教材の専門家です。{{textbook_name}}の目次を正確に把握し、学習者の質問に答えてください。",
+        quality_check_system=f"""あなたは{label}コースの設計アドバイザーです。
+コースの骨格を評価し、以下のJSON形式のみで出力してください:
+{{"score": 0から100の整数, "feedback": "改善提案コメント（1〜3文）"}}""",
+        self_intro_system=f"""あなたは以下の人格プロファイルを持つ{label}コーチです。
+この口調・励まし方の特徴を反映して、学習者に向けた自己紹介文を1つ生成してください。
+
+以下を含めること:
+- どんな学習者に向いているか
+- 指導で大切にしていること
+- 一言励まし
+
+150〜200文字程度の自然な文章のみを出力してください（JSON形式ではなく、本文のみ）。""",
+        character_concept_system=f"""あなたはキャラクターの設定デザイナーです。
+ユーザーが入力したキャラクターのイメージをもとに、{label}コンテンツに使用するキャラクター設定を提案してください。
+以下のJSON形式のみで返答してください。
+{{
+  "name_suggestions": ["名前案1", "名前案2", "名前案3"],
+  "first_person": "一人称(例: 私、僕)",
+  "tone": "口調の説明",
+  "personality": "性格の説明",
+  "sentence_ending": "語尾の特徴",
+  "catchphrase": "口癖",
+  "ng_words": ["NG表現1", "NG表現2"],
+  "sample_lines": ["{label}指導の場面でのセリフ例1", "セリフ例2", "セリフ例3"]
+}}""",
+        tone_profile_system=f"""あなたはキャラクターの設定デザイナーです。
+すでに名前や説明が決まっているキャラクターについて、{label}コンテンツで使う口調設定を提案してください。
+以下のJSON形式のみで返答してください。
+{{
+  "first_person": "一人称",
+  "tone": "口調の説明",
+  "personality": "性格の説明",
+  "sentence_ending": "語尾の特徴",
+  "catchphrase": "口癖",
+  "ng_words": ["NG表現1"],
+  "background": "キャラクターの背景設定",
+  "reaction_patterns": "感情・リアクションパターン",
+  "speaking_samples": ["{label}指導の場面でのメッセージ例1", "例2", "例3"]
+}}""",
+        personalize_system=f"""あなたは{label}の個別コーチです。
+学習者の診断回答とコース骨格をもとに、その学習者専用の30日チェックリストを生成してください。
+
+必ず以下のJSON形式のみで出力してください:
+{{
+  "days": [
+    {{
+      "day": 1,
+      "adjusted_checklist_items": [{{"text": "具体的なタスク", "minutes": 15}}],
+      "personalize_reason": "調整理由（20文字以内）"
+    }}
+  ]
+}}""",
+        daily_adjust_system=f"""あなたは{label}コースの日次タスク調整AIです。
+学習者の前日の学習報告をもとに、今日のチェックリストを微調整してください。
+
+以下のJSON形式のみで返してください:
+{{"adjusted_checklist_items": [{{"text": "...", "minutes": ...}}], "reason": "調整理由（20文字以内）"}}""",
+        default_diagnosis_questions=[
+            {"question_text": "現在のレベルや経験を教えてください。", "answer_type": "text", "options": None, "is_required": True},
+            {"question_text": "1日に確保できる学習時間はどのくらいですか？", "answer_type": "single", "options": ["15分以内", "30分", "1時間", "1時間以上"], "is_required": True},
+            {"question_text": "特に強化したい点や苦手な部分はありますか？", "answer_type": "text", "options": None, "is_required": False},
+        ],
+    )
+
+
 def get_subject_config(subject: str) -> SubjectConfig:
-    if subject not in SUBJECT_REGISTRY:
-        raise ValueError(f"Unknown subject: {subject!r}. Valid: {list(SUBJECT_REGISTRY)}")
-    return SUBJECT_REGISTRY[subject]
+    """分野設定を取得する。登録外のフリーテキスト分野は汎用設定を返す。"""
+    return SUBJECT_REGISTRY.get(subject) or _make_generic_config(subject or "スキル学習")
 
 
 def get_subject_label(subject: str) -> str:
-    return SUBJECT_REGISTRY.get(subject, ENGLISH_CONFIG).label
+    if subject in SUBJECT_REGISTRY:
+        return SUBJECT_REGISTRY[subject].label
+    return subject or "スキル学習"
 
 
 def get_category_options(subject: str) -> list[str]:
-    return SUBJECT_CATEGORY_MAP.get(subject, SUBJECT_CATEGORY_MAP["english"])
+    return SUBJECT_CATEGORY_MAP.get(subject, [])

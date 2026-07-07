@@ -136,7 +136,7 @@ class CourseCreate(BaseModel):
     title: str
     description: Optional[str] = None
     thumbnail_url: Optional[str] = None
-    subject: str = "english"
+    subject: str = ""
     category: Optional[str] = None
     price: int = 0
     is_free: bool = False
@@ -745,7 +745,7 @@ def parse_toc_chat(course_id: int, data: ParseTocRequest, current_user=Depends(g
     course = _get_owned_course(db, course_id, current_user)
     from app.core.subject_config import get_subject_config
     from app.core.llm import generate_text, LLMError, extract_json
-    config = get_subject_config(course.subject or "english")
+    config = get_subject_config(course.subject or "")
     SYSTEM = config.toc_chat_system_template.format(textbook_name=data.textbook_name)
     messages = list(data.history)
     messages.append({"role": "user", "content": data.message})
@@ -964,19 +964,9 @@ def delete_diagnosis_question(question_id: int, current_user=Depends(get_current
     return {"message": "削除しました"}
 
 
-@router.get("/subjects")
-def get_subject_choices():
-    """利用可能な科目の一覧と、科目→カテゴリのマッピングを返す。"""
-    from app.core.subject_config import SUBJECT_CHOICES, SUBJECT_CATEGORY_MAP
-    return {"subjects": SUBJECT_CHOICES, "category_map": SUBJECT_CATEGORY_MAP}
-
-
 @router.get("/subjects/{subject}/default-diagnosis-questions")
 def get_default_diagnosis_questions(subject: str):
     """指定した科目のデフォルト診断質問テンプレートを返す。"""
     from app.core.subject_config import get_subject_config
-    try:
-        config = get_subject_config(subject)
-        return {"questions": config.default_diagnosis_questions}
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Unknown subject: {subject}")
+    config = get_subject_config(subject)
+    return {"questions": config.default_diagnosis_questions}

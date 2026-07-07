@@ -7,12 +7,6 @@ import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
 import { ContentCard, ContentItem } from "@/components/ContentEmbed";
 
-const SUBJECT_OPTIONS = [
-  { key: "english", label: "英語", color: "#1d4ed8", bg: "#dbeafe" },
-  { key: "it",      label: "IT・プログラミング", color: "#065f46", bg: "#d1fae5" },
-  { key: "music",   label: "音楽", color: "#9d174d", bg: "#fce7f3" },
-  { key: "japanese",label: "日本語", color: "#92400e", bg: "#fef3c7" },
-];
 
 const TAG_SUGGESTIONS = ["初心者向け","中級","上級","文法","発音","会話","リスニング","単語","試験対策","ビジネス"];
 
@@ -32,7 +26,7 @@ export default function CreatorContentsPage() {
   const [filterSubject, setFilterSubject] = useState("");
 
   const [url, setUrl] = useState("");
-  const [subject, setSubject] = useState("english");
+  const [subject, setSubject] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
@@ -88,7 +82,11 @@ export default function CreatorContentsPage() {
   }
 
   const filtered = filterSubject ? contents.filter(c => c.subject === filterSubject) : contents;
-  const selectedSubject = SUBJECT_OPTIONS.find(s => s.key === subject);
+  const subjectCounts = contents.reduce<Record<string, number>>((acc, c) => {
+    if (c.subject) acc[c.subject] = (acc[c.subject] ?? 0) + 1;
+    return acc;
+  }, {});
+  const uniqueSubjects = Object.keys(subjectCounts);
 
   if (loading) return <Skeleton />;
 
@@ -156,25 +154,14 @@ export default function CreatorContentsPage() {
               </div>
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", display: "block", marginBottom: 8 }}>分野</label>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {SUBJECT_OPTIONS.map(s => (
-                    <button
-                      key={s.key}
-                      type="button"
-                      onClick={() => setSubject(s.key)}
-                      style={{
-                        padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer",
-                        background: subject === s.key ? s.bg : "var(--bg)",
-                        color: subject === s.key ? s.color : "var(--muted)",
-                        border: `1.5px solid ${subject === s.key ? s.color : "var(--border)"}`,
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", display: "block", marginBottom: 6 }}>分野</label>
+                <input
+                  className="input w-full"
+                  placeholder="例: マイクラ建築、料理、TOEIC、Python"
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
               </div>
 
               <div>
@@ -182,7 +169,7 @@ export default function CreatorContentsPage() {
                 {tags.length > 0 && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                     {tags.map(t => (
-                      <span key={t} style={{ fontSize: 12, padding: "2px 10px", borderRadius: 999, background: selectedSubject ? selectedSubject.bg : "var(--bg)", color: selectedSubject ? selectedSubject.color : "var(--muted)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 4 }}>
+                      <span key={t} style={{ fontSize: 12, padding: "2px 10px", borderRadius: 999, background: "var(--bg)", color: "var(--muted)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 4 }}>
                         #{t}
                         <button type="button" onClick={() => setTags(tags.filter(x => x !== t))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: 1, color: "inherit", opacity: 0.7 }}>×</button>
                       </span>
@@ -227,54 +214,50 @@ export default function CreatorContentsPage() {
           {/* サイドバー（デスクトップ） */}
           <aside className="hidden lg:flex" style={{ width: 160, flexShrink: 0, flexDirection: "column", gap: 4, position: "sticky", top: 72 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>分野</p>
-            {[{ key: "", label: "すべて" }, ...SUBJECT_OPTIONS].map(s => (
+            {["", ...uniqueSubjects].map(key => (
               <button
-                key={s.key}
+                key={key}
                 type="button"
-                onClick={() => setFilterSubject(s.key)}
+                onClick={() => setFilterSubject(key)}
                 style={{
                   textAlign: "left", padding: "8px 12px", borderRadius: 8,
-                  fontSize: 13, fontWeight: filterSubject === s.key ? 700 : 500,
-                  background: filterSubject === s.key ? "var(--primary)" : "transparent",
-                  color: filterSubject === s.key ? "white" : "var(--muted)",
+                  fontSize: 13, fontWeight: filterSubject === key ? 700 : 500,
+                  background: filterSubject === key ? "var(--primary)" : "transparent",
+                  color: filterSubject === key ? "white" : "var(--muted)",
                   border: "none", cursor: "pointer", transition: "all 0.15s",
                 }}
               >
-                {s.label}
+                {key || "すべて"}
               </button>
             ))}
 
             <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 }}>
               <p style={{ fontSize: 12, color: "var(--muted)" }}>{contents.length}件のコンテンツ</p>
-              {SUBJECT_OPTIONS.map(s => {
-                const count = contents.filter(c => c.subject === s.key).length;
-                if (!count) return null;
-                return (
-                  <div key={s.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", padding: "2px 0" }}>
-                    <span>{s.label}</span>
-                    <span>{count}</span>
-                  </div>
-                );
-              })}
+              {uniqueSubjects.map(s => (
+                <div key={s} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", padding: "2px 0" }}>
+                  <span>{s}</span>
+                  <span>{subjectCounts[s]}</span>
+                </div>
+              ))}
             </div>
           </aside>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* モバイルフィルター */}
             <div className="flex gap-2 overflow-x-auto pb-2 lg:hidden" style={{ scrollbarWidth: "none", marginBottom: 12 }}>
-              {[{ key: "", label: "すべて" }, ...SUBJECT_OPTIONS].map(s => (
+              {["", ...uniqueSubjects].map(key => (
                 <button
-                  key={s.key}
+                  key={key}
                   type="button"
-                  onClick={() => setFilterSubject(s.key)}
+                  onClick={() => setFilterSubject(key)}
                   className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0"
                   style={{
-                    background: filterSubject === s.key ? "var(--primary)" : "var(--card)",
-                    color: filterSubject === s.key ? "white" : "var(--muted)",
-                    border: `1px solid ${filterSubject === s.key ? "var(--primary)" : "var(--border)"}`,
+                    background: filterSubject === key ? "var(--primary)" : "var(--card)",
+                    color: filterSubject === key ? "white" : "var(--muted)",
+                    border: `1px solid ${filterSubject === key ? "var(--primary)" : "var(--border)"}`,
                   }}
                 >
-                  {s.label}
+                  {key || "すべて"}
                 </button>
               ))}
             </div>

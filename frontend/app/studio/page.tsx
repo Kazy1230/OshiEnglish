@@ -28,25 +28,19 @@ const FORMATS: Format[] = [
   { key: "youtube", label: "YouTube動画", icon: "▶", mediaType: "video", defaultVal: 480, unit: "秒", minVal: 120, maxVal: 1800, hint: "じっくり解説・信頼構築に最適" },
 ];
 
-const STUDIO_SUBJECT_OPTIONS = [
-  { key: "english", label: "英語", icon: "📚", description: "TOEIC・英会話・英文法など" },
-  { key: "japanese", label: "日本語", icon: "🗾", description: "JLPT・日常会話・ビジネス日本語など" },
-  { key: "it", label: "IT・プログラミング", icon: "💻", description: "Python・AWS・Web開発など" },
-  { key: "music", label: "音楽", icon: "🎵", description: "ピアノ・ギター・音楽理論など" },
-];
 
 const FORMAT_LABEL: Record<string, string> = {
   x: "X", threads: "Threads", instagram_post: "インスタ投稿",
   instagram_reel: "インスタReels", youtube_short: "YouTubeショート", youtube: "YouTube動画",
 };
 
-type Step = "subject" | "format" | "ideas" | "angles" | "generating" | "result";
+type Step = "format" | "ideas" | "angles" | "generating" | "result";
 type Panel = "create" | "drafts" | "marketing";
 
 // ── コンテンツ作成パネル ─────────────────────────────────────────
 function CreatePanel({ character, onSave }: { character: { id: number; name: string } | null; onSave: () => void }) {
-  const [subject, setSubject] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>("subject");
+  const [subject, setSubject] = useState("");
+  const [step, setStep] = useState<Step>("format");
   const [format, setFormat] = useState<Format | null>(null);
   const [paramVal, setParamVal] = useState(0);
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -70,7 +64,7 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
   useEffect(() => { if (result) resultRef.current?.scrollIntoView({ behavior: "smooth" }); }, [result]);
 
   const progressSteps = [
-    { key: "subject", label: "分野" }, { key: "format", label: "フォーマット" },
+    { key: "format", label: "フォーマット" },
     { key: "ideas", label: "ネタ選び" }, { key: "angles", label: "切り口" },
     { key: "generating", label: "生成中" }, { key: "result", label: "完成" },
   ];
@@ -78,7 +72,8 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
 
   function selectFormat(f: Format) {
     setFormat(f); setParamVal(f.defaultVal);
-    setIdeas([]); setSelectedIdea(null); setAngles([]); setSelectedAngle(null); setResult(""); setStep("ideas");
+    setIdeas([]); setSelectedIdea(null); setAngles([]); setSelectedAngle(null); setResult("");
+    setStep("ideas");
   }
 
   async function fetchIdeas() {
@@ -87,7 +82,7 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
     try {
       const durationSec = format.mediaType === "video" ? paramVal : undefined;
       const charLimit = format.mediaType === "text" ? paramVal : undefined;
-      const res = await api.studioIdeas(format.key, character.id, durationSec, charLimit, subject ?? undefined);
+      const res = await api.studioIdeas(format.key, character.id, durationSec, charLimit, subject || undefined);
       setIdeas(res.ideas || []);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "ネタ提案に失敗しました", "error");
@@ -97,7 +92,7 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
   async function selectIdea(idea: Idea) {
     setSelectedIdea(idea); setAngles([]); setSelectedAngle(null); setLoadingAngles(true); setStep("angles");
     try {
-      const res = await api.studioAngles(idea.title, idea.hook, format!.key, character!.id, subject ?? undefined);
+      const res = await api.studioAngles(idea.title, idea.hook, format!.key, character!.id, subject || undefined);
       setAngles(res.angles || []);
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "切り口提案に失敗しました", "error");
@@ -114,7 +109,7 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
       const res = await fetch(`${API_BASE}/studio/generate/content`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ character_id: character.id, format: format.key, idea: selectedIdea.title, hook: angle.hook, duration_sec: durationSec, char_limit: charLimit, subject: subject ?? undefined }),
+        body: JSON.stringify({ character_id: character.id, format: format.key, idea: selectedIdea.title, hook: angle.hook, duration_sec: durationSec, char_limit: charLimit, subject: subject || undefined }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({ detail: "エラーが発生しました" })); throw new Error(err.detail); }
       const rawDraftId = res.headers.get("X-Draft-Id");
@@ -155,7 +150,7 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
   }
 
   function restart() {
-    setSubject(null); setStep("subject"); setFormat(null); setIdeas([]); setSelectedIdea(null);
+    setSubject(""); setStep("format"); setFormat(null); setIdeas([]); setSelectedIdea(null);
     setAngles([]); setSelectedAngle(null); setResult(""); setRawPhase(""); setKeyword("");
     setDraftId(null); setAlreadySaved(false); setSavedMemo(""); setShowMemoInput(false);
   }
@@ -193,34 +188,18 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
         })}
       </div>
 
-      {/* STEP 0: 分野 */}
-      {step === "subject" && (
-        <div className="flex flex-col gap-4">
-          <p className="font-bold" style={{ color: "var(--text)" }}>どの分野のコンテンツを作りますか？</p>
-          <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
-            {STUDIO_SUBJECT_OPTIONS.map(opt => (
-              <button key={opt.key} onClick={() => { setSubject(opt.key); setStep("format"); }}
-                className="card p-5 flex flex-col gap-2 text-left hover-lift" style={{ background: "var(--card)" }}>
-                <span className="text-2xl">{opt.icon}</span>
-                <span className="text-sm font-bold" style={{ color: "var(--primary)" }}>{opt.label}</span>
-                <span className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{opt.description}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 1: フォーマット */}
+      {/* STEP 0: フォーマット（分野入力を上部に統合） */}
       {step === "format" && (
         <div className="flex flex-col gap-4">
-          {subject && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--primary) 20%, transparent)" }}>
-              <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: "var(--primary)" }}>
-                {STUDIO_SUBJECT_OPTIONS.find(o => o.key === subject)?.icon} {STUDIO_SUBJECT_OPTIONS.find(o => o.key === subject)?.label}
-              </span>
-              <button onClick={() => { setSubject(null); setStep("subject"); }} className="text-xs underline" style={{ color: "var(--muted)" }}>変更</button>
-            </div>
-          )}
+          <div>
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>分野（任意）</label>
+            <input
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              placeholder="例: マイクラ建築、料理、TOEIC、Python"
+              style={{ maxWidth: 400 }}
+            />
+          </div>
           <p className="font-bold" style={{ color: "var(--text)" }}>どのフォーマットで投稿しますか？</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {FORMATS.map(f => (

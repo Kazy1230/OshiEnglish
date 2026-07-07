@@ -15,7 +15,7 @@ class CreatorContent(Base):
     description = Column(Text, nullable=True)
     thumbnail_url = Column(String(2048), nullable=True)
     content_type = Column(String(50), nullable=False)  # youtube / x / instagram / threads / tiktok / note / other
-    subject = Column(String(20), nullable=False, default="english")
+    subject = Column(String(100), nullable=True, default="")
     tags = Column(JSON, nullable=True)  # list[str]
     is_public = Column(Boolean, nullable=False, default=True)
     like_count = Column(Integer, nullable=False, default=0)

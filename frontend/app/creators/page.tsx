@@ -16,55 +16,40 @@ type CreatorCard = {
   character: { id: number; name: string; avatar_url?: string | null } | null;
 };
 
-const SUBJECT_TABS = [
-  { key: "all", label: "すべて" },
-  { key: "english", label: "英語" },
-  { key: "it", label: "IT・プログラミング" },
-  { key: "music", label: "音楽" },
-  { key: "japanese", label: "日本語" },
-];
-
 export default function CreatorsPage() {
   const [creators, setCreators] = useState<CreatorCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSubject, setActiveSubject] = useState("all");
+  const [searchSubject, setSearchSubject] = useState("");
 
   useEffect(() => {
     api.listCreators().then(setCreators).finally(() => setLoading(false));
   }, []);
 
-  const filtered = activeSubject === "all"
-    ? creators
-    : creators.filter(cr => cr.subject === activeSubject);
+  const filtered = searchSubject.trim()
+    ? creators.filter(cr => cr.subject?.toLowerCase().includes(searchSubject.toLowerCase()))
+    : creators;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <PublicHeader />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-        {/* Subject filter tabs */}
-        <div className="flex gap-2 flex-wrap mb-6">
-          {SUBJECT_TABS.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveSubject(tab.key)}
-              className="text-sm font-bold px-4 py-2 rounded-full transition-all"
-              style={{
-                background: activeSubject === tab.key ? "var(--primary)" : "var(--card)",
-                color: activeSubject === tab.key ? "white" : "var(--muted)",
-                border: `1.5px solid ${activeSubject === tab.key ? "var(--primary)" : "var(--border)"}`,
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* 分野検索 */}
+        <div className="mb-6">
+          <input
+            value={searchSubject}
+            onChange={e => setSearchSubject(e.target.value)}
+            placeholder="分野で絞り込む（例: 料理、Python、ヨガ）"
+            className="w-full"
+            style={{ maxWidth: 400 }}
+          />
         </div>
 
         {loading ? (
           <p style={{ color: "var(--muted)" }}>読み込み中…</p>
         ) : filtered.length === 0 ? (
           <p style={{ color: "var(--muted)" }}>
-            {activeSubject === "all" ? "まだクリエイターが登録されていません。" : "この分野のクリエイターはまだいません。"}
+            {creators.length === 0 ? "まだクリエイターが登録されていません。" : "この分野のクリエイターはまだいません。"}
           </p>
         ) : (
           <div className="flex flex-col gap-4">

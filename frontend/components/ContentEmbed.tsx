@@ -170,13 +170,7 @@ export function ContentEmbed({ item }: { item: ContentItem }) {
   return <LinkCard url={item.url} title={item.title} thumbnail={item.thumbnail_url} description={item.description} />;
 }
 
-const SUBJECT_COLOR: Record<string, { bg: string; text: string }> = {
-  english: { bg: "#dbeafe", text: "#1d4ed8" },
-  it:      { bg: "#d1fae5", text: "#065f46" },
-  music:   { bg: "#fce7f3", text: "#9d174d" },
-  japanese:{ bg: "#fef3c7", text: "#92400e" },
-};
-const SUBJECT_LABEL: Record<string, string> = { english: "英語", it: "IT", music: "音楽", japanese: "日本語" };
+const DEFAULT_SUBJECT_STYLE = { bg: "#f3f4f6", text: "#6b7280" };
 const TYPE_ICON: Record<string, string> = { youtube: "▶", x: "𝕏", instagram: "📸", threads: "🧵", tiktok: "♪", note: "📝", other: "🔗" };
 
 function Avatar({ name, avatarUrl, size = 36 }: { name?: string | null; avatarUrl?: string | null; size?: number }) {
@@ -207,7 +201,7 @@ export function ContentCard({
   onDelete?: (id: number) => void;
   compact?: boolean;
 }) {
-  const subjectStyle = SUBJECT_COLOR[item.subject] || { bg: "#f3f4f6", text: "#6b7280" };
+  const subjectStyle = DEFAULT_SUBJECT_STYLE;
 
   return (
     <article style={{
@@ -237,7 +231,7 @@ export function ContentCard({
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
             <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: subjectStyle.bg, color: subjectStyle.text }}>
-              {SUBJECT_LABEL[item.subject] || item.subject}
+              {item.subject}
             </span>
             <span style={{ fontSize: 10, color: "var(--muted)" }}>
               {TYPE_ICON[item.content_type] || "🔗"} {item.content_type}

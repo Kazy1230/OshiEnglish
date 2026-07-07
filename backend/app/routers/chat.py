@@ -249,7 +249,7 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
             conversation_history.append({"role": "assistant", "content": rq.answers[-1].body})
 
     try:
-        _classify_msgs = prompts.build_classify_messages(data.body, existing_category_names, subject=course.subject or "english")
+        _classify_msgs = prompts.build_classify_messages(data.body, existing_category_names, subject=course.subject or "")
         classify_raw = generate_text(
             _classify_msgs[0]["content"],
             _classify_msgs[1:],
@@ -351,7 +351,7 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
     ] if creator_id else []
 
     try:
-        _classify_msgs = prompts.build_classify_messages(data.body, existing_category_names, subject=course.subject or "english")
+        _classify_msgs = prompts.build_classify_messages(data.body, existing_category_names, subject=course.subject or "")
         classify_raw = generate_text(
             _classify_msgs[0]["content"],
             _classify_msgs[1:],

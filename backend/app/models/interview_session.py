@@ -13,6 +13,7 @@ class InterviewSession(Base):
     fixed_index = Column(Integer, nullable=False, default=0)  # 次に出す固定質問のインデックス（0〜4）
     follow_up_count = Column(Integer, nullable=False, default=0)  # 深掘り質問の使用数（最大3）
     pending_question = Column(String(1000), nullable=True)  # 直近にAIが提示した質問文（回答待ち）
+    subject = Column(String(100), nullable=True)
     base_type = Column(String(50), nullable=True)  # Step0で選んだ指導スタイルのプリセット（共感型/指導型/激励型/厳格型）
     gender = Column(String(20), nullable=True)  # Step0で選んだキャラクターの性別（男性/女性/中性的）
     qa_history = Column(JSON, nullable=True)  # [{question, answer, is_followup}] の配列

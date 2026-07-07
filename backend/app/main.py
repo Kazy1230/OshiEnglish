@@ -201,7 +201,8 @@ _ensure_column("content_drafts", "memo", "TEXT NULL")
 # --- コンテンツプール ---
 _ensure_column("course_textbooks", "content_id", "INT NULL")
 # --- マルチドメイン拡張（v1.2）: subject・チェックリスト化 ---
-_ensure_column("courses", "subject", "VARCHAR(20) NOT NULL DEFAULT 'english'")
+_ensure_column("courses", "subject", "VARCHAR(100) NOT NULL DEFAULT ''")
+_ensure_nullable("courses", "subject", "VARCHAR(100) NULL DEFAULT ''")
 _rename_column("course_days", "task_types", "checklist_items", "JSON NULL")
 _rename_column("day_logs", "completed_task_types", "completed_item_indices", "JSON NULL")
 _ensure_column("interview_sessions", "base_type", "VARCHAR(50) NULL")
@@ -234,6 +235,9 @@ _ensure_column("purchases", "target_pace", "VARCHAR(20) NULL")
 _ensure_column("purchases", "pace_set_at", "DATETIME NULL")
 _ensure_column("purchases", "is_graduated", "TINYINT(1) NOT NULL DEFAULT 0")
 _ensure_column("purchases", "graduated_at", "DATETIME NULL")
+_ensure_column("interview_sessions", "subject", "VARCHAR(100) NULL")
+_ensure_nullable("interview_sessions", "subject", "VARCHAR(100) NULL")
+_ensure_nullable("creator_contents", "subject", "VARCHAR(100) NULL DEFAULT ''")
 
 
 def _migrate_legacy_characters_to_creator():

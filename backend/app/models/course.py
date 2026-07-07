@@ -13,7 +13,7 @@ class Course(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     thumbnail_url = Column(String(500), nullable=True)
-    subject = Column(String(20), nullable=False, default="english", index=True, comment="english | it | music")
+    subject = Column(String(100), nullable=True, default="", index=True)
     category = Column(String(100), nullable=True)  # TOEIC / IELTS / 英文法 など
     status = Column(String(20), nullable=False, default="draft")  # draft / published / unpublished
     price = Column(Integer, nullable=False, default=0)  # 単位: 円

@@ -9,19 +9,6 @@ import { AppHeader } from "@/components/AppHeader";
 
 type CharacterSummary = { id: number; name: string };
 
-const SUBJECT_OPTIONS = [
-  { key: "english", label: "英語", icon: "📚", description: "TOEIC・英会話・英文法など" },
-  { key: "it", label: "IT・プログラミング", icon: "💻", description: "Python・AWS・Web開発など" },
-  { key: "music", label: "音楽", icon: "🎵", description: "ピアノ・ギター・音楽理論など" },
-  { key: "japanese", label: "日本語", icon: "🗾", description: "JLPT・日常会話・ビジネス日本語など" },
-];
-
-const CATEGORY_MAP: Record<string, string[]> = {
-  english: ["TOEIC", "TOEFL", "IELTS", "英検", "英会話", "ビジネス英語", "英文法", "英作文"],
-  it: ["Python", "JavaScript", "TypeScript", "AWS", "データベース", "アルゴリズム", "Web開発", "モバイル開発"],
-  music: ["ピアノ", "ギター", "DTM", "音楽理論", "ボーカル", "ドラム", "ベース", "作曲・編曲"],
-  japanese: ["JLPT N5", "JLPT N4", "JLPT N3", "JLPT N2", "JLPT N1", "日常会話", "ビジネス日本語", "読み書き"],
-};
 
 export default function NewCoursePage() {
   const router = useRouter();
@@ -29,7 +16,7 @@ export default function NewCoursePage() {
   const [character, setCharacter] = useState<CharacterSummary | null>(null);
   const [loadingCharacter, setLoadingCharacter] = useState(true);
 
-  const [subject, setSubject] = useState<string | null>(null);
+  const [subject, setSubject] = useState("");
   const [title, setTitle] = useState("");
   const [goal, setGoal] = useState("");
   const [category, setCategory] = useState("");
@@ -55,15 +42,10 @@ export default function NewCoursePage() {
     }
   }, [loading, me, router]);
 
-  // subjectが変わったらcategoryをリセット
-  useEffect(() => {
-    setCategory("");
-  }, [subject]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!character) { toast("先にAIインタビューを完了して人格(キャラクター)を作成してください", "error"); return; }
-    if (!subject) { toast("分野を選択してください", "error"); return; }
+    if (!subject.trim()) { toast("分野を入力してください", "error"); return; }
     setSubmitting(true);
     try {
       const course = await api.createCourse({
@@ -90,48 +72,15 @@ export default function NewCoursePage() {
 
   if (loading || loadingCharacter) return <Skeleton />;
 
-  const categoryOptions = subject ? (CATEGORY_MAP[subject] ?? []) : [];
-
   return (
     <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="30日伴走コース新規作成" />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-
-        {/* Step 1: 分野選択 */}
-        {!subject ? (
-          <div className="card flex flex-col gap-5">
-            <div>
-              <p className="font-black text-base" style={{ color: "var(--primary)" }}>このコースの分野を選んでください</p>
-              <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>分野に合わせたカテゴリ・質問テンプレートが使えます</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {SUBJECT_OPTIONS.map(opt => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setSubject(opt.key)}
-                  className="flex flex-col items-center gap-3 px-4 py-6 rounded-2xl text-center transition-all hover:scale-[1.03]"
-                  style={{
-                    background: "var(--card)",
-                    border: "1.5px solid var(--border)",
-                  }}
-                >
-                  <span className="text-3xl">{opt.icon}</span>
-                  <span className="font-black text-sm" style={{ color: "var(--primary)" }}>{opt.label}</span>
-                  <span className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{opt.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
           <form onSubmit={handleSubmit} className="card flex flex-col gap-4">
-            {/* 選択した分野の表示 */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--primary) 20%, transparent)" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{SUBJECT_OPTIONS.find(o => o.key === subject)?.icon}</span>
-                <span className="text-sm font-bold" style={{ color: "var(--primary)" }}>{SUBJECT_OPTIONS.find(o => o.key === subject)?.label}</span>
-              </div>
-              <button type="button" onClick={() => setSubject(null)} className="text-xs underline" style={{ color: "var(--muted)" }}>変更</button>
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>分野 *</label>
+              <input value={subject} onChange={e => setSubject(e.target.value)} required placeholder="例: マイクラ建築、料理、ヨガ、TOEIC、Python" />
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>どんなニッチな分野でも入力できます</p>
             </div>
 
             {character ? (
@@ -145,13 +94,8 @@ export default function NewCoursePage() {
             )}
 
             <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>カテゴリ</label>
-              <select value={category} onChange={e => setCategory(e.target.value)}>
-                <option value="">カテゴリを選択（任意）</option>
-                {categoryOptions.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>カテゴリ（任意）</label>
+              <input value={category} onChange={e => setCategory(e.target.value)} placeholder="例: 初心者向け、ビジネス英語（任意）" />
             </div>
 
             <div>
@@ -213,7 +157,6 @@ export default function NewCoursePage() {
               {submitting ? "作成中…" : "作成して次へ（教材を設定する）"}
             </button>
           </form>
-        )}
       </main>
     </div>
   );

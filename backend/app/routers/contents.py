@@ -42,7 +42,7 @@ def _serialize(c: CreatorContent, liked: bool = False) -> dict:
 
 class ContentCreate(BaseModel):
     url: str
-    subject: str = "english"
+    subject: str = ""
     tags: Optional[list[str]] = None
     is_public: bool = True
 
