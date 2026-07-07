@@ -26,24 +26,38 @@
   --surface: #201d14;
 }
 
-/* 管理者画面専用テーマ（サイト全体とは異なる配色で識別性を上げる） */
+/* 管理者画面専用テーマ — ダークグラファイト×エメラルド */
 .admin-theme {
-  --bg: #eef0f7;
+  --bg: #f4f5f7;
   --card: #ffffff;
-  --primary: #4338ca;
-  --accent: #c2620a;
-  --text: #201c34;
-  --muted: #635f73;
-  --border: #dadce8;
+  --primary: #111827;
+  --accent: #059669;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --surface: #f9fafb;
+  --sidebar-bg: #0f1117;
+  --sidebar-text: #e5e7eb;
+  --sidebar-muted: #6b7280;
+  --sidebar-active-bg: rgba(255,255,255,0.08);
+  --sidebar-active-text: #ffffff;
+  --sidebar-hover-bg: rgba(255,255,255,0.05);
 }
 :root.dark .admin-theme {
-  --bg: #14121f;
-  --card: #1f1b30;
-  --primary: #8b91f5;
-  --accent: #f0a93f;
-  --text: #ece9f5;
-  --muted: #a8a4ba;
-  --border: #332c4d;
+  --bg: #0d0f12;
+  --card: #161a1f;
+  --primary: #f1f5f9;
+  --accent: #10b981;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --border: #1e2530;
+  --surface: #111418;
+  --sidebar-bg: #080a0d;
+  --sidebar-text: #e2e8f0;
+  --sidebar-muted: #475569;
+  --sidebar-active-bg: rgba(255,255,255,0.07);
+  --sidebar-active-text: #ffffff;
+  --sidebar-hover-bg: rgba(255,255,255,0.04);
 }
 
 body {
