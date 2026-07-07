@@ -192,6 +192,10 @@ def _cascade_delete_creator_data(db: Session, customer: Customer) -> None:
     from app.models.interview_session import InterviewSession
     from app.models.question_category import QuestionCategory
     from app.models.category_content import CategoryContent
+    from app.models.content_draft import ContentDraft
+    from app.models.creator_content import CreatorContent
+    from app.models.favorite import Favorite as FavoriteModel
+    from app.models.marketing_strategy import MarketingStrategy
 
     profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == customer.id).first()
     if not profile:
@@ -209,6 +213,10 @@ def _cascade_delete_creator_data(db: Session, customer: Customer) -> None:
             delete_course_cascade(db, course_id, force=True)
         db.query(Character).filter(Character.id == character.id).delete(synchronize_session=False)
 
+    db.query(ContentDraft).filter(ContentDraft.creator_id == profile.id).delete(synchronize_session=False)
+    db.query(CreatorContent).filter(CreatorContent.creator_id == profile.id).delete(synchronize_session=False)
+    db.query(FavoriteModel).filter(FavoriteModel.creator_id == profile.id).delete(synchronize_session=False)
+    db.query(MarketingStrategy).filter(MarketingStrategy.creator_id == profile.id).delete(synchronize_session=False)
     db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).delete(synchronize_session=False)
     db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).delete(synchronize_session=False)
     db.query(CreatorProfile).filter(CreatorProfile.id == profile.id).delete(synchronize_session=False)
