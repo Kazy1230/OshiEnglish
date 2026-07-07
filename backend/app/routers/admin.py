@@ -35,6 +35,9 @@ from app.models.learner_textbook_progress import LearnerTextbookProgress
 from app.models.course_diagnosis_question import CourseDiagnosisQuestion
 from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.textbook import Textbook
+from app.models.course_chapter import CourseChapter
+from app.models.chapter_card import ChapterCard
+from app.models.card_progress import CardProgress
 
 router = APIRouter(prefix="/admin", tags=["管理者機能"])
 
@@ -202,6 +205,14 @@ def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> N
     if diagnosis_question_ids:
         db.query(LearnerDiagnosisAnswer).filter(LearnerDiagnosisAnswer.question_id.in_(diagnosis_question_ids)).delete(synchronize_session=False)
     db.query(CourseDiagnosisQuestion).filter(CourseDiagnosisQuestion.course_id == course_id).delete(synchronize_session=False)
+
+    chapter_ids = [r[0] for r in db.query(CourseChapter.id).filter(CourseChapter.course_id == course_id).all()]
+    if chapter_ids:
+        card_ids = [r[0] for r in db.query(ChapterCard.id).filter(ChapterCard.chapter_id.in_(chapter_ids)).all()]
+        if card_ids:
+            db.query(CardProgress).filter(CardProgress.card_id.in_(card_ids)).delete(synchronize_session=False)
+        db.query(ChapterCard).filter(ChapterCard.chapter_id.in_(chapter_ids)).delete(synchronize_session=False)
+    db.query(CourseChapter).filter(CourseChapter.course_id == course_id).delete(synchronize_session=False)
 
     db.query(CourseDay).filter(CourseDay.course_id == course_id).delete(synchronize_session=False)
     db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete(synchronize_session=False)
