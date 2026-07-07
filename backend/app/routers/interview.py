@@ -31,6 +31,7 @@ GENDERS = ("男性", "女性", "中性的")
 class InterviewStartRequest(BaseModel):
     base_type: Optional[str] = None
     gender: Optional[str] = None
+    subject: Optional[str] = None
 
 
 @router.post("/start")
@@ -38,11 +39,15 @@ def start_interview(data: InterviewStartRequest = InterviewStartRequest(), curre
     """インタビューを開始（または途中保存から再開）し、現在出すべき質問を返す。
 
     base_typeはStep0で選んだ指導スタイルのプリセット（初回開始時のみ反映、再開時は無視）。
+    subjectはコースのジャンル（english/it/music/japanese）。初回開始時のみ反映。
     """
     profile = _get_own_creator_profile(db, current_user)
 
     session = db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).first()
-    total_questions = len(prompts.FIXED_QUESTIONS)
+    subject = session.subject if session else data.subject
+    fixed_qs = prompts.get_fixed_questions(subject)
+    total_questions = len(fixed_qs)
+
     if session and session.status == "completed":
         return {"status": "completed", "question": None, "progress": {"current": total_questions, "total": total_questions}}
 
@@ -55,11 +60,12 @@ def start_interview(data: InterviewStartRequest = InterviewStartRequest(), curre
             creator_id=profile.id,
             fixed_index=0,
             follow_up_count=0,
-            pending_question=prompts.FIXED_QUESTIONS[0],
+            pending_question=fixed_qs[0],
             qa_history=[],
             status="in_progress",
             base_type=data.base_type,
             gender=data.gender,
+            subject=data.subject,
         )
         db.add(session)
         db.commit()
@@ -87,21 +93,24 @@ def submit_answer(data: InterviewAnswerRequest, current_user=Depends(get_current
     if not session.pending_question:
         raise HTTPException(status_code=400, detail="現在回答待ちの質問がありません")
 
+    fixed_qs = prompts.get_fixed_questions(session.subject)
+    total_questions = len(fixed_qs)
+
     history = list(session.qa_history or [])
     history.append({
         "question": session.pending_question,
         "answer": data.answer,
-        "is_followup": session.fixed_index >= len(prompts.FIXED_QUESTIONS),
+        "is_followup": session.fixed_index >= total_questions,
     })
 
-    is_last_fixed_question = session.fixed_index == len(prompts.FIXED_QUESTIONS) - 1
+    is_last_fixed_question = session.fixed_index == total_questions - 1
     can_follow_up = session.follow_up_count < prompts.MAX_FOLLOW_UPS
 
     next_question = None
     if can_follow_up:
         try:
             text = generate_text(
-                prompts.FOLLOW_UP_DECISION_SYSTEM,
+                prompts.build_follow_up_decision_system(session.subject),
                 prompts.build_follow_up_decision_messages(session.pending_question, data.answer),
                 max_tokens=300,
                 json_mode=True,
@@ -121,7 +130,7 @@ def submit_answer(data: InterviewAnswerRequest, current_user=Depends(get_current
         return {
             "status": "in_progress",
             "question": next_question,
-            "progress": {"current": session.fixed_index + 1, "total": len(prompts.FIXED_QUESTIONS)},
+            "progress": {"current": session.fixed_index + 1, "total": total_questions},
         }
 
     # 深掘り不要、または深掘り上限に達した → 次の固定質問へ
@@ -130,17 +139,16 @@ def submit_answer(data: InterviewAnswerRequest, current_user=Depends(get_current
         session.pending_question = None
         session.qa_history = history
         db.commit()
-        total = len(prompts.FIXED_QUESTIONS)
-        return {"status": "completed", "question": None, "progress": {"current": total, "total": total}}
+        return {"status": "completed", "question": None, "progress": {"current": total_questions, "total": total_questions}}
 
     session.fixed_index += 1
-    session.pending_question = prompts.FIXED_QUESTIONS[session.fixed_index]
+    session.pending_question = fixed_qs[session.fixed_index]
     session.qa_history = history
     db.commit()
     return {
         "status": "in_progress",
         "question": session.pending_question,
-        "progress": {"current": session.fixed_index + 1, "total": len(prompts.FIXED_QUESTIONS)},
+        "progress": {"current": session.fixed_index + 1, "total": total_questions},
     }
 
 
@@ -154,7 +162,7 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
 
     try:
         text = generate_text(
-            prompts.PROFILE_GENERATION_SYSTEM,
+            prompts.build_profile_generation_system(session.subject),
             prompts.build_profile_generation_messages(session.qa_history or [], session.base_type, session.gender),
             max_tokens=1800,
             json_mode=True,
