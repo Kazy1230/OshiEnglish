@@ -163,13 +163,8 @@ if _column_exists("customers", "role"):
 _ensure_column("creator_profiles", "speciality", "VARCHAR(255) NULL")
 _ensure_column("creator_profiles", "experience", "TEXT NULL")
 
-# --- Phase 2: コース構造・30日間コース生成 ---
-_ensure_column("courses", "goal", "VARCHAR(255) NULL")
-_ensure_column("courses", "target_learner", "TEXT NULL")
-_ensure_column("courses", "intensity", "VARCHAR(100) NULL")
+# --- Phase 2: コース構造（v2.0でgoal/target_learner/intensity/days_generation_*はDROPするため_ensure_column不要） ---
 _ensure_column("courses", "personality_profile_id", "INT NULL")
-_ensure_column("courses", "days_generation_status", "VARCHAR(20) NOT NULL DEFAULT 'idle'")
-_ensure_column("courses", "days_generation_error", "TEXT NULL")
 
 # --- Phase 4: Stripeサブスクリプション（Tier A/B） ---
 _ensure_column("courses", "tier_a_price", "INT NULL")
@@ -192,9 +187,7 @@ _ensure_column("course_subscriptions", "past_due_since", "DATETIME NULL")
 # --- クリエイターダッシュボード・紹介ページ再設計（AI生成自己紹介文） ---
 _ensure_column("creator_profiles", "self_intro", "TEXT NULL")
 
-# --- コース作成時に使用教材・進行速度を入力させ、Layer1生成のインプットにする ---
-_ensure_column("courses", "study_materials", "TEXT NULL")
-_ensure_column("courses", "pace", "VARCHAR(50) NULL")
+# --- 教材進捗ベースのパーソナライズ（v2.0でstudy_materials/paceはDROPするため_ensure_column不要） ---
 # --- 教材進捗ベースのパーソナライズ（議論サマリー20260626 13節） ---
 _ensure_column("course_textbooks", "target_laps", "INT NOT NULL DEFAULT 1")
 # --- 繰越タスク設計（議論サマリー20260626 15節） ---
