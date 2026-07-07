@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, customers, characters, payments, courses, creators, favorites, studio, notifications, interview, diagnosis, chat, admin, contents
+from app.routers import auth, customers, characters, payments, courses, creators, favorites, studio, notifications, interview, diagnosis, chat, admin, contents, curriculum
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,9 @@ _ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
 # --- コンテンツスタジオ: content_draftsテーブルのカラム追加 ---
 _ensure_column("content_drafts", "creator_id", "INT NULL")
 _ensure_column("content_drafts", "character_id", "INT NULL")
+_ensure_column("content_drafts", "format", "VARCHAR(50) NULL")
+_ensure_column("content_drafts", "is_saved", "TINYINT(1) NOT NULL DEFAULT 0")
+_ensure_column("content_drafts", "memo", "TEXT NULL")
 # --- コンテンツプール ---
 _ensure_column("course_textbooks", "content_id", "INT NULL")
 # --- マルチドメイン拡張（v1.2）: subject・チェックリスト化 ---
@@ -219,6 +222,25 @@ _ensure_nullable("learner_profiles", "target_score", "INT NULL")
 _ensure_nullable("learner_profiles", "exam_date", "VARCHAR(50) NULL")
 _ensure_nullable("learner_profiles", "daily_study_time", "VARCHAR(50) NULL")
 _ensure_nullable("learner_profiles", "weak_areas", "JSON NULL")
+
+# --- v2.0: カリキュラム（章/カード）アーキテクチャへの移行 ---
+# courses: 旧day系カラムを削除 → 新カリキュラム用カラムを追加
+_drop_column("courses", "goal")
+_drop_column("courses", "target_learner")
+_drop_column("courses", "intensity")
+_drop_column("courses", "study_materials")
+_drop_column("courses", "pace")
+_drop_column("courses", "days_generation_status")
+_drop_column("courses", "days_generation_error")
+_ensure_column("courses", "curriculum_target_audience", "TEXT NULL")
+_ensure_column("courses", "curriculum_topics", "TEXT NULL")
+_ensure_column("courses", "curriculum_style", "TEXT NULL")
+_ensure_column("courses", "completion_video_url", "VARCHAR(500) NULL")
+# purchases: 学習者ペース・卒業フラグ追加
+_ensure_column("purchases", "target_pace", "VARCHAR(20) NULL")
+_ensure_column("purchases", "pace_set_at", "DATETIME NULL")
+_ensure_column("purchases", "is_graduated", "TINYINT(1) NOT NULL DEFAULT 0")
+_ensure_column("purchases", "graduated_at", "DATETIME NULL")
 
 
 def _migrate_legacy_characters_to_creator():
@@ -378,6 +400,7 @@ app.include_router(diagnosis.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(contents.router)
+app.include_router(curriculum.router)
 
 
 @app.get("/health")

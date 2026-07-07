@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -17,6 +17,9 @@ class ContentDraft(Base):
     raw_content = Column(Text, nullable=True)  # Step2: 素材生成結果
     voiced_content = Column(Text, nullable=True)  # Step3: 口調変換結果
     script_content = Column(Text, nullable=True)  # Step4: 台本生成結果
+    format = Column(String(50), nullable=True)  # x / instagram_post / youtube etc.
+    is_saved = Column(Boolean, nullable=False, default=False)  # コンテンツ案として保存済み
+    memo = Column(Text, nullable=True)  # クリエイターメモ
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

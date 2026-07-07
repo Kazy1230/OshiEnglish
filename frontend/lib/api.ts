@@ -210,6 +210,11 @@ export const api = {
   listDrafts: () => apiFetch("/studio/drafts"),
   getDraft: (id: number) => apiFetch(`/studio/drafts/${id}`),
   deleteDraft: (id: number) => apiFetch(`/studio/drafts/${id}`, { method: "DELETE" }),
+  saveDraft: (id: number, memo?: string) => apiFetch(`/studio/drafts/${id}/save`, { method: "PUT", body: JSON.stringify({ memo }) }),
+  listSavedDrafts: () => apiFetch("/studio/saved-drafts"),
+  getMarketingStrategy: () => apiFetch("/studio/marketing-strategy"),
+  updateMarketingStrategy: (content: string) => apiFetch("/studio/marketing-strategy", { method: "PUT", body: JSON.stringify({ content }) }),
+  marketingStrategyChat: (message: string, currentStrategy?: string) => apiFetch("/studio/marketing-strategy/chat", { method: "POST", body: JSON.stringify({ message, current_strategy: currentStrategy }) }),
 
   // コンテンツプール
   listMyContents: () => apiFetch("/contents/my"),
@@ -314,5 +319,35 @@ export const api = {
     apiFetch(`/customers/${customerId}`, { method: "PATCH", body: JSON.stringify(data) }),
   adminReissuePassword: (customerId: number) => apiFetch(`/customers/${customerId}/reissue-password`, { method: "POST" }),
   adminDeleteCustomer: (customerId: number) => apiFetch(`/customers/${customerId}`, { method: "DELETE" }),
+
+  // カリキュラム（章/カード構造 v2.0）
+  getCurriculumMeta: (courseId: number) => apiFetch(`/courses/${courseId}`),
+  updateCurriculumMeta: (courseId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/curriculum-meta`, { method: "PUT", body: JSON.stringify(data) }),
+  getCurriculumPrompt: (courseId: number) => apiFetch(`/courses/${courseId}/curriculum-prompt`),
+  listChapters: (courseId: number) => apiFetch(`/courses/${courseId}/chapters`),
+  createChapter: (courseId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/chapters`, { method: "POST", body: JSON.stringify(data) }),
+  updateChapter: (courseId: number, chapterId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteChapter: (courseId: number, chapterId: number) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}`, { method: "DELETE" }),
+  createCard: (courseId: number, chapterId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards`, { method: "POST", body: JSON.stringify(data) }),
+  updateCard: (courseId: number, chapterId: number, cardId: number, data: object) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/${cardId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteCard: (courseId: number, chapterId: number, cardId: number) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/${cardId}`, { method: "DELETE" }),
+  youtubeCheck: (courseId: number) =>
+    apiFetch(`/courses/${courseId}/youtube-check`, { method: "POST" }),
+  // 学習者向け
+  getLearnerCurriculum: (courseId: number) => apiFetch(`/courses/${courseId}/curriculum`),
+  setPace: (courseId: number, pace: string) =>
+    apiFetch(`/courses/${courseId}/pace`, { method: "POST", body: JSON.stringify({ pace }) }),
+  completeCard: (cardId: number) =>
+    apiFetch(`/cards/${cardId}/complete`, { method: "POST" }),
+  getLearnerProgress: (courseId: number) => apiFetch(`/courses/${courseId}/progress`),
+  graduateCourse: (courseId: number) =>
+    apiFetch(`/courses/${courseId}/graduate`, { method: "POST" }),
 
 };

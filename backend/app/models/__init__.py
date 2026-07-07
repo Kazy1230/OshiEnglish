@@ -4,6 +4,9 @@ from app.models.creator_profile import CreatorProfile
 from app.models.personality_profile import PersonalityProfile
 from app.models.interview_session import InterviewSession
 from app.models.course import Course
+from app.models.course_chapter import CourseChapter
+from app.models.chapter_card import ChapterCard
+from app.models.card_progress import CardProgress
 from app.models.course_day import CourseDay
 from app.models.course_material import CourseMaterial
 from app.models.lesson import Lesson
@@ -33,3 +36,4 @@ from app.models.course_diagnosis_question import CourseDiagnosisQuestion
 from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.creator_content import CreatorContent
 from app.models.content_like import ContentLike
+from app.models.marketing_strategy import MarketingStrategy

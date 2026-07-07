@@ -11,6 +11,7 @@ from app.core import studio_prompts as prompts
 from app.models.content_draft import ContentDraft
 from app.models.character import Character
 from app.models.creator_profile import CreatorProfile
+from app.models.marketing_strategy import MarketingStrategy
 
 router = APIRouter(prefix="/studio", tags=["AIコンテンツ生成スタジオ"])
 
@@ -173,7 +174,7 @@ def generate_content(data: GenerateContentRequest, current_user=Depends(get_curr
 
     voiced_system = prompts.build_voiced_content_system(character)
 
-    draft = ContentDraft(creator_id=creator_id, theme=data.idea, structure=[], target_level=data.format)
+    draft = ContentDraft(creator_id=creator_id, character_id=character_id_val, theme=data.idea, structure=[], target_level=data.format, format=data.format)
     db.add(draft)
     db.commit()
     db.refresh(draft)
@@ -431,3 +432,120 @@ def delete_draft(
     db.delete(draft)
     db.commit()
     return {"message": "削除しました"}
+
+
+class DraftSaveRequest(BaseModel):
+    memo: Optional[str] = None
+
+
+@router.put("/drafts/{draft_id}/save")
+def save_draft(
+    draft_id: int,
+    data: DraftSaveRequest = DraftSaveRequest(),
+    current_user=Depends(get_current_creator_or_admin),
+    db: Session = Depends(get_db),
+):
+    """生成したコンテンツをコンテンツ案として保存する。"""
+    draft = _get_owned_draft(db, draft_id, current_user)
+    draft.is_saved = True
+    if data.memo is not None:
+        draft.memo = data.memo
+    db.commit()
+    return {"message": "保存しました", "draft_id": draft.id}
+
+
+@router.get("/saved-drafts")
+def list_saved_drafts(
+    current_user=Depends(get_current_creator_or_admin),
+    db: Session = Depends(get_db),
+):
+    """コンテンツ案プール: is_saved=Trueの下書き一覧。"""
+    creator_id = _get_own_creator_profile_id(db, current_user)
+    query = db.query(ContentDraft).filter(ContentDraft.is_saved == True)  # noqa: E712
+    query = query.filter(ContentDraft.creator_id == creator_id) if creator_id is not None else query.filter(ContentDraft.creator_id.is_(None))
+    drafts = query.order_by(ContentDraft.updated_at.desc()).all()
+    return [
+        {
+            "id": d.id,
+            "theme": d.theme,
+            "format": d.format,
+            "target_level": d.target_level,
+            "voiced_content": d.voiced_content,
+            "memo": d.memo,
+            "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+        }
+        for d in drafts
+    ]
+
+
+# ── マーケティング戦略 ────────────────────────────────────────────
+
+@router.get("/marketing-strategy")
+def get_marketing_strategy(
+    current_user=Depends(get_current_creator_or_admin),
+    db: Session = Depends(get_db),
+):
+    creator_id = _get_own_creator_profile_id(db, current_user)
+    strategy = db.query(MarketingStrategy).filter(MarketingStrategy.creator_id == creator_id).first()
+    return {"content": strategy.content if strategy else ""}
+
+
+class MarketingStrategyUpdate(BaseModel):
+    content: str
+
+
+@router.put("/marketing-strategy")
+def update_marketing_strategy(
+    data: MarketingStrategyUpdate,
+    current_user=Depends(get_current_creator_or_admin),
+    db: Session = Depends(get_db),
+):
+    creator_id = _get_own_creator_profile_id(db, current_user)
+    if creator_id is None:
+        raise HTTPException(status_code=400, detail="クリエイタープロフィールが必要です")
+    strategy = db.query(MarketingStrategy).filter(MarketingStrategy.creator_id == creator_id).first()
+    if strategy:
+        strategy.content = data.content
+    else:
+        strategy = MarketingStrategy(creator_id=creator_id, content=data.content)
+        db.add(strategy)
+    db.commit()
+    return {"message": "保存しました"}
+
+
+class MarketingChatRequest(BaseModel):
+    message: str
+    current_strategy: Optional[str] = None
+
+
+@router.post("/marketing-strategy/chat")
+def marketing_strategy_chat(
+    data: MarketingChatRequest,
+    current_user=Depends(get_current_creator_or_admin),
+    db: Session = Depends(get_db),
+):
+    """マーケティング戦略AIアドバイザー。現在の戦略メモを踏まえてアドバイスを返す。"""
+    _require_active_creator(db, current_user)
+    character = None
+    creator_id = _get_own_creator_profile_id(db, current_user)
+    if creator_id:
+        character = db.query(Character).filter(Character.creator_id == creator_id).first()
+
+    tone_desc = ""
+    if character and character.tone_profile:
+        tp = character.tone_profile
+        tone_desc = f"\nクリエイターの強み・キャラクター: {tp.get('personality', '')} / 口調: {tp.get('speech_style', '')}"
+
+    system = f"""あなたはコンテンツクリエイターのマーケティング戦略アドバイザーです。
+SNS・動画・ブログなどのコンテンツマーケティングに詳しく、クリエイターの強みを活かした戦略を提案します。{tone_desc}
+
+アドバイスは具体的・実践的に。箇条書きを活用して読みやすくしてください。300文字以内。"""
+
+    strategy_context = f"\n\n【現在の戦略メモ】\n{data.current_strategy}" if data.current_strategy else ""
+    messages = [{"role": "user", "content": f"{strategy_context}\n\n【質問・相談】\n{data.message}"}]
+
+    try:
+        reply = generate_text(system, messages, max_tokens=400)
+        return {"reply": reply}
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
