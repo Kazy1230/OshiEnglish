@@ -46,8 +46,16 @@ _CONSULT_LEARNER_LABELS = {
 }
 
 
-def build_consult_system(subject: str = "english") -> str:
-    expert_label = _SUBJECT_EXPERT_LABELS.get(subject, "学習コンテンツ")
+_SUBJECT_EXPERT_LABELS = {
+    "english": "英語学習",
+    "it": "IT・プログラミング学習",
+    "music": "音楽学習",
+    "japanese": "日本語学習",
+}
+
+
+def build_consult_system(subject: str = "") -> str:
+    expert_label = _SUBJECT_EXPERT_LABELS.get(subject, subject or "学習コンテンツ")
     learner_label = _CONSULT_LEARNER_LABELS.get(subject, "学習者")
     return _CONSULT_SYSTEM_TEMPLATE.format(expert_label=expert_label, learner_label=learner_label)
 
