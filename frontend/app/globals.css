@@ -26,38 +26,108 @@
   --surface: #201d14;
 }
 
-/* 管理者画面専用テーマ — ダークグラファイト×エメラルド */
+/* 管理者画面専用テーマ — クリーンホワイト×インディゴ */
 .admin-theme {
-  --bg: #f4f5f7;
+  --bg: #f8f9fc;
   --card: #ffffff;
-  --primary: #111827;
-  --accent: #059669;
+  --primary: #4f46e5;
+  --accent: #10b981;
   --text: #111827;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --surface: #f9fafb;
-  --sidebar-bg: #0f1117;
-  --sidebar-text: #e5e7eb;
+  --surface: #f1f3f9;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --sidebar-bg: #1e1b4b;
+  --sidebar-text: #c7d2fe;
   --sidebar-muted: #6b7280;
-  --sidebar-active-bg: rgba(255,255,255,0.08);
+  --sidebar-active-bg: rgba(99,102,241,0.25);
   --sidebar-active-text: #ffffff;
-  --sidebar-hover-bg: rgba(255,255,255,0.05);
+  --sidebar-hover-bg: rgba(255,255,255,0.07);
 }
 :root.dark .admin-theme {
-  --bg: #0d0f12;
-  --card: #161a1f;
-  --primary: #f1f5f9;
-  --accent: #10b981;
-  --text: #e2e8f0;
+  --bg: #0f1117;
+  --card: #181c24;
+  --primary: #818cf8;
+  --accent: #34d399;
+  --text: #f1f5f9;
   --muted: #64748b;
-  --border: #1e2530;
-  --surface: #111418;
-  --sidebar-bg: #080a0d;
-  --sidebar-text: #e2e8f0;
+  --border: #252d3d;
+  --surface: #141820;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --sidebar-bg: #0c0e18;
+  --sidebar-text: #c7d2fe;
   --sidebar-muted: #475569;
-  --sidebar-active-bg: rgba(255,255,255,0.07);
-  --sidebar-active-text: #ffffff;
-  --sidebar-hover-bg: rgba(255,255,255,0.04);
+  --sidebar-active-bg: rgba(99,102,241,0.20);
+  --sidebar-active-text: #e0e7ff;
+  --sidebar-hover-bg: rgba(255,255,255,0.05);
+}
+
+/* 管理画面専用: コンパクトなカード */
+.admin-theme .admin-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.admin-theme .admin-row:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.admin-theme .admin-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+}
+.admin-theme .admin-badge-indigo {
+  background: rgba(99,102,241,0.12);
+  color: var(--primary);
+}
+.admin-theme .admin-badge-green {
+  background: rgba(16,185,129,0.12);
+  color: var(--accent);
+}
+.admin-theme .admin-badge-red {
+  background: rgba(239,68,68,0.12);
+  color: var(--danger, #ef4444);
+}
+.admin-theme .admin-badge-gray {
+  background: var(--surface);
+  color: var(--muted);
+}
+.admin-theme .admin-action {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--card);
+  color: var(--text);
+}
+.admin-theme .admin-action:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.admin-theme .admin-action-danger {
+  color: var(--danger, #ef4444);
+  border-color: rgba(239,68,68,0.3);
+}
+.admin-theme .admin-action-danger:hover {
+  background: rgba(239,68,68,0.08);
+  border-color: var(--danger, #ef4444);
+  color: var(--danger, #ef4444);
 }
 
 body {

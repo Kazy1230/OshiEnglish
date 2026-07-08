@@ -5,7 +5,6 @@ import { toast } from "@/components/Toast";
 
 type CreatorApplication = { id: number; username: string | null; speciality: string | null; experience: string | null };
 
-/** G-01: クリエイター申請の審査・承認/却下 */
 export function CreatorApplicationsTab() {
   const [applications, setApplications] = useState<CreatorApplication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,29 +36,37 @@ export function CreatorApplicationsTab() {
     }
   }
 
-  if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
+  if (loading) return <p style={{ color: "var(--muted)", fontSize: 14 }}>読み込み中…</p>;
 
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>🧑‍🏫 クリエイター申請の審査</h2>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0 }}>クリエイター申請</h2>
+        <span className="admin-badge admin-badge-indigo">{applications.length}件</span>
+      </div>
+
       {applications.length === 0 ? (
-        <p className="text-sm" style={{ color: "var(--muted)" }}>審査待ちの申請はありません。</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {applications.map(a => (
-            <div key={a.id} className="card flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{a.username}</p>
-                <p className="text-xs" style={{ color: "var(--muted)" }}>{a.speciality}</p>
-                {a.experience && <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>{a.experience}</p>}
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={() => handleApprove(a.id)} className="btn-primary text-sm">承認</button>
-                <button onClick={() => handleReject(a.id)} className="text-xs underline" style={{ color: "var(--muted)" }}>却下</button>
-              </div>
-            </div>
-          ))}
+        <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
+          審査待ちの申請はありません
         </div>
+      ) : (
+        applications.map(a => (
+          <div key={a.id} className="admin-row">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>{a.username}</p>
+              {a.speciality && (
+                <p style={{ fontSize: 12, color: "var(--muted)" }}>専門: {a.speciality}</p>
+              )}
+              {a.experience && (
+                <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, whiteSpace: "pre-wrap" }}>{a.experience}</p>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button className="admin-action admin-badge-green" style={{ background: "rgba(16,185,129,0.1)", color: "var(--accent)", border: "1px solid rgba(16,185,129,0.3)" }} onClick={() => handleApprove(a.id)}>承認</button>
+              <button className="admin-action admin-action-danger" onClick={() => handleReject(a.id)}>却下</button>
+            </div>
+          </div>
+        ))
       )}
     </div>
   );

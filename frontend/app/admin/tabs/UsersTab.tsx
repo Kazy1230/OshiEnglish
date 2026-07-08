@@ -13,16 +13,18 @@ type AdminCustomer = {
 };
 
 const ROLE_LABEL: Record<string, string> = { learner: "学習者", creator: "クリエイター", admin: "管理者" };
+const ROLE_BADGE_CLASS: Record<string, string> = {
+  learner: "admin-badge admin-badge-gray",
+  creator: "admin-badge admin-badge-indigo",
+  admin: "admin-badge admin-badge-green",
+};
 
-/** 全ユーザー（顧客）の一覧・検索・有効化停止・パスワード再発行・削除 */
 export function UsersTab() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
 
-  function reload() {
-    return api.adminListCustomers().then(setCustomers);
-  }
+  function reload() { return api.adminListCustomers().then(setCustomers); }
 
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
 
@@ -63,52 +65,55 @@ export function UsersTab() {
     }
   }
 
-  if (loading) return <p style={{ color: "var(--muted)" }}>読み込み中…</p>;
+  if (loading) return <p style={{ color: "var(--muted)", fontSize: 14 }}>読み込み中…</p>;
 
   const filtered = customers.filter(c =>
     !query.trim() || c.username.toLowerCase().includes(query.toLowerCase()) || (c.email ?? "").toLowerCase().includes(query.toLowerCase())
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="text-xl font-black" style={{ color: "var(--primary)" }}>👤 ユーザー一覧</h2>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0 }}>ユーザー一覧</h2>
+        <span className="admin-badge admin-badge-gray">{filtered.length} / {customers.length}件</span>
+      </div>
+
       <input
         placeholder="ユーザー名・メールアドレスで検索"
         value={query}
         onChange={e => setQuery(e.target.value)}
-        className="max-w-sm"
+        style={{ maxWidth: 360, fontSize: 13 }}
       />
-      <p className="text-xs" style={{ color: "var(--muted)" }}>{filtered.length}件</p>
+
       {filtered.length === 0 ? (
-        <p className="text-sm" style={{ color: "var(--muted)" }}>該当するユーザーがいません。</p>
+        <p style={{ color: "var(--muted)", fontSize: 14, padding: "24px 0" }}>該当するユーザーがいません</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map(c => (
-            <div key={c.id} className="card flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{c.username}</p>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>
-                    {ROLE_LABEL[c.role] ?? c.role}
-                  </span>
-                  {!c.is_active && (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#e53e3e", color: "white" }}>停止中</span>
-                  )}
-                </div>
-                <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>{c.email || "メール未設定"}</p>
+        filtered.map(c => (
+          <div key={c.id} className="admin-row">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{c.username}</span>
+                <span className={ROLE_BADGE_CLASS[c.role] ?? "admin-badge admin-badge-gray"}>{ROLE_LABEL[c.role] ?? c.role}</span>
+                {!c.is_active && <span className="admin-badge admin-badge-red">停止中</span>}
+                {c.is_password_reset_required && <span className="admin-badge" style={{ background: "rgba(245,158,11,0.12)", color: "#d97706", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>PW変更必要</span>}
               </div>
-              <div className="flex gap-2 flex-shrink-0 flex-wrap">
-                <button onClick={() => handleReissuePassword(c)} className="text-xs underline" style={{ color: "var(--muted)" }}>パスワード再発行</button>
-                <button onClick={() => handleToggleActive(c)} className="text-xs underline" style={{ color: c.is_active ? "#e53e3e" : "var(--accent)" }}>
-                  {c.is_active ? "停止する" : "有効化する"}
-                </button>
-                {c.role !== "admin" && (
-                  <button onClick={() => handleDelete(c)} className="text-xs underline" style={{ color: "#e53e3e" }}>削除</button>
-                )}
-              </div>
+              <p style={{ fontSize: 12, color: "var(--muted)" }}>{c.email || "メール未設定"}</p>
             </div>
-          ))}
-        </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
+              <button className="admin-action" onClick={() => handleReissuePassword(c)}>PW再発行</button>
+              <button
+                className={`admin-action${c.is_active ? " admin-action-danger" : ""}`}
+                style={!c.is_active ? { color: "var(--accent)", borderColor: "rgba(16,185,129,0.3)" } : undefined}
+                onClick={() => handleToggleActive(c)}
+              >
+                {c.is_active ? "停止" : "有効化"}
+              </button>
+              {c.role !== "admin" && (
+                <button className="admin-action admin-action-danger" onClick={() => handleDelete(c)}>削除</button>
+              )}
+            </div>
+          </div>
+        ))
       )}
     </div>
   );

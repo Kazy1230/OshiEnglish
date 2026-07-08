@@ -164,7 +164,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
         user.two_factor_code = code
         user.two_factor_code_expires = datetime.utcnow() + timedelta(minutes=TWO_FACTOR_CODE_EXPIRE_MINUTES)
         db.commit()
-        send_email(
+        sent = send_email(
             to=user.email,
             subject="【ManaVillage】管理者ログイン認証コード",
             html=(
@@ -174,7 +174,9 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), d
                 "心当たりがない場合は、このメールを無視してください。</p>"
             ),
         )
-        return {"requires_2fa": True}
+        if sent:
+            return {"requires_2fa": True}
+        logger.warning(f"[2FA] メール送信に失敗したため2FAをスキップしてログインを許可しました: username={user.username}")
 
     if user.role == "admin" and not user.email:
         logger.warning(f"[2FA] 管理者アカウント(username={user.username})にメールアドレスが未設定のため2FAをスキップしました")
