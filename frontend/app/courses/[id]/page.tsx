@@ -64,7 +64,8 @@ export default function CourseDetailPage() {
   const [memo, setMemo] = useState("");
 
   function load() {
-    return api.getCourseDetail(courseId).then(async (c: CourseDetail) => {
+    return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
+      const c: CourseDetail = { ...raw, lessons: raw.lessons ?? [] };
       setCourse(c);
       if (c.lessons.length > 0) setActiveLessonId(c.lessons[0].id);
       const unlocked = c.is_purchased || c.is_free;
