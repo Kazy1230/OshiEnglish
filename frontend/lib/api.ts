@@ -338,6 +338,16 @@ export const api = {
     apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/${cardId}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCard: (courseId: number, chapterId: number, cardId: number) =>
     apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/${cardId}`, { method: "DELETE" }),
+  reorderChapters: (courseId: number, ids: number[]) =>
+    apiFetch(`/courses/${courseId}/chapters/reorder`, { method: "PUT", body: JSON.stringify({ ids }) }),
+  reorderCards: (courseId: number, chapterId: number, ids: number[]) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/reorder`, { method: "PUT", body: JSON.stringify({ ids }) }),
+  duplicateCard: (courseId: number, chapterId: number, cardId: number) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/${cardId}/duplicate`, { method: "POST" }),
+  getYoutubeMeta: (courseId: number, chapterId: number, cardId: number) =>
+    apiFetch(`/courses/${courseId}/chapters/${chapterId}/cards/${cardId}/youtube-meta`),
+  submitCurriculumForReview: (courseId: number) =>
+    apiFetch(`/courses/${courseId}/submit-for-review`, { method: "POST" }),
   youtubeCheck: (courseId: number) =>
     apiFetch(`/courses/${courseId}/youtube-check`, { method: "POST" }),
   // 学習者向け

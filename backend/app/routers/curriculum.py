@@ -87,10 +87,11 @@ class ChapterUpdate(BaseModel):
     order: Optional[int] = None
 
 class CardCreate(BaseModel):
-    card_type: str = "video"  # video / assignment / test / message
+    card_type: str = "video"  # video / build_task / quiz / message
     title: Optional[str] = None
     body: Optional[str] = None
     youtube_url: Optional[str] = None
+    quiz_options: Optional[List[dict]] = None  # [{text: str, is_correct: bool}]
     is_preview: bool = False
     order: Optional[int] = None
 
@@ -99,16 +100,24 @@ class CardUpdate(BaseModel):
     title: Optional[str] = None
     body: Optional[str] = None
     youtube_url: Optional[str] = None
+    quiz_options: Optional[List[dict]] = None
     is_preview: Optional[bool] = None
     order: Optional[int] = None
+
+class ReorderRequest(BaseModel):
+    ids: List[int]
 
 class PaceSet(BaseModel):
     target_pace: str  # 2weeks / 1month / 3months / no_deadline
 
 class CurriculumMeta(BaseModel):
+    purpose: Optional[str] = None
     target_audience: Optional[str] = None
     topics: Optional[str] = None
+    duration: Optional[str] = None
     style: Optional[str] = None
+    concerns: Optional[str] = None
+    existing_videos: Optional[str] = None
     completion_video_url: Optional[str] = None
 
 
@@ -122,14 +131,20 @@ def update_curriculum_meta(
     current_user=Depends(get_current_user),
 ):
     course = _get_owned_course(db, course_id, current_user)
-    if data.target_audience is not None:
-        course.curriculum_target_audience = data.target_audience
-    if data.topics is not None:
-        course.curriculum_topics = data.topics
-    if data.style is not None:
-        course.curriculum_style = data.style
-    if data.completion_video_url is not None:
-        course.completion_video_url = data.completion_video_url
+    field_map = {
+        "purpose": "curriculum_purpose",
+        "target_audience": "curriculum_target_audience",
+        "topics": "curriculum_topics",
+        "duration": "curriculum_duration",
+        "style": "curriculum_style",
+        "concerns": "curriculum_concerns",
+        "existing_videos": "curriculum_existing_videos",
+        "completion_video_url": "completion_video_url",
+    }
+    for src, dst in field_map.items():
+        val = getattr(data, src)
+        if val is not None:
+            setattr(course, dst, val)
     db.commit()
     return {"ok": True}
 
@@ -143,35 +158,24 @@ def get_curriculum_prompt(
     current_user=Depends(get_current_user),
 ):
     course = _get_owned_course(db, course_id, current_user)
+    purpose = course.curriculum_purpose or "（未入力）"
     target = course.curriculum_target_audience or "（未入力）"
     topics = course.curriculum_topics or "（未入力）"
+    duration = course.curriculum_duration or "（未入力）"
     style = course.curriculum_style or "（未入力）"
+    concerns = course.curriculum_concerns or "（未入力）"
+    existing_videos = course.curriculum_existing_videos or "（未入力）"
 
     prompt = f"""あなたは学習カリキュラム設計の専門家です。
-以下の情報を元に、まずは叩き台となるカリキュラムの構成案を提案してください。
-一度に完成させようとせず、私からの質問や修正指示に対して都度相談しながら、
-一緒に練り上げていくスタンスでお願いします。
+以下の情報を元に、まずはコース全体の章立て（カリキュラムの骨格）を提案してください。
 
-【コースタイトル】
-{course.title}
-
-【対象者】
-{target}
-
-【扱いたいトピック・要素】
-{topics}
-
-【講師としてのスタイル・こだわり】
-{style}
-
----
-【出力ルール】
-・毎回の返答は、まず自然な文章で提案・説明・質問をしてください。
-・各章の到達目標(goal)は1〜2文で。
-・達成判定基準(assessment_criteria)は、AIコーチが評価できる具体的な観点を3つ程度。
-・私が「これで確定」と言うまでは提案を続けてください。
-・追加で動画URLのリストがあれば「使いたい動画一覧」として貼ると、
-  各章に合う動画を提案してもらえます。"""
+【講座の目的】{purpose}
+【対象者】{target}
+【扱いたいトピック・要素】{topics}
+【期間感の目安】{duration}
+【講師としてのスタイル・こだわり】{style}
+【まだ迷っている・決めきれていない点】{concerns}
+【持っている動画】{existing_videos}"""
 
     return {"prompt": prompt}
 
@@ -322,7 +326,7 @@ def update_card(
     card = db.query(ChapterCard).filter(ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="カードが見つかりません")
-    for field in ("card_type", "title", "body", "youtube_url", "is_preview", "order"):
+    for field in ("card_type", "title", "body", "youtube_url", "quiz_options", "is_preview", "order"):
         val = getattr(data, field)
         if val is not None:
             setattr(card, field, val)
@@ -345,6 +349,124 @@ def delete_card(
     db.delete(card)
     db.commit()
     return {"ok": True}
+
+
+# ── クリエイター: 章/カード並び替え ──────────────────────────────
+
+@router.put("/courses/{course_id}/chapters/reorder")
+def reorder_chapters(
+    course_id: int,
+    data: ReorderRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    _get_owned_course(db, course_id, current_user)
+    for idx, chapter_id in enumerate(data.ids):
+        db.query(CourseChapter).filter(
+            CourseChapter.id == chapter_id, CourseChapter.course_id == course_id
+        ).update({"order": idx})
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/courses/{course_id}/chapters/{chapter_id}/cards/reorder")
+def reorder_cards(
+    course_id: int,
+    chapter_id: int,
+    data: ReorderRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    _get_owned_course(db, course_id, current_user)
+    for idx, card_id in enumerate(data.ids):
+        db.query(ChapterCard).filter(
+            ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id
+        ).update({"order": idx})
+    db.commit()
+    return {"ok": True}
+
+
+# ── クリエイター: カード複製 ─────────────────────────────────────
+
+@router.post("/courses/{course_id}/chapters/{chapter_id}/cards/{card_id}/duplicate")
+def duplicate_card(
+    course_id: int,
+    chapter_id: int,
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    _get_owned_course(db, course_id, current_user)
+    src = db.query(ChapterCard).filter(ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id).first()
+    if not src:
+        raise HTTPException(status_code=404, detail="カードが見つかりません")
+    max_order = db.query(ChapterCard).filter(ChapterCard.chapter_id == chapter_id).count()
+    new_card = ChapterCard(
+        chapter_id=chapter_id,
+        card_type=src.card_type,
+        title=f"{src.title}（コピー）" if src.title else None,
+        body=src.body,
+        youtube_url=src.youtube_url,
+        quiz_options=src.quiz_options,
+        is_preview=src.is_preview,
+        order=max_order,
+    )
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+    return {"id": new_card.id, "order": new_card.order}
+
+
+# ── クリエイター: YouTube メタデータ取得 ─────────────────────────
+
+@router.get("/courses/{course_id}/chapters/{chapter_id}/cards/{card_id}/youtube-meta")
+async def get_youtube_meta(
+    course_id: int,
+    chapter_id: int,
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    _get_owned_course(db, course_id, current_user)
+    card = db.query(ChapterCard).filter(ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id).first()
+    if not card or not card.youtube_url:
+        raise HTTPException(status_code=404, detail="カードまたはYouTube URLが見つかりません")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                "https://www.youtube.com/oembed",
+                params={"url": card.youtube_url, "format": "json"},
+            )
+            if r.status_code != 200:
+                return {"available": False}
+            data = r.json()
+            return {
+                "available": True,
+                "title": data.get("title"),
+                "author_name": data.get("author_name"),
+                "thumbnail_url": data.get("thumbnail_url"),
+            }
+    except Exception:
+        return {"available": False}
+
+
+# ── クリエイター: コース審査申請 ─────────────────────────────────
+
+@router.post("/courses/{course_id}/submit-for-review")
+def submit_for_review(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    course = _get_owned_course(db, course_id, current_user)
+    if course.status not in ("draft", "unpublished"):
+        raise HTTPException(status_code=400, detail="審査申請できる状態ではありません")
+    card_count = _card_count(db, course_id)
+    if card_count == 0:
+        raise HTTPException(status_code=400, detail="カードが1件もないコースは申請できません")
+    course.status = "under_review"
+    db.commit()
+    return {"ok": True, "status": "under_review"}
 
 
 # ── YouTube oEmbed 可用性チェック ─────────────────────────────────
