@@ -35,7 +35,7 @@ export default function ReviewsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getReviews(courseId).then(setReviews).finally(() => setLoading(false));
+    api.getReviews(courseId).then(setReviews).catch(() => {}).finally(() => setLoading(false));
   }, [courseId]);
 
   const weekly = reviews.filter(r => r.review_type === "weekly");

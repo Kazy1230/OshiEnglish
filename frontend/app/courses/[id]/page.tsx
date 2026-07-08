@@ -12,13 +12,6 @@ type Lesson = {
   id: number; order: number; title: string; content_type: "text" | "video";
   body?: string | null; youtube_url?: string | null; is_preview: boolean;
 };
-type ChapterCard = {
-  id: number; order: number; card_type: string; title: string | null;
-  body: string | null; youtube_url: string | null; is_preview: boolean;
-};
-type CourseChapter = {
-  id: number; order: number; title: string; goal: string | null; cards: ChapterCard[];
-};
 type CourseDetail = {
   id: number; title: string; description?: string | null; thumbnail_url?: string | null;
   category?: string | null; status: string; price: number; is_free: boolean;
@@ -70,9 +63,6 @@ export default function CourseDetailPage() {
   const [reporting, setReporting] = useState(false);
   const [reportedDay, setReportedDay] = useState<number | null>(null);
   const [memo, setMemo] = useState("");
-  const [chapters, setChapters] = useState<CourseChapter[]>([]);
-  const [openChapterId, setOpenChapterId] = useState<number | null>(null);
-  const [activeCard, setActiveCard] = useState<ChapterCard | null>(null);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
@@ -83,12 +73,6 @@ export default function CourseDetailPage() {
       if (unlocked) {
         api.getCourseProgress(courseId).then(p => {
           setCompletedLessonIds(new Set(p.lessons.filter((l: { is_completed: boolean }) => l.is_completed).map((l: { lesson_id: number }) => l.lesson_id)));
-        }).catch(() => {});
-      }
-      if (unlocked && (c.chapter_count ?? 0) > 0) {
-        api.listChapters(courseId).then((chs: CourseChapter[]) => {
-          setChapters(chs);
-          if (chs.length > 0) setOpenChapterId(chs[0].id);
         }).catch(() => {});
       }
       if (unlocked && c.has_days) {
@@ -629,83 +613,18 @@ export default function CourseDetailPage() {
           </>
         )}
 
-        {/* ===== v2.0コース：章/カード学習UI ===== */}
-        {unlocked && chapters.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <p className="font-bold text-sm" style={{ color: "var(--text)" }}>
-              カリキュラム（{chapters.length} 章）
-            </p>
-            {chapters.map(ch => {
-              const isOpen = openChapterId === ch.id;
-              return (
-                <div key={ch.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
-                  <button
-                    className="w-full flex items-center gap-3 p-4 text-left"
-                    onClick={() => setOpenChapterId(isOpen ? null : ch.id)}
-                  >
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{ background: "var(--primary)", color: "#fff" }}>
-                      第{ch.order}章
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>{ch.title}</p>
-                      {ch.goal && <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>🎯 {ch.goal}</p>}
-                      <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{ch.cards.length} カード</p>
-                    </div>
-                    <span className="text-xs flex-shrink-0" style={{ color: "var(--muted)" }}>{isOpen ? "▲" : "▼"}</span>
-                  </button>
-
-                  {isOpen && (
-                    <div className="border-t" style={{ borderColor: "var(--border, #e5e7eb)" }}>
-                      {ch.cards.length === 0 ? (
-                        <p className="text-sm text-center py-6" style={{ color: "var(--muted)" }}>カードがありません</p>
-                      ) : (
-                        <div className="flex flex-col divide-y" style={{ borderColor: "var(--border, #e5e7eb)" }}>
-                          {ch.cards.map(card => {
-                            const isActive = activeCard?.id === card.id;
-                            const typeIcon: Record<string, string> = { video: "▶", build_task: "🔨", quiz: "❓", message: "💬" };
-                            return (
-                              <div key={card.id}>
-                                <button
-                                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors"
-                                  style={{ background: isActive ? "color-mix(in srgb, var(--primary) 6%, var(--bg))" : "var(--card)" }}
-                                  onClick={() => setActiveCard(isActive ? null : card)}
-                                >
-                                  <span className="text-base flex-shrink-0">{typeIcon[card.card_type] || "📄"}</span>
-                                  <span className="flex-1 text-sm" style={{ color: "var(--text)" }}>
-                                    {card.title || card.card_type}
-                                  </span>
-                                  {card.is_preview && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
-                                      style={{ background: "#dbeafe", color: "#1d4ed8" }}>無料</span>
-                                  )}
-                                </button>
-                                {isActive && (card.youtube_url || card.body) && (
-                                  <div className="px-4 pb-4 pt-2" style={{ background: "var(--bg)" }}>
-                                    {card.card_type === "video" && card.youtube_url ? (
-                                      <div className="aspect-video rounded-xl overflow-hidden">
-                                        <iframe
-                                          src={card.youtube_url.replace("youtu.be/", "www.youtube.com/embed/").replace("watch?v=", "embed/")}
-                                          className="w-full h-full" allowFullScreen
-                                        />
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text)" }}>
-                                        {card.body}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        {/* ===== v2.0コース：学習開始ボタン ===== */}
+        {unlocked && !course.has_days && (course.chapter_count ?? 0) > 0 && (
+          <div className="card flex flex-col gap-4 overflow-hidden p-0">
+            <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+              <p className="text-lg font-black text-white">学習を始めよう</p>
+              <p className="text-sm text-white/80 mt-1">{course.chapter_count} 章のカリキュラムが用意されています</p>
+            </div>
+            <div className="px-6 pb-6">
+              <Link href={`/courses/${courseId}/learn`} className="btn-primary inline-block">
+                カリキュラムを見る →
+              </Link>
+            </div>
           </div>
         )}
 
