@@ -168,28 +168,30 @@ flowchart TD
 | 指導実績 | 専門性確認 |
 | SNS / ブログ等 | 実在性・活動実績確認 |
 
-### 3.2 コース作成フロー
+### 3.2 コース作成フロー（v2.0: 章/カード方式）
+
+> v1.x の30日カレンダー方式（calendar/textbooks）から v2.0 の章/カード方式に刷新済み。
 
 ```mermaid
 flowchart TD
   A["/creator/interview"] --> B["指導スタイルプリセット選択"]
   B --> C["AIインタビュー固定質問 + 深掘り"]
-  C --> D["人格プロファイル生成"]
+  C --> D["人格プロファイル生成 + キャラクター自動作成"]
   D --> E["/creator/profile で確認・編集"]
   E --> F["/creator/courses/new"]
-  F --> G["基本情報・価格・Tier設定"]
-  G --> H["/creator/courses/[id]/textbooks"]
-  H --> I["教材選択・章/項目のDay割当"]
-  I --> I2["AIに教材の使い方を相談・自動プラン適用"]
-  I2 --> J["/creator/courses/[id]/calendar"]
-  J --> K["30日骨格をAI生成"]
-  K --> L["Day単位でテーマ・タスク・休息日を編集"]
-  L --> M["Day1診断カスタム質問設定"]
-  M --> N["参考資料追加"]
-  N --> O["品質チェック"]
-  O --> P["公開申請"]
-  P --> Q["運営承認"]
-  Q --> R["公開"]
+  F --> G["Step0: 基本情報（分野フリーテキスト・コース名・料金）"]
+  G --> H["Step1: 壁打ち相談フォーム（目的/対象/トピック/期間/スタイル/懸念/動画）"]
+  H --> I["Step2: AI壁打ち用プロンプト生成・コピー → ChatGPT等で章立て相談"]
+  I --> J["/creator/courses/[id]/chapters"]
+  J --> K["章タイトル・ゴールを入力、↑↓で順序調整"]
+  K --> L["/creator/courses/[id]/curriculum（ハブ）"]
+  L --> M["/creator/courses/[id]/chapters/[chId]"]
+  M --> N["カード追加（動画/課題/クイズ/メッセージ）・DnD並び替え"]
+  N --> L
+  L --> O["/creator/courses/[id]/preview（確認）"]
+  O --> P["/creator/courses/[id]/publish（チェックリスト+申請）"]
+  P --> Q["運営承認（/admin）"]
+  Q --> R["公開（status: published）"]
 ```
 
 重要な設計原則:
@@ -197,6 +199,7 @@ flowchart TD
 | 原則 | 内容 |
 |---|---|
 | 1クリエイター = 1人格 | コースごとにキャラクターを選択しない。AIインタビュー完了時に人格/キャラクターが作成される |
+| 分野フリーテキスト | subject は固定ENUMではなくVARCHAR(100)のフリーテキスト。既知分野(english/it/music/japanese)は特化設定、それ以外は汎用設定が自動適用される |
 | Layer1 | クリエイター・コース共通の30日骨格。全学習者に共通 |
 | Layer2 | 学習者診断後に、30日骨格のタスク分量を個別化 |
 | Layer3 | 日次通知・チャット応答など、その場の文脈で動的生成 |

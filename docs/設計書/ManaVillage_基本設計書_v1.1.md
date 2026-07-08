@@ -45,9 +45,14 @@ ManaVillageは「成果達成型メンタープラットフォーム」であり
 | SCR-12 | /dashboard | クリエイターダッシュボード | クリエイター |
 | SCR-13 | /creator/interview | AIインタビュー(人格収集) | クリエイター |
 | SCR-14 | /creator/profile, /dashboard/characters/[id] | 人格プロファイル・キャラクター編集 | クリエイター |
-| SCR-15 | /creator/courses/new | コース新規作成 | クリエイター |
-| SCR-17 | /creator/courses/[id]/calendar | コース基本情報＋30日カレンダー編集 | クリエイター |
-| SCR-17b | /creator/courses/[id]/textbooks | コース教材設定 | クリエイター |
+| SCR-15 | /creator/courses/new | コース新規作成（3ステップ：基本情報→壁打ち相談→プロンプト確認） | クリエイター |
+| SCR-15b | /creator/courses/[id]/chapters | 章立て入力（章タイトル・ゴール・順序設定） | クリエイター |
+| SCR-15c | /creator/courses/[id]/curriculum | カリキュラムハブ（章一覧・カード確認・審査申請起点） | クリエイター |
+| SCR-15d | /creator/courses/[id]/chapters/[chId] | 章詳細・カードビルダー（DnD並び替え・4種カード追加） | クリエイター |
+| SCR-15e | /creator/courses/[id]/preview | コースプレビュー（学習者目線の確認画面） | クリエイター |
+| SCR-15f | /creator/courses/[id]/publish | 公開設定・審査申請（チェックリスト付き） | クリエイター |
+| SCR-17 | /creator/courses/[id]/calendar | （旧）30日カレンダー編集（v1.x 方式。v2.0では非推奨） | クリエイター |
+| SCR-17b | /creator/courses/[id]/textbooks | コース教材設定（v1.x 方式。v2.0では主フローから外れた） | クリエイター |
 | SCR-17c | /creator/courses/[id]/enrollments | 申込者一覧 | クリエイター |
 | SCR-18 | /creator/analytics | 質問分析ダッシュボード | クリエイター |
 | SCR-19 | /creator/inbox | Tier B回答画面(未回答質問対応) | クリエイター |
@@ -137,27 +142,33 @@ ManaVillageは「成果達成型メンタープラットフォーム」であり
 
 ※ インタビュー完了（`POST /interview/generate-profile`呼び出し）と同時に、人格プロファイル(`personality_profiles`)に加えて**人格(キャラクター)レコードも自動生成**される（名前の初期値はクリエイターのアカウント名）。クリエイターは生成後、`/creator/profile`または`/dashboard/characters/[id]`で名前・口調・アバター画像（AI生成または手動アップロード）を編集できる。
 
-#### SCR-15 コース新規作成
-| エリア | 内容 |
-|---|---|
-| 担当キャラクター表示 | クリエイター本人の人格(キャラクター)に読み取り専用で自動的に紐づく（選択UIなし） |
-| コース基本情報入力 | コース名・ゴール・対象学習者・学習強度(intensity)・進行速度(pace) |
-| 使用教材 | プリセット教材(`textbooks`)から検索選択、または手入力(`custom_name`/`custom_toc`)で追加。単語帳タイプの場合は1日の新規語数・復習語数も設定 |
-| Day1診断カスタム質問 | 任意でカスタム質問を追加（テキスト/数値/単一選択/複数選択） |
-| Tier A/B 価格設定 | Tier A・Tier Bそれぞれの月額（`tier_a_price`/`tier_b_price`）を設定。買い切り(`price`/`is_free`)コースとしての運用も可能 |
+#### SCR-15〜15f コース作成フロー（v2.0: 章/カード方式）
 
-※ 1クリエイター=1人格のため、キャラクターを選ぶプルダウン等のUIは存在しない。クリエイターがまだAIインタビューを完了していない（人格が存在しない）場合は、コース作成不可とし、AIインタビューへの導線を表示する。
+> v1.x の30日カレンダー方式から全面刷新。章/カード構造でカリキュラムを作る。
 
-#### SCR-17 コース基本情報＋30日カレンダー編集
-| エリア | 内容 |
-|---|---|
-| コース基本情報編集 | コース名・ゴール・対象者・学習強度・進行速度・価格などを編集 |
-| 30日生成 | 「AIで30日分を生成する」操作でバックグラウンドタスクを起動（`days_generation_status`: idle/generating/completed/failed）。フロントエンドはポーリングで進行状況を表示 |
-| カレンダービュー | 生成済みの30日分(Layer1: `course_days`)を表示。各日の`theme`・`task_types`(タスク種別と標準時間の型データ)・`is_rest_day`を編集 |
-| 品質チェック | 「品質チェック」操作でAIによるコース内容のレビュー結果を取得できる |
-| 公開申請 | レビュー依頼(`submit-for-review`)を経て管理者承認後に公開 |
+| 画面 | パス | 内容 |
+|---|---|---|
+| SCR-15 | `/creator/courses/new` | Step0: 基本情報（分野フリーテキスト・コース名・料金）→ Step1: 壁打ち相談フォーム → Step2: AI壁打ち用プロンプト表示・コピー |
+| SCR-15b | `/creator/courses/[id]/chapters` | 章タイトル・ゴール入力、↑↓並び替え、保存で一括再作成 |
+| SCR-15c | `/creator/courses/[id]/curriculum` | ハブ画面。章一覧・カードチップ・プロンプトトグル・卒業動画URL・審査申請ボタン |
+| SCR-15d | `/creator/courses/[id]/chapters/[chId]` | カードビルダー。4種カード追加（video/build_task/quiz/message）、@dnd-kit DnD並び替え、複製、インライン編集 |
+| SCR-15e | `/creator/courses/[id]/preview` | 読み取り専用プレビュー。学習者目線でアコーディオン展開 |
+| SCR-15f | `/creator/courses/[id]/publish` | チェックリスト + 審査申請。`status: draft → under_review` |
 
-※ Layer1の`course_days`はメッセージ文を持たない（タスクの「型」のみ）。実際の朝/夜/完了時のメッセージは、学習者ごとにLayer3（チャット時に都度生成）で作られる。旧設計の`ai_message_morning`/`ai_message_evening`/`ai_message_completion`カラムは廃止済み。
+カード種別:
+
+| 種別値 | 表示 | 特記 |
+|---|---|---|
+| `video` | ▶ 動画 | YouTubeURL必須 |
+| `build_task` | 🔨 課題 | 本文あり |
+| `quiz` | ❓ クイズ | `quiz_options` JSON（2〜4択、正解1つ） |
+| `message` | 💬 メッセージ | 本文あり |
+
+分野（subject）は固定ENUMではなくフリーテキスト（VARCHAR(100)）。
+
+#### SCR-17 コース基本情報＋30日カレンダー編集（v1.x 方式・非推奨）
+
+v1.x では30日カレンダー方式（Layer1: `course_days`）を採用していたが、v2.0 では章/カード方式（SCR-15〜15f）に置き換えられた。画面は残存しているが主フローからは外れている。
 
 #### SCR-18 質問分析ダッシュボード
 | エリア | 内容 |

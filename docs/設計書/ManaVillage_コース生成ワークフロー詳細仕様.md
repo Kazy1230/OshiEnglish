@@ -1,419 +1,288 @@
-# ManaVillage コース生成ワークフロー詳細仕様
+# ManaVillage コース作成フロー詳細仕様
 
-> ステータス: ドラフト v1.2
-> 関連ドキュメント: ManaVillage 要件定義書 v1.1
+> ステータス: v2.0（2026-07-08 更新）
+> 前バージョン（v1.2: 30日カレンダー方式）から章/カード構造に全面刷新。
 
 ---
 
 ## 1. ワークフロー全体像
 
-> 1クリエイター=1人格(キャラクター)。Step 2の人格プロファイル生成と同時に人格(キャラクター)レコードが自動作成されるため、Step 3以降のどの画面にも「キャラクターを選択する」操作は存在しない。
+> 1クリエイター=1人格(キャラクター)。インタビュー完了時にキャラクターが自動作成されるため、コース作成画面に「キャラクターを選択する」操作は存在しない。
 
 ```
-Step 1: AIインタビュー(人格収集)
+Step 1: AIインタビュー（人格収集）
   ↓
 Step 2: 人格プロファイル生成・確認
   ↓
-Step 3: コース基本情報入力
+Step 3: コース新規作成（基本情報 + 壁打ち相談フォーム）
+         → AI壁打ち用プロンプト生成 → ChatGPT/Claude 等で章立てを壁打ち
   ↓
-Step 4: 使用教材の設定（検索/手入力 → AIプラン相談 → 手動調整）
+Step 4: 章立て入力（/creator/courses/[id]/chapters）
   ↓
-Step 5: 30日コース骨格自動生成(Layer1)
+Step 5: カリキュラムハブ（/creator/courses/[id]/curriculum）
+         各章にカード（動画/課題/クイズ/メッセージ）を追加・編集
   ↓
-Step 6: クリエイターによる日単位編集・カスタム診断質問の設定
+Step 6: プレビュー確認（/creator/courses/[id]/preview）
   ↓
-Step 7: 参考資料の添付
+Step 7: 審査申請（/creator/courses/[id]/publish）
   ↓
-Step 8: 品質チェック・公開申請
-  ↓
-Step 9: 運営確認 → 公開
+Step 8: 運営確認 → 公開
 ```
-
-コース購入後、学習者がDay1診断に回答すると、Layer1骨格を基に学習者ごとのタスク配分を個人化するLayer2生成が走る(詳細はStep 9の後段を参照)。
 
 ---
 
-## 2. Step 1: AIインタビュー(人格収集)
+## 2. Step 1: AIインタビュー（人格収集）
 
 ### 設計方針
 
-- 5問の固定質問でサクッと終わる設計
-- 回答内容に応じてAIが深掘り質問を最大3問追加(適応型)
-- 合計: 最短5問、最長8問程度
-- 所要時間の目安: 10〜15分
+学習者のセリフ形式で質問することで、クリエイターの生の指導スタイルを引き出すロールプレイ形式。
 
-### 固定質問リスト(英語学習領域)
+### 固定質問（7問）
 
-| # | 質問 | 目的 |
-|---|---|---|
-| Q1 | 「学習者が挫折しそうになったとき、どのように声をかけますか?」 | 励まし方・コミュニケーションスタイルの把握 |
-| Q2 | 「TOEIC初心者に最初の1週間で何をさせますか?その理由も教えてください。」 | 指導の優先順位・学習哲学の把握 |
-| Q3 | 「単語・文法・リスニング・読解のうち、最も重視するものはどれですか?なぜですか?」 | 指導方針・判断基準の把握 |
-| Q4 | 「あなたの指導を受けた学習者が成果を出せないとき、原因はどこにあると思いますか?」 | 問題解決アプローチの把握 |
-| Q5 | 「あなたの指導で一番大切にしていることを一言で表すとしたら何ですか?」 | 学習哲学・核心的価値観の把握 |
+```
+1. 先生、最近全然リスニングが伸びなくて…正直心が折れそうです。
+2. 初心者です。とりあえず最初の1週間、何から始めればいいですか？
+3. 単語も文法もリスニングも全部中途半端で、何を優先すればいいか分かりません。
+4. 3ヶ月続けてるのに全然伸びている気がしません…私のやり方、何か間違ってますか？
+5. 先生のコースに申し込もうか迷ってるんですけど、他の先生と何が違うんですか？
+6. 先生って、昔から得意だったんですか？どんなきっかけで教える側になったんですか？
+7. 先生に「よくできました！」って褒めてもらった時、どんな感じで返してもらえると嬉しいですか？
+```
 
-### 深掘り質問(AIが自動生成)
-
-回答が短い・抽象的な場合にAIが追加質問を生成する。
-
-例:
-- Q1への回答が「頑張れと伝えます」→「具体的にどんな言葉を使いますか?実際のセリフを教えてください。」
-- Q3への回答が「文法です」→「文法のどの部分から始めますか?なぜそこからですか?」
-
-### インタビューUI
-
-- チャット形式で1問ずつ表示
-- クリエイターがテキストで自由回答
-- 「次の質問へ」ボタンで進む
-- 途中保存可能(ブラウザを閉じても続きから再開できる)
+各回答後にAIが深掘りの要否を判定（最大3回/問）。深掘り判定は LLM が `{"action": "followup", "question": "…"}` または `{"action": "next"}` を返す。
 
 ---
 
-## 3. Step 2: 人格プロファイル生成・確認
+## 3. Step 2: 人格プロファイル生成
 
-### AIが抽出する人格プロファイル構造
+`POST /interview/generate-profile` で PersonalityProfile（チャット・コース生成用）と Character.tone_profile（チャット人格再現用）を同時生成する。
 
 ```json
 {
   "personality_profile": {
-    "communication": {
-      "tone": "親しみやすく背中を押すタイプ。命令形は使わない",
-      "first_person": "私",
-      "sentence_ending": "〜しましょう、〜できますよ",
-      "catchphrase": "小さな一歩が大きな変化を生む"
-    },
-    "coaching_style": {
-      "strictness": "優しめ。継続を最優先にして負荷をかけすぎない",
-      "encouragement": "具体的な行動を褒める。結果よりプロセスを評価する",
-      "feedback_method": "まず良い点を伝えてから改善点を提案する"
-    },
-    "learning_philosophy": {
-      "core_value": "継続が最強の戦略",
-      "priority": ["継続性", "単語力", "リスニング", "文法"],
-      "judgment_criteria": "無理のない量で毎日続けることを最優先にする"
-    },
-    "thinking_style": {
-      "analogy_tendency": "日常生活の例えを好む",
-      "explanation_method": "Why→What→Howの順で説明する",
-      "problem_solving": "原因を習慣に求め、小さな改善から始める"
-    }
+    "communication": { "tone": "…", "first_person": "私", "sentence_ending": "…", "catchphrase": "…" },
+    "coaching_style": { "strictness": "…", "encouragement": "…", "feedback_method": "…" },
+    "learning_philosophy": { "core_value": "…", "priority": ["…"], "judgment_criteria": "…" },
+    "thinking_style": { "analogy_tendency": "…", "explanation_method": "…", "problem_solving": "…" }
   }
 }
 ```
 
-### 確認画面
-
-- AIが生成した人格プロファイルをクリエイターが確認
-- 修正したい項目があれば自由テキストで上書き可能
-- 「この内容でコース生成に進む」ボタンで次へ
-
 ---
 
-## 4. Step 3: コース基本情報入力
+## 4. Step 3: コース新規作成（3ステップフォーム）
+
+画面パス: `/creator/courses/new`
+
+### Step 0: 基本情報
 
 | 項目 | 内容 | 備考 |
 |---|---|---|
-| コース名 | 例:「TOEIC800達成 30日伴走コース」 | |
-| ゴール | 例:「TOEIC800点を取得する」 | 数値目標推奨 |
-| 対象者 | 例:「現在600点前後・3ヶ月後に受験予定」 | |
-| 学習強度(intensity) | 例:「1日30〜60分」 | 30日コース生成に使用 |
-| 使用する教材(study_materials) | Step4で設定した教材の要約テキスト | 後述。Layer1生成の入力になる |
-| 進行速度(pace) | 例:「標準」「ゆっくり」「速め」 | 週ごとの難易度カーブ・タスク量の調整に使用 |
-| 価格 | 980〜1,980円/月(Tier A)・2,980〜5,000円/月(Tier B)、または買い切り(100円以上) | |
+| 分野（subject） | フリーテキスト | 例: TOEIC、マイクラ建築、料理、Python。文字数制限なし（DB: VARCHAR(100)）|
+| コース名（title） | テキスト | |
+| 無料フラグ（is_free） | チェックボックス | |
+| Tier A月額（tier_a_price） | 数値 | 980〜1,980円 |
+| Tier B月額（tier_b_price） | 数値（任意） | 2,980〜5,000円 |
 
-`goal` / `target_learner` / `intensity` / `study_materials` / `pace` がすべて入力され、かつ人格プロファイルが紐づいていなければ、Layer1生成(Step5)は実行できない。
+### Step 1: カリキュラム壁打ち相談フォーム
+
+| フィールド | DBカラム | 説明 |
+|---|---|---|
+| 講座の目的・ゴール | `curriculum_purpose` | 例: TOEIC800点を3ヶ月で達成 |
+| 対象者 | `curriculum_target_audience` | 例: 現在600点前後の社会人 |
+| 扱いたいトピック・要素 | `curriculum_topics` | 例: リスニング、語彙1000語 |
+| 期間感の目安 | `curriculum_duration` | 例: 12週間、30日間 |
+| 講師としてのスタイル・こだわり | `curriculum_style` | 例: 実践重視、毎日短く継続 |
+| まだ迷っている・決めきれていない点 | `curriculum_concerns` | 例: どの範囲から始めるか |
+| 持っている動画（任意） | `curriculum_existing_videos` | YouTube URL 一覧等 |
+
+フォーム送信時に `POST /courses` と `PUT /courses/{id}/curriculum-meta` を実行。
+
+### Step 2: AI壁打ち用プロンプト表示
+
+`GET /courses/{id}/curriculum-prompt` で以下のテンプレートにデータを埋め込んだプロンプトを生成する。
+
+```
+あなたは学習カリキュラム設計の専門家です。
+以下の情報を元に、まずはコース全体の章立て（カリキュラムの骨格）を提案してください。
+
+【講座の目的】{purpose}
+【対象者】{target_audience}
+【扱いたいトピック・要素】{topics}
+【期間感の目安】{duration}
+【講師としてのスタイル・こだわり】{style}
+【まだ迷っている・決めきれていない点】{concerns}
+【持っている動画】{existing_videos}
+```
+
+クリエイターはこのプロンプトをChatGPT/Claude等にコピーして章立てを相談する。  
+「次へ：章立てを入力する」ボタンで `/creator/courses/[id]/chapters` へ遷移。
 
 ---
 
-## 5. Step 4: 使用教材の設定
+## 5. Step 4: 章立て入力
 
-旧設計では教材は「参考資料」として日程に組み込まずに添付するだけだったが、現行システムでは教材は**コース骨格生成(Layer1)の直接の入力**になる。クリエイターは教材を登録し、各章・項目（または単語帳の場合は1日あたりの新規語数・復習語数）をどの日にやるかを決めてからコースを生成する。画面は次の3段構成。
+画面パス: `/creator/courses/[id]/chapters`
 
-### ① 教材の検索・手入力
+AIとの壁打ちで決まった章立てをテキスト入力する。
 
-- プリセット教材を書籍名で検索して追加できる(`GET /textbooks`)。プリセットは目次データ(`toc`)を持つカタログで、運営が管理画面から事前登録する。
-- プリセットにない教材は、教材名と目次(1行1項目のテキスト)を手入力して追加できる(`custom_name` / `custom_toc`)。
-- 教材種別は `textbook`(参考書・問題集等。目次項目ごとに日程を割り当てる)と `vocabulary`(単語帳。1日あたりの新規語数・復習語数・目標周回数で進捗を管理する)の2種類。
-- 1コースに複数の教材を登録できる。
+- 章タイトル（必須）
+- この章のゴール（任意）
+- ↑↓ ボタンで順序変更
+- 「+ 章を追加」ボタンで章追加
+- 保存時は既存章を全削除して再作成（全置換方式）
 
-### ② AIに教材の使い方を相談する（AI教材プラン相談）
-
-クリエイターが「いつ・どのくらい・どの順番で教材を使うか」を自然言語で説明すると、AIがそれを30日間(Day1〜30)の具体的な日程プランに変換する(`POST /courses/{id}/textbooks/plan`)。
-
-- 入力は登録済み教材の一覧(目次・単語帳設定)と、クリエイターの自由記述の説明文。
-- 教材が複数ある場合、「並行して進めるのか」「順番に進めるのか」など説明文だけでは判断できない点があれば、AIは `needs_clarification: true` を返し、確認すべき質問(最大3つ)を提示する。クリエイターが回答すると、その質疑応答履歴(`qa_history`)を踏まえて再度プランを生成する。このやりとりは何度でも繰り返せる。
-- AIの応答には、現時点のプランの自然言語要約(`summary`)と、教材ごとの暫定プラン(`plans`)が常に含まれる。`needs_clarification: true` の間も暫定プランは提示され、クリエイターは内容を確認できる。
-- クリエイターが内容に納得したら「この内容で確定してコースに反映」を押し、プランを確定する(`POST /courses/{id}/textbooks/plan/apply`)。これにより各教材の `daily_words` / `review_words` / `target_laps`、および章・項目ごとの `day_number`(`textbook_day_assignments`)が保存される。
-
-### ③ 教材ごとの設定（AIプラン適用後の確認・手動調整）
-
-AIプランを適用した後も、教材ごとに以下を手動で確認・上書きできる。
-
-- 単語帳: 1日あたり新規語数・復習語数・目標周回数(コース完了条件として求める周回数)
-- 参考書・問題集: 目次の各項目を1〜30日目のどこでやるか、または「やらない」(`day_number = null`)に個別設定
-- 「AIに自動割り当てしてもらう」ボタンで、項目数に応じた30日への均等割り当ても可能(クライアント側の簡易割り当てロジック。AIプラン相談とは別の機能)
-
-教材の設定が完了したら、教材内容を要約したテキストをコースの `study_materials` フィールドに保存し、Step5(カレンダー画面)に進む。
+保存後は `/creator/courses/[id]/curriculum` へ遷移。
 
 ---
 
-## 6. Step 5: 30日コース骨格自動生成(Layer1)
+## 6. Step 5: カリキュラムハブ + カード追加
 
-### 3層生成アーキテクチャにおける位置づけ
+画面パス: `/creator/courses/[id]/curriculum`（ハブ）  
+カード編集: `/creator/courses/[id]/chapters/[chapterId]`
 
-ManaVillageのコース生成は3層構造になっている。
+### カード種別
 
-```
-Layer1（本ステップ） = クリエイターが1回だけ生成する全学習者共通の骨格。メッセージ文は持たない。
-Layer2 = 学習者ごとのDay1診断結果でタスク配分を個人化（Step9後段で詳述）。
-Layer3 = 毎日の動的メッセージ生成（チャット機能側で別途生成）。
-```
+| 種別値 | 表示名 | アイコン | 用途 |
+|---|---|---|---|
+| `video` | 動画 | ▶ | YouTube動画視聴 |
+| `build_task` | 課題 | 🔨 | 作品作成・実践課題 |
+| `quiz` | クイズ | ❓ | 選択式クイズ（2〜4択、正解1つ） |
+| `message` | メッセージ | 💬 | 章完了記念メッセージ等 |
 
-旧設計（週単位13回のAI呼び出し、12〜13分）から、1回のAI呼び出しで30日分をまとめて生成する方式に変更されており、生成時間は目安15秒に短縮されている。
+`quiz` カードは `quiz_options: [{text: string, is_correct: boolean}]` のJSON配列で選択肢を保持する。
 
-### 生成内容の構造
+### カード操作
 
-30日を4週に分け、週ごとにフェーズラベル(Week1=基礎、Week2=強化、Week3=実践、Week4=仕上げ)を割り当てる。Layer1ではメッセージ文は生成せず、タスクの「型」(種別と標準学習時間)のみを生成する。
+- 追加: カード種別ボタンをクリック → `POST /courses/{id}/chapters/{chId}/cards`
+- 編集: カードを展開してインライン編集 → `PUT /courses/{id}/chapters/{chId}/cards/{cardId}`
+- 削除: `DELETE /courses/{id}/chapters/{chId}/cards/{cardId}`
+- 並び替え: @dnd-kit DnD → `PUT /courses/{id}/chapters/{chId}/cards/reorder`（`{ids: [...]}`）
+- 複製: `POST /courses/{id}/chapters/{chId}/cards/{cardId}/duplicate`
+- YouTubeメタ取得: `GET /courses/{id}/chapters/{chId}/cards/{cardId}/youtube-meta`
 
-### 1日分の生成内容(CourseDay)
+### 無料プレビュー設定
 
-```json
-{
-  "day": 1,
-  "week": 1,
-  "theme": "学習スタート・現在地の確認",
-  "task_types": [
-    {"type": "vocabulary", "label": "単語学習", "base_minutes": 15}
-  ],
-  "is_rest_day": false
-}
-```
-
-- `theme` は15文字以内
-- `task_types` の `type` は `vocabulary` / `listening` / `grammar` / `reading` / `shadowing` / `practice` のいずれか
-- 休息日は7日ごとに1日程度設け、その日は `task_types` を空配列にする
-- `task_types` の許可リストは、登録済み教材の種別から自動推定される(`_infer_skill_type`)。例えば単語帳は `vocabulary`、目次や対象範囲に「リスニング」を含む教材は `listening`、それ以外の教材は `practice` として扱われ、AIがその許可リスト外のタスク種別を出力した場合はサーバー側で除外される(登録していない教材のタスクが紛れ込むのを防ぐため)。
-
-### 生成に使うインプット
-
-- 人格プロファイル(Step2)
-- コース基本情報(Step3: ゴール・対象者・学習強度・進行速度)
-- Step4で確定した「教材の日程割り当て」(`course_textbooks` + `textbook_day_assignments`)。割り当てがある日は、その日の `theme` ・`task_types` を必ずその教材項目に基づいて生成する。割り当てが無い日は人格プロファイル・ゴールに基づき自由に設計する。
-
-旧設計と異なり、教材はコース骨格生成に直接組み込まれる。教材を「参考資料」としてのみ扱うのは、Step4で登録しない補足コンテンツ(後述のStep7「参考資料」)に限られる。
-
-### 生成の実行とポーリング
-
-- `POST /courses/{id}/generate-days` を呼ぶとバックグラウンドタスクとして生成を開始し、即座に202を返す(`days_generation_status = "generating"`)。
-- クライアントは `GET /courses/{id}/generation-status` を4秒間隔でポーリングし、`status`(`generating` / `completed` / `failed`)と生成済み日数を確認する。
-- 生成に失敗した場合(AIの応答が30日分でない、JSON解析失敗等)は `days_generation_status = "failed"` となり、エラー内容が `days_generation_error` に保存される。
-- 既に骨格が生成済みのコースでも「全日を再生成する」ボタンから何度でも再生成できる(既存の `CourseDay` は削除されて作り直される)。
+`is_preview=true` のカードは未購入ユーザーも閲覧可能。カード編集フォームのチェックボックスで設定。
 
 ---
 
-## 7. Step 6: クリエイターによる日単位編集・カスタム診断質問の設定
+## 7. Step 6: プレビュー確認
 
-### カレンダービューの設計
+画面パス: `/creator/courses/[id]/preview`
 
-- 30日分を7列のグリッドでカレンダー形式に一覧表示
-- 各日をクリックすると詳細編集パネル(モーダル)が開く
-- AI生成済みは「primary」色、クリエイター編集済み(`is_edited_by_creator = true`)は「accent」色、休息日はグレーで色分け
-- タスクが1件も設定されていない日には警告アイコンを表示する
+学習者目線でコース全体を確認するための読み取り専用ページ。
 
-### 1日分の編集パネル
+- コース概要（タイトル・分野・目的・対象者・統計）
+- 章のアコーディオン展開でカード一覧を確認
+- 無料プレビューカードにバッジ表示
 
-| 項目 | 編集可否 |
+---
+
+## 8. Step 7: 審査申請
+
+画面パス: `/creator/courses/[id]/publish`
+
+### 申請前チェックリスト
+
+| 項目 | 判定ロジック |
 |---|---|
-| 日のテーマ(15文字以内) | ○ 自由編集 |
-| タスク種別(チェックボックスで選択) | ○ 選択中の種別のみ表示・並び替え |
-| タスクの順序 | ○ ドラッグ＆ドロップまたは↑↓ボタンで並び替え |
-| 各タスクの標準学習時間(分) | ○ 5〜120分で数値編集。合計90分を超えると警告表示 |
-| 休息日フラグ | ○ ON/OFFで切り替え(ONの場合タスク種別は空になる) |
+| 章が1つ以上ある | `chapters.length > 0` |
+| カードが1つ以上ある | `totalCards > 0` |
+| コースタイトルが設定されている | `title` が空でない |
+| 分野が設定されている | `subject` が空でない |
 
-編集パネルには「学習者ごとの個別タスク配分(個人化プラン)はDay1診断完了時に自動生成され、ここで編集できるのは全学習者共通の骨格である」旨の注記がある。
+全チェック通過後に「審査に申請する」ボタンが有効化される。
 
-### Day1診断のカスタム質問
+`POST /courses/{id}/submit-for-review` で `status` が `draft` → `under_review` に遷移。
 
-旧設計にあった固定7問は廃止され、クリエイターがコースごとに自由に診断質問を設定する方式になっている。
-
-- 質問形式は `text`(テキスト入力) / `number`(数値入力) / `single`(単一選択) / `multi`(複数選択)
-- `single` / `multi` の場合は選択肢(`options`)が必須
-- 推奨質問のテンプレート(「TOEFL ITP推奨質問セット」「汎用推奨質問セット」)をワンクリックで一括追加できる
-- 追加・削除・必須/任意の切り替えが可能
-
-ここで設定した質問への学習者の回答が、Step9後段のLayer2個人化生成の入力になる。
+申請後はコース編集不可（審査中状態）。
 
 ---
 
-## 8. Step 7: 参考資料の添付
+## 9. Step 8: 運営確認 → 公開
 
-### 方針
-
-Step4で登録した「使用教材」とは別に、コース内容を補足する「参考資料」を添付できる。こちらはコース骨格生成には組み込まれない。
-
-### 添付できるもの
-
-| 種別 | 内容 |
-|---|---|
-| URL | 参考サイト・YouTube動画・ブログ記事等 |
-| PDF | 単語リスト・問題集・オリジナルテキスト等(`type` フィールドでpdf/urlを区別) |
-
-### 表示場所
-
-学習者のコースページの「参考資料」セクションに一覧表示。日単位のコンテンツとは別の場所に配置。
+- 管理画面（`/admin`）からコース審査タブで確認
+- `PUT /admin/courses/{id}/approve` → `status: published`（マーケットプレイスに掲載）
+- `PUT /admin/courses/{id}/reject` → `status: draft`（差し戻し、修正後に再申請可能）
 
 ---
 
-## 9. Step 8: 品質チェック・公開申請
+## 10. データモデル
 
-### 品質チェック(セルフチェック)
-
-公開申請の前に `GET /courses/{id}/quality-check` で5項目×20点(満点100点)の自動採点を受けられる。
-
-| 項目 | 採点ロジック |
-|---|---|
-| 目標の具体性 | ゴールに数値が含まれているか |
-| 30日間のタスク密度 | 休息日が4日以下なら満点。超えるごとに減点 |
-| 教材マッピングの網羅性 | 登録した教材の章・項目のうち、日程に割り当て済みの割合 |
-| 目標と学習時間の整合性 | AIがゴール・対象者・学習強度・進行速度の整合性を判定(LLM呼び出しに失敗した場合は満点扱い) |
-| カスタム質問の設定 | Day1診断のカスタム質問が1件以上設定されているか |
-
-合計70点以上で「publish」(このまま公開を推奨)、それ未満は「review」(改善を推奨)と判定されるが、いずれの場合もクリエイターは「このまま公開する」を選んで申請できる。
-
-### 公開申請
-
-- `POST /courses/{id}/submit-for-review` で `draft` → `review` に変更
-- 申請可能な条件: コースが `draft` 状態であること、かつレッスンまたは30日分のコンテンツが1件以上存在すること、かつクリエイター申請が承認(active)済みであること
-- 申請後はコースステータスが「運営確認中」になり、クリエイター側では編集不可（カレンダー画面では承認待ちの案内のみ表示）
-
----
-
-## 10. Step 9: 運営確認 → 公開、および学習者個人化(Layer2)
-
-### 運営確認・承認フロー
-
-- 運営が管理画面から承認または差し戻しを行う(`/admin/courses/{id}/approve` 等、別ドキュメント参照)
-- 承認後はコースステータスが `published` になり、マーケットプレイスに掲載される
-
-### 学習者によるDay1診断とLayer2個人化生成
-
-学習者がコースに申し込み、Day1診断（教材ごとの進捗入力＋クリエイターが設定したカスタム質問への回答）を完了すると、Layer1骨格を学習者専用にアレンジするLayer2生成が走る。
-
-- 入力: クリエイターが設定したカスタム質問への回答(`custom_qa`)、人格プロファイル、Layer1の30日骨格(`course_days`)、教材ごとの残りタスク量(`textbook_progress`)
-- 調整ルール(`personalize_prompts.py`):
-  - 回答内に学習時間や弱点分野の言及があれば優先反映(言及がなければLayer1の標準時間を使う)
-  - 苦手・弱点分野のタスク配分を増やし、得意・既習分野は減らす
-  - 増減は1タスクあたり最大15分まで
-  - 休息日は `adjusted_tasks` を空配列にする
-  - 教材ごとの残りタスク量が多い教材を優先的に増やし、既に進んだ範囲を重複して課さない
-- 生成結果は `learner_course_days` に保存され、`adjusted_tasks` と調整理由(`personalize_reason`)を持つ
-- 生成に失敗した場合はLayer1の `task_types` をそのままコピーして処理を継続し、学習者の体験を止めない
-
-### 日次学習ログと繰越タスク
-
-学習者が各日の学習完了を報告する際に、完了したタスク種別(`completed_task_types`)を指定できる。未完了のタスク種別があった場合、翌日の `learner_course_days.carryover_tasks` に繰り越される(`day_number` が30未満の場合のみ)。
-
----
-
-## 11. データモデル概要
+### Course（courses テーブル）
 
 ```
-creator_personality_profiles
-  - id
-  - creator_id
-  - interview_answers (JSON: 質問と回答のペア)
-  - profile (JSON: 人格プロファイル構造体)
-  - created_at
-
 courses
-  - id
-  - creator_id（characterを介して紐づく）
+  - id, character_id, title, description, thumbnail_url
+  - subject VARCHAR(100)          # フリーテキスト分野
+  - category VARCHAR(100)         # 任意サブカテゴリ
+  - status                        # draft / under_review / published / unpublished
+  - price, is_free
+  - tier_a_price, tier_b_price
   - personality_profile_id
-  - title
-  - goal
-  - target_learner
-  - intensity (1日の学習時間目安)
-  - study_materials (Step4で確定した教材の要約テキスト)
-  - pace (進行速度)
-  - price / is_free / tier_a_price / tier_b_price
-  - status (draft / review / published / unpublished)
-  - days_generation_status (idle / generating / completed / failed)
-  - days_generation_error
-  - created_at
+  - curriculum_purpose TEXT
+  - curriculum_target_audience TEXT
+  - curriculum_topics TEXT
+  - curriculum_duration VARCHAR(100)
+  - curriculum_style TEXT
+  - curriculum_concerns TEXT
+  - curriculum_existing_videos TEXT
+  - completion_video_url          # 全カード完了時に再生
+  - is_suspended, suspension_reason
+  - created_at, updated_at
+```
 
-textbooks（プリセット教材マスタ。運営が管理）
-  - id
-  - name
-  - publisher
-  - type (textbook / vocabulary)
-  - target
-  - toc (JSON: 目次データ)
-  - is_preset
+### CourseChapter（course_chapters テーブル）
 
-course_textbooks（コースに紐づく教材。プリセット選択 or 手入力）
-  - id
-  - course_id
-  - textbook_id (NULLなら手入力教材)
-  - custom_name / custom_toc (手入力の場合)
-  - type (textbook / vocabulary)
-  - daily_words / review_words (単語帳の場合)
-  - target_laps (コース完了条件として求める周回数)
+```
+course_chapters
+  - id, course_id
+  - order                         # 表示順
+  - title, goal TEXT
+  - assessment_criteria JSON      # 達成判定基準（任意）
+  - created_at, updated_at
+```
 
-textbook_day_assignments（教材の各章・項目を何日目にやるか）
-  - id
-  - course_textbook_id
-  - toc_item
-  - day_number (1〜30。NULLは「やらない」)
+### ChapterCard（chapter_cards テーブル）
 
-course_days（Layer1: 全学習者共通の骨格）
-  - id
-  - course_id
-  - day_number (1〜30)
-  - week_number (1〜4)
-  - theme
-  - task_types (JSON: [{type, label, base_minutes}])
-  - is_rest_day
-  - is_edited_by_creator
-  - created_at / updated_at
-
-learner_course_days（Layer2: 学習者ごとの個人化タスク配分）
-  - id
-  - learner_profile_id
-  - day_number
-  - adjusted_tasks (JSON: [{type, minutes}])
-  - personalize_reason
-  - carryover_tasks (JSON: 前日からの繰越タスク)
-
-course_diagnosis_questions（Day1診断のカスタム質問）
-  - id
-  - course_id
-  - question_text
-  - answer_type (text / number / single / multi)
-  - options (JSON)
-  - is_required
+```
+chapter_cards
+  - id, chapter_id
   - order
+  - card_type                     # video / build_task / quiz / message
+  - title, body TEXT
+  - youtube_url VARCHAR(500)
+  - is_preview                    # 無料プレビュー公開
+  - quiz_options JSON             # [{text: str, is_correct: bool}]（quiz種別のみ）
+  - youtube_available, youtube_checked_at
+  - created_at, updated_at
+```
 
-course_materials（参考資料。コース骨格には組み込まない）
-  - id
-  - course_id
-  - type (pdf / url)
-  - title
-  - file_url
+### CardProgress（card_progress テーブル）
+
+```
+card_progress
+  - id, user_id, card_id
+  - is_completed, completed_at
   - created_at
-
-day_logs（学習者の日次完了ログ）
-  - user_id / course_id / day_number
-  - is_completed / completed_at / memo
-  - completed_task_types
 ```
 
 ---
 
-## 12. 未決定事項(次フェーズで定義)
+## 11. 削除された機能（v1.2 → v2.0 変更点）
 
-| 項目 | 内容 |
+以下は v1.2（30日カレンダー方式）で存在していたが v2.0 では廃止・非使用になった。
+
+| 廃止要素 | 理由 |
 |---|---|
-| 日次Push通知の送信タイミング | 朝何時・夜何時に送るか。学習者が設定できるか |
-| 週次・月次レビューのAI生成ロジック | 学習履歴データをどう分析しフィードバックを生成するか |
-| クリエイターへの売上振込フロー | Stripe Connectの詳細 |
-| AI教材プラン相談の質問上限超過時の挙動 | 3問の確認質問で認識が合わない場合のフォールバック導線 |
+| `course_days` テーブル（Layer1 30日骨格生成） | 章/カード方式に変更 |
+| `learner_course_days`（Layer2 個人化） | 廃止 |
+| `POST /courses/{id}/generate-days`（AI骨格生成） | 廃止 |
+| カレンダーUI（`/creator/courses/[id]/calendar`） | 廃止 |
+| `goal / target_learner / intensity / study_materials / pace` カラム | 廃止（curriculum_* に置換） |
+| 30日コース Layer1/2/3 3層生成アーキテクチャ | 廃止（章/カード手動作成に置換） |
+| 教材設定（`/creator/courses/[id]/textbooks`） | 画面は残存するが主フローから外れた |
+| 品質チェック（`GET /courses/{id}/quality-check`）| 廃止 |
+
+> ※ `course_days`・`learner_course_days` テーブルはDBに残存するが、v2.0では使用されない。
