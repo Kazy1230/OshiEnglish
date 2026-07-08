@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -17,6 +17,7 @@ class ChapterCard(Base):
     body = Column(Text, nullable=True)        # message/assignment/testの本文
     youtube_url = Column(String(500), nullable=True)
     is_preview = Column(Boolean, nullable=False, default=False)
+    quiz_options = Column(JSON, nullable=True)  # [{text: str, is_correct: bool}] quiz種別用
     # YouTube oEmbed による可用性チェック結果
     youtube_available = Column(Boolean, nullable=True)
     youtube_checked_at = Column(DateTime(timezone=True), nullable=True)

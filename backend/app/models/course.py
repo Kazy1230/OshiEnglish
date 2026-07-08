@@ -21,9 +21,13 @@ class Course(Base):
     # --- カリキュラム（v2.0: 章/カード構造に移行） ---
     personality_profile_id = Column(Integer, ForeignKey("personality_profiles.id"), nullable=True, index=True)
     # カリキュラム作成時の入力（外部AIとの壁打ち用プロンプト生成に使用）
-    curriculum_target_audience = Column(Text, nullable=True)
-    curriculum_topics = Column(Text, nullable=True)
-    curriculum_style = Column(Text, nullable=True)
+    curriculum_purpose = Column(Text, nullable=True)          # 講座の目的
+    curriculum_target_audience = Column(Text, nullable=True)  # 対象者
+    curriculum_topics = Column(Text, nullable=True)           # 扱いたいトピック
+    curriculum_duration = Column(String(100), nullable=True)  # 期間感の目安
+    curriculum_style = Column(Text, nullable=True)            # 講師スタイル
+    curriculum_concerns = Column(Text, nullable=True)         # 迷っている点
+    curriculum_existing_videos = Column(Text, nullable=True)  # 持っている動画リスト
     # 卒業動画URL（全章完了時に再生）
     completion_video_url = Column(String(500), nullable=True)
     # Tier A(AIのみ)/ Tier B(AI+クリエイター添削)の月額（円）。両方NULLの場合は買い切り（price/is_free）コースとして扱う

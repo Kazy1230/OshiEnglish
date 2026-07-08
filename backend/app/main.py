@@ -239,6 +239,14 @@ _ensure_column("interview_sessions", "subject", "VARCHAR(100) NULL")
 _ensure_nullable("interview_sessions", "subject", "VARCHAR(100) NULL")
 _ensure_nullable("creator_contents", "subject", "VARCHAR(100) NULL DEFAULT ''")
 
+# --- コース作成フロー v2（外部AI壁打ち用フィールド追加）---
+_ensure_column("courses", "curriculum_purpose",         "TEXT NULL")
+_ensure_column("courses", "curriculum_duration",        "VARCHAR(100) NULL")
+_ensure_column("courses", "curriculum_concerns",        "TEXT NULL")
+_ensure_column("courses", "curriculum_existing_videos", "TEXT NULL")
+# --- チャプターカード: quiz 種別の選択肢 ---
+_ensure_column("chapter_cards", "quiz_options", "JSON NULL")
+
 
 def _migrate_legacy_characters_to_creator():
     from app.core.creator_migration import migrate_legacy_characters_to_creator
