@@ -5,6 +5,7 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
+import { CreatorBreadcrumb } from "@/components/CreatorBreadcrumb";
 import { RevenuePanel } from "@/components/RevenuePanel";
 import { AnalyticsPanel } from "@/components/AnalyticsPanel";
 import { InboxPanel } from "@/components/InboxPanel";
@@ -111,6 +112,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+
+      <CreatorBreadcrumb />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 24 }}>
 

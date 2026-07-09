@@ -79,7 +79,7 @@ export function AppHeader({
           <LogoutButton variant="onColor" />
         </div>
       </header>
-      {role === "creator" && <CreatorBreadcrumb />}
+      {role === "creator" && pathname !== "/dashboard" && <CreatorBreadcrumb />}
     </>
   );
 }

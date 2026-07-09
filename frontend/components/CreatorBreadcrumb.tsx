@@ -29,10 +29,14 @@ const ROUTES: { pattern: RegExp; trail: (m: RegExpMatchArray) => Crumb[] }[] = [
   { pattern: /^\/dashboard\/characters\/\d+$/, trail: () => [{ label: "プロフィール画面" }] },
 ];
 
-/** クリエイター向け画面のパンくずリスト。/dashboard自体には表示しない。 */
+/** クリエイター向け画面のパンくずリスト。/dashboardではルートのみ(リンク無し)を表示する。 */
 export function CreatorBreadcrumb() {
   const pathname = usePathname();
-  if (!pathname || pathname === "/dashboard") return null;
+  if (!pathname) return null;
+
+  if (pathname === "/dashboard") {
+    return <BreadcrumbBar crumbs={[{ label: "ダッシュボード" }]} />;
+  }
 
   let trail: Crumb[] = [];
   for (const r of ROUTES) {
@@ -42,6 +46,10 @@ export function CreatorBreadcrumb() {
 
   const crumbs: Crumb[] = [{ label: "ダッシュボード", href: "/dashboard" }, ...trail];
 
+  return <BreadcrumbBar crumbs={crumbs} />;
+}
+
+function BreadcrumbBar({ crumbs }: { crumbs: Crumb[] }) {
   return (
     <nav style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-1.5 flex-wrap" style={{ fontSize: 12, paddingTop: 8, paddingBottom: 8 }}>
