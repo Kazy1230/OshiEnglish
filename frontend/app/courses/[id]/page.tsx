@@ -275,6 +275,62 @@ export default function CourseDetailPage() {
             )}
           </div>
 
+          {/* 購入導線：Tier A/B または単価 */}
+          {!unlocked && (
+            <div className="mt-3">
+              {(course.tier_a_price || course.tier_b_price) ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {course.tier_a_price && (
+                    <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--primary) 12%, transparent)", color: "var(--primary)" }}>Tier A</span>
+                        <span className="text-[11px]" style={{ color: "#6b7280" }}>メンター相談つき</span>
+                      </div>
+                      <p className="text-xl font-black" style={{ color: "#1a1a2e" }}>¥{course.tier_a_price.toLocaleString()}<span className="text-xs font-bold" style={{ color: "#6b7280" }}>/月</span></p>
+                      <ul className="text-[11px] flex flex-col gap-0.5" style={{ color: "#4b5563" }}>
+                        <li>✓ 30日パーソナライズコース</li>
+                        <li>✓ メンターとのチャット（無制限）</li>
+                      </ul>
+                      <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="text-sm font-bold py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--primary)", color: "white" }}>
+                        {purchasing ? "準備中…" : "Tier Aで始める"}
+                      </button>
+                    </div>
+                  )}
+                  {course.tier_b_price && (
+                    <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", border: "2px solid var(--accent)" }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>Tier B</span>
+                        <span className="text-[11px] font-bold" style={{ color: "var(--accent)" }}>おすすめ</span>
+                      </div>
+                      <p className="text-xl font-black" style={{ color: "#1a1a2e" }}>¥{course.tier_b_price.toLocaleString()}<span className="text-xs font-bold" style={{ color: "#6b7280" }}>/月</span></p>
+                      <ul className="text-[11px] flex flex-col gap-0.5" style={{ color: "#4b5563" }}>
+                        <li>✓ 30日パーソナライズコース</li>
+                        <li>✓ メンターとのチャット（無制限）</li>
+                        <li>✓ <strong style={{ color: "var(--accent)" }}>クリエイター直接添削（1日1回）</strong></li>
+                      </ul>
+                      <button onClick={() => handleSubscribe("B")} disabled={purchasing} className="text-sm font-bold py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--accent)", color: "white" }}>
+                        {purchasing ? "準備中…" : "Tier Bで始める"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}>
+                  <p className="text-xl font-black" style={{ color: "#1a1a2e" }}>
+                    {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
+                  </p>
+                  {course.is_free ? (
+                    <span className="text-sm" style={{ color: "#6b7280" }}>無料で受講できます</span>
+                  ) : (
+                    <button onClick={handlePurchase} disabled={purchasing} className="text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--primary)", color: "white" }}>
+                      {purchasing ? "準備中…" : "購入して始める"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 購入済みバッジ */}
           {unlocked && (
             <div className="flex items-center gap-3 mt-2 flex-wrap">
@@ -316,60 +372,6 @@ export default function CourseDetailPage() {
           <>
             {course.description && (
               <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>{course.description}</p>
-            )}
-
-            {(course.tier_a_price || course.tier_b_price) ? (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm font-bold" style={{ color: "var(--muted)" }}>プランを選んで始める</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {course.tier_a_price && (
-                    <div className="card flex flex-col gap-3 p-5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--primary) 10%, transparent)", color: "var(--primary)" }}>Tier A</span>
-                        <span className="text-xs" style={{ color: "var(--muted)" }}>メンター相談つき</span>
-                      </div>
-                      <p className="text-2xl font-black" style={{ color: "var(--primary)" }}>¥{course.tier_a_price.toLocaleString()}<span className="text-sm font-bold text-muted">/月</span></p>
-                      <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--muted)" }}>
-                        <li>✓ 30日パーソナライズコース</li>
-                        <li>✓ メンターとのチャット（無制限）</li>
-                      </ul>
-                      <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="btn-primary w-full disabled:opacity-50">
-                        {purchasing ? "準備中…" : "Tier Aで始める"}
-                      </button>
-                    </div>
-                  )}
-                  {course.tier_b_price && (
-                    <div className="card flex flex-col gap-3 p-5" style={{ border: "2px solid var(--accent)" }}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>Tier B</span>
-                        <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>おすすめ</span>
-                      </div>
-                      <p className="text-2xl font-black" style={{ color: "var(--accent)" }}>¥{course.tier_b_price.toLocaleString()}<span className="text-sm font-bold" style={{ color: "var(--muted)" }}>/月</span></p>
-                      <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--muted)" }}>
-                        <li>✓ 30日パーソナライズコース</li>
-                        <li>✓ メンターとのチャット（無制限）</li>
-                        <li>✓ <strong style={{ color: "var(--accent)" }}>クリエイター直接添削（1日1回）</strong></li>
-                      </ul>
-                      <button onClick={() => handleSubscribe("B")} disabled={purchasing} className="btn-primary w-full disabled:opacity-50" style={{ background: "var(--accent)" }}>
-                        {purchasing ? "準備中…" : "Tier Bで始める"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="card p-5 flex items-center justify-between gap-4">
-                <p className="text-2xl font-black" style={{ color: "var(--primary)" }}>
-                  {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
-                </p>
-                {course.is_free ? (
-                  <span className="text-sm" style={{ color: "var(--muted)" }}>無料で受講できます</span>
-                ) : (
-                  <button onClick={handlePurchase} disabled={purchasing} className="btn-primary disabled:opacity-50">
-                    {purchasing ? "準備中…" : "購入して始める"}
-                  </button>
-                )}
-              </div>
             )}
 
             {course.lessons.length > 0 && (
