@@ -74,6 +74,7 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
     personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
     if not personality or not personality.profile:
         return
+    tone_profile = course.character.tone_profile if course.character else None
 
     learner_day = db.query(LearnerCourseDay).filter(
         LearnerCourseDay.learner_profile_id == learner_profile.id, LearnerCourseDay.day_number == day_number,
@@ -89,7 +90,7 @@ def _send_slot_notification(db: Session, setting: NotificationSetting, learner_p
 
     try:
         message = generate_text(
-            prompts.build_today_message_system(personality.profile, slot),
+            prompts.build_today_message_system(personality.profile, slot, tone_profile),
             prompts.build_today_message_user(day_number, today_tasks, [s.summary for s in summaries]),
             max_tokens=300,
             model=app_settings.DEEPSEEK_MODEL_LITE,
@@ -186,11 +187,14 @@ def check_inactive_reminders():
             if not user:
                 continue
 
-            # キャラクターのtone_profileを取得（なければpersonality_profileにフォールバック）
+            # キャラクターのtone_profileと人格プロファイル（指導哲学）を両方取得し、
+            # どちらの生成パスでも人格が薄くならないようにする
             character = db.query(Character).filter(Character.creator_id == course.character.creator_id).first() if course.character else None
             tone_profile = character.tone_profile if character and character.tone_profile else None
             character_name = character.name if character else None
             character_image = character.image_url if character else None
+            personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+            personality_profile = personality.profile if personality and personality.profile else None
 
             if tone_profile and character_name:
                 # 最後の日次サマリーを取得して「続きの話」感を出す
@@ -201,7 +205,7 @@ def check_inactive_reminders():
 
                 try:
                     message = generate_text(
-                        prompts.build_reengagement_message_system(tone_profile, character_name),
+                        prompts.build_reengagement_message_system(tone_profile, character_name, personality_profile),
                         prompts.build_reengagement_message_user(last_summary, days_inactive),
                         max_tokens=150,
                         model=app_settings.DEEPSEEK_MODEL_LITE,
@@ -211,13 +215,12 @@ def check_inactive_reminders():
                     continue
             else:
                 # tone_profileがない場合はpersonality_profileでフォールバック
-                personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
-                if not personality or not personality.profile:
+                if not personality_profile:
                     continue
                 tier = min(3, days_inactive)
                 try:
                     message = generate_text(
-                        prompts.build_reminder_message_system(personality.profile, tier),
+                        prompts.build_reminder_message_system(personality_profile, tier, tone_profile),
                         prompts.build_reminder_message_user(days_inactive),
                         max_tokens=200,
                         model=app_settings.DEEPSEEK_MODEL_LITE,

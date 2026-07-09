@@ -444,10 +444,11 @@ def get_today_message(course_id: int, type: str = "morning", current_user=Depend
         raise HTTPException(status_code=400, detail="type は 'morning' または 'evening' を指定してください")
     course = _get_accessible_course(db, course_id, current_user)
     personality = _get_personality_profile(db, course) or {}
+    tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
     try:
         message = generate_text(
-            prompts.build_today_message_system(personality, type),
+            prompts.build_today_message_system(personality, type, tone_profile),
             prompts.build_today_message_user(day_number, today_tasks, recent_summaries),
             max_tokens=300,
             model=settings.DEEPSEEK_MODEL_LITE,

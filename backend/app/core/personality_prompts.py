@@ -177,12 +177,52 @@ def build_profile_generation_messages(qa_history: list[dict], base_type: str | N
     return [{"role": "user", "content": transcript}]
 
 
+def render_personality_profile_prose(profile: dict | None) -> str:
+    """人格プロファイル（communication/coaching_style/learning_philosophy/thinking_style）を
+    AIへの指示文の散文に変換する。JSONのままkey: valueで渡すとAIの口調が説明口調・機械的になり
+    やすいため、「〜にしてください」という自然な日本語の指示文にする。"""
+    if not isinstance(profile, dict) or not profile:
+        return ""
+    comm = profile.get("communication") or {}
+    coaching = profile.get("coaching_style") or {}
+    philosophy = profile.get("learning_philosophy") or {}
+    thinking = profile.get("thinking_style") or {}
+
+    lines = []
+    if comm.get("first_person"):
+        lines.append(f"一人称は「{comm['first_person']}」にしてください。")
+    if comm.get("tone"):
+        lines.append(f"口調は{comm['tone']}にしてください。")
+    if comm.get("sentence_ending"):
+        lines.append(f"語尾は{comm['sentence_ending']}にしてください。")
+    if comm.get("catchphrase"):
+        lines.append(f"「{comm['catchphrase']}」という口癖・決め台詞をよく使ってください。")
+    if coaching.get("strictness"):
+        lines.append(f"指導の厳しさについては、{coaching['strictness']}という姿勢で接してください。")
+    if coaching.get("encouragement"):
+        lines.append(f"励ますときは、{coaching['encouragement']}という方法にしてください。")
+    if coaching.get("feedback_method"):
+        lines.append(f"フィードバックの仕方は、{coaching['feedback_method']}にしてください。")
+    if philosophy.get("core_value"):
+        lines.append(f"最も大事にしている考え方は「{philosophy['core_value']}」です。この価値観に基づいて話してください。")
+    if philosophy.get("priority"):
+        lines.append(f"優先順位のつけ方は、{philosophy['priority']}にしてください。")
+    if philosophy.get("judgment_criteria"):
+        lines.append(f"判断基準は、{philosophy['judgment_criteria']}にしてください。")
+    if thinking.get("analogy_tendency"):
+        lines.append(f"例え話は、{thinking['analogy_tendency']}という傾向で使ってください。")
+    if thinking.get("explanation_method"):
+        lines.append(f"説明の仕方は、{thinking['explanation_method']}にしてください。")
+    if thinking.get("problem_solving"):
+        lines.append(f"問題解決のアプローチは、{thinking['problem_solving']}にしてください。")
+    return "\n".join(lines)
+
+
 def build_personality_system_prompt(profile: dict, subject: str | None = None) -> str:
     """人格プロファイルを、コース生成・チャット等の他機能で使うシステムプロンプト断片に変換する。"""
-    import json
     label = _subject_label(subject)
     return (
-        f"あなたは以下の人格プロファイルを持つ{label}コーチです。"
+        f"あなたは以下の人格を持つ{label}コーチです。"
         "この口調・指導スタイル・学習哲学に忠実に振る舞ってください。\n\n"
-        f"【人格プロファイル】\n{json.dumps(profile, ensure_ascii=False, indent=2)}"
+        f"{render_personality_profile_prose(profile)}"
     )

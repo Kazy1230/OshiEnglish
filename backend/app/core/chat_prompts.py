@@ -49,70 +49,39 @@ def build_classify_messages(question_body: str, existing_category_names: list[st
     ]
 
 
+def _build_personality_block(personality_profile: dict | None, tone_profile: dict | None) -> str:
+    """personality_profile（インタビューで抽出した指導哲学）とtone_profile（口調・口癖・セリフ例）を
+    両方使って人格説明の散文ブロックを組み立てる。JSONのkey: value形式で渡すとAIの口調が説明的・
+    機械的になりやすいため、必ず「〜にしてください」という指示文の散文にする。
+    どちらか一方が欠けていても、もう一方から人格を組み立てられるようにする。"""
+    from app.core.personality_prompts import render_personality_profile_prose
+    from app.core.character_voice import render_tone_profile
+
+    profile_prose = render_personality_profile_prose(personality_profile or {})
+    tone_prose = render_tone_profile(tone_profile or {})
+    combined = "\n".join(p for p in (profile_prose, tone_prose) if p)
+    return combined or "（人格設定なし）"
+
+
 def build_answer_system(personality_profile: dict, message_type: str, tone_profile: dict | None = None, subject: str = "english") -> list[dict]:
     """人格プロファイル部分（同じコースの全チャットで不変）とメッセージ種別ごとの回答スタイル（可変）を
     別々のcontent blockに分け、人格プロファイル側にcache_controlを付けてPrompt Cachingを有効化する
     （詳細設計書2.5節：システムプロンプトのキャッシュでAPIコストを削減）。
-    tone_profileはCharacterのtone_profile（first_person/speech_style/personality/catchphrase/ng_expressions）。
-    personality_profileが空でもtone_profileから人格を組み立てられるようにする。"""
+    personality_profile（指導哲学）とtone_profile（Characterの口調・口癖・セリフ例）を両方渡し、
+    どちらか一方が空でも人格を組み立てられるようにする。"""
     from app.core.subject_config import get_subject_config
     config = get_subject_config(subject)
     answer_style_by_type = config.answer_style_by_type
-    comm = personality_profile.get("communication", {})
-    coaching = personality_profile.get("coaching_style", {})
-    tp = tone_profile or {}
     style = answer_style_by_type.get(message_type, answer_style_by_type.get("content", ""))
 
-    # tone_profileから補完（personality_profileが空の場合のフォールバック）
-    first_person = comm.get("first_person") or tp.get("first_person", "")
-    tone_text = comm.get("tone") or tp.get("speech_style", "")
-    sentence_ending = comm.get("sentence_ending") or ""
-    strictness = coaching.get("strictness", "")
-    encouragement = coaching.get("encouragement", "")
-    personality_text = tp.get("personality", "")
-    catchphrase = tp.get("catchphrase", "")
-    ng_expressions = tp.get("ng_expressions") or []
-
-    background = tp.get("background", "")
-    reaction_patterns = tp.get("reaction_patterns", "")
-    speaking_samples = tp.get("speaking_samples") or []
-
-    personality_lines = []
-    if first_person:
-        personality_lines.append(f"- 一人称: 「{first_person}」")
-    if tone_text:
-        personality_lines.append(f"- 口調・話し方: {tone_text}")
-    if sentence_ending:
-        personality_lines.append(f"- 文末の癖: {sentence_ending}")
-    if personality_text:
-        personality_lines.append(f"- 性格・特徴: {personality_text}")
-    if catchphrase:
-        personality_lines.append(f"- 口癖: {catchphrase}")
-    if background:
-        personality_lines.append(f"- 背景設定: {background}")
-    if reaction_patterns:
-        personality_lines.append(f"- 感情リアクション: {reaction_patterns}")
-    if strictness:
-        personality_lines.append(f"- 指導の厳しさ: {strictness}")
-    if encouragement:
-        personality_lines.append(f"- 励まし方: {encouragement}")
-    if ng_expressions:
-        personality_lines.append(f"- 使ってはいけない表現: {', '.join(ng_expressions)}")
-
-    personality_block = "\n".join(personality_lines) if personality_lines else "（人格設定なし）"
-
-    samples_block = ""
-    if speaking_samples:
-        samples_list = "\n".join(f'  「{s}」' for s in speaking_samples if s)
-        samples_block = f"\n【このキャラクターの実際のセリフ例（この口調・雰囲気で返答すること）】\n{samples_list}"
+    personality_block = _build_personality_block(personality_profile, tone_profile)
 
     preamble = f"""あなたは学習コーチです。以下の人格でチャットしています。
 学習者と友人のように自然に会話し、絶対に一貫した人格・口調を保ってください。
 返答は短くテンポよく。前後の文脈を踏まえて会話を続けてください。
 
 【人格設定】
-{personality_block}
-{samples_block}"""
+{personality_block}"""
     suffix = f"""【今回の回答スタイル】
 {style}
 
@@ -154,20 +123,18 @@ def build_answer_messages(
     return messages
 
 
-def build_today_message_system(personality_profile: dict, message_kind: str) -> str:
-    """Layer3: 朝/夜の声かけメッセージ生成用システムプロンプト。message_kindは'morning'/'evening'。"""
-    comm = personality_profile.get("communication", {})
-    coaching = personality_profile.get("coaching_style", {})
+def build_today_message_system(personality_profile: dict, message_kind: str, tone_profile: dict | None = None) -> str:
+    """Layer3: 朝/夜の声かけメッセージ生成用システムプロンプト。message_kindは'morning'/'evening'。
+    personality_profile（指導哲学）とtone_profile（口癖・セリフ例）を両方渡し、口調がぶれないようにする。"""
     kind_label = "朝の声かけ" if message_kind == "morning" else "夜のリマインド"
+    personality_block = _build_personality_block(personality_profile, tone_profile)
     return f"""あなたは学習コーチとして、以下の人格で学習者に{kind_label}メッセージを送ってください。
 
 【人格設定】
-- 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）
-- 指導の厳しさ: {coaching.get('strictness', '')}
-- 励まし方: {coaching.get('encouragement', '')}
+{personality_block}
 
 直近の学習状況を踏まえて、今日の{kind_label}メッセージを生成してください。
-200文字以内。人格プロファイルの口調を必ず守ること。説明文や前置きは不要です。"""
+200文字以内。上記の人格の口調を必ず守ること。説明文や前置きは不要です。"""
 
 
 def build_today_message_user(day_number: int, today_tasks: list[dict], recent_summaries: list[str]) -> list[dict]:
@@ -180,42 +147,36 @@ def build_today_message_user(day_number: int, today_tasks: list[dict], recent_su
     return [{"role": "user", "content": content}]
 
 
-def build_reminder_message_system(personality_profile: dict, tier: int) -> str:
-    """改善提案書5節: 3段階リマインドメール。tierは未開封日数に応じた1/2/3のトーン段階。"""
-    comm = personality_profile.get("communication", {})
-    coaching = personality_profile.get("coaching_style", {})
+def build_reminder_message_system(personality_profile: dict, tier: int, tone_profile: dict | None = None) -> str:
+    """改善提案書5節: 3段階リマインドメール。tierは未開封日数に応じた1/2/3のトーン段階。
+    personality_profile（指導哲学）とtone_profile（口癖・セリフ例）を両方渡し、口調がぶれないようにする。"""
     tone_instruction = {
         1: "通常の声かけ。今日のタスクを確認しようと軽く促す。",
         2: "促進トーン。昨日できなかった分を一緒に取り戻そうと前向きに励ます。",
         3: "感情に寄り添うトーン。プレッシャーをかけず「少しだけでもいいから開いてみて」という温かい呼びかけにする。",
     }[tier]
+    personality_block = _build_personality_block(personality_profile, tone_profile)
     return f"""あなたは学習コーチとして、以下の人格で学習者にリマインドメッセージを送ってください。
 
 【人格設定】
-- 口調: {comm.get('tone', '')}（一人称「{comm.get('first_person', '')}」、文末「{comm.get('sentence_ending', '')}」）
-- 励まし方: {coaching.get('encouragement', '')}
+{personality_block}
 
 【今回のトーン】{tone_instruction}
-100文字以内。人格プロファイルの口調を必ず守ること。説明文や前置きは不要です。"""
+100文字以内。上記の人格の口調を必ず守ること。説明文や前置きは不要です。"""
 
 
 def build_reminder_message_user(days_inactive: int) -> list[dict]:
     return [{"role": "user", "content": f"学習者は{days_inactive}日間チャットを開いていません。リマインドメッセージを生成してください。"}]
 
 
-def build_reengagement_message_system(tone_profile: dict, character_name: str) -> str:
-    """好奇心ベースの呼び戻しメッセージ。罪悪感ではなく「続きが気になる」感覚を引き出す。"""
-    first_person = tone_profile.get("first_person", "私")
-    speech_style = tone_profile.get("speech_style", "")
-    personality = tone_profile.get("personality", "")
-    catchphrase = tone_profile.get("catchphrase", "")
+def build_reengagement_message_system(tone_profile: dict, character_name: str, personality_profile: dict | None = None) -> str:
+    """好奇心ベースの呼び戻しメッセージ。罪悪感ではなく「続きが気になる」感覚を引き出す。
+    personality_profile（指導哲学）とtone_profile（口癖・セリフ例）を両方渡し、口調がぶれないようにする。"""
+    personality_block = _build_personality_block(personality_profile, tone_profile)
     return f"""あなたは「{character_name}」というキャラクターです。学習者に"続きが気になる"という好奇心ベースのメッセージを送ってください。
 
 【キャラクター設定】
-- 一人称: {first_person}
-- 話し方: {speech_style}
-- 性格: {personality}
-- 口癖: {catchphrase}
+{personality_block}
 
 【重要なルール】
 - 「何日間やっていない」「サボった」などの罪悪感を煽る表現は絶対に使わない
