@@ -24,6 +24,45 @@ _PROSE_TEMPLATES = {
 
 _STRUCTURED_KEYS = {"reaction_examples", "intimacy_variations", "level_tones", "article_style", "article_sample", "speaking_samples"}
 
+# AIのJSON応答がプロンプトの指示（文字列を期待している）通りに返らず、ネストしたdict/listで
+# 返ってくることがあるフィールド。フロントのcontrolled inputにそのまま渡すと「[object Object]」
+# と表示されるため、保存前・表示前に必ずこの関数を通して文字列へ矯正する。
+_LIST_FIELDS = {"ng_expressions", "ng_words", "speaking_samples", "keywords", "sample_lines", "name_suggestions"}
+
+
+def _flatten_to_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "、".join(_flatten_to_text(v) for v in value if v not in (None, ""))
+    if isinstance(value, dict):
+        return "。".join(_flatten_to_text(v) for v in value.values() if v not in (None, "", []))
+    return str(value)
+
+
+def sanitize_tone_profile_fields(data: dict | None) -> dict:
+    """tone_profile系のAI応答・保存データを、表示・保存に安全な型に矯正する。
+    speaking_samples/ng_expressions等の一覧フィールドは文字列のリストに、
+    それ以外（reaction_patterns/background等）はネストしていても1本の文字列に変換する。"""
+    if not isinstance(data, dict):
+        return {}
+    sanitized: dict = {}
+    for key, value in data.items():
+        if key in _LIST_FIELDS:
+            if isinstance(value, list):
+                sanitized[key] = [_flatten_to_text(v) for v in value if v not in (None, "")]
+            elif value:
+                sanitized[key] = [_flatten_to_text(value)]
+            else:
+                sanitized[key] = []
+        elif isinstance(value, (dict, list)):
+            sanitized[key] = _flatten_to_text(value)
+        else:
+            sanitized[key] = value
+    return sanitized
+
 
 def render_tone_profile(tone_profile: dict | None) -> str:
     if not isinstance(tone_profile, dict) or not tone_profile:
@@ -33,18 +72,18 @@ def render_tone_profile(tone_profile: dict | None) -> str:
         val = tone_profile.get(key)
         if val in (None, "", []):
             continue
-        text = "、".join(val) if isinstance(val, list) else str(val)
+        text = _flatten_to_text(val)
         if text.strip():
             lines.append(template(text))
     for key, val in tone_profile.items():
         if key in _PROSE_TEMPLATES or key in _STRUCTURED_KEYS or val in (None, "", []):
             continue
-        text = "、".join(val) if isinstance(val, list) else str(val)
+        text = _flatten_to_text(val)
         if text.strip():
             lines.append(f"{key}は次の通りにしてください: {text}")
     speaking_samples = tone_profile.get("speaking_samples")
     if isinstance(speaking_samples, list) and speaking_samples:
-        samples_text = "\n".join(f"「{s}」" for s in speaking_samples if s)
+        samples_text = "\n".join(f"「{_flatten_to_text(s)}」" for s in speaking_samples if s)
         lines.append(f"実際にこのキャラクターが話すセリフの例は次の通りです。この口調・雰囲気をそのまま再現してください:\n{samples_text}")
     return "\n".join(lines)
 

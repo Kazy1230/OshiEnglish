@@ -107,12 +107,16 @@ def generate_tone_profile(
 ):
     if not data.name.strip():
         raise HTTPException(status_code=400, detail="キャラクター名を入力してください")
+    from app.core.character_voice import sanitize_tone_profile_fields
+
     messages = prompts.build_tone_profile_messages(data.name, data.description, data.tone_profile, subject=data.subject)
     last_error: LLMError | None = None
     for _ in range(2):
         try:
             text = generate_text(messages[0]["content"], messages[1:], max_tokens=800, json_mode=True)
-            return extract_json(text)
+            # AIが文字列を期待するフィールド(reaction_patterns等)でdict/listを返すことがあるため、
+            # フロントのcontrolled inputに渡す前に文字列へ矯正する（[object Object]表示バグの対策）
+            return sanitize_tone_profile_fields(extract_json(text))
         except LLMError as e:
             last_error = e
     raise HTTPException(status_code=500, detail=str(last_error))

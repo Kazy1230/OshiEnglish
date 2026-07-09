@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.security import get_current_creator_or_admin
 from app.core.llm import generate_text, extract_json, LLMError
 from app.core import personality_prompts as prompts
-from app.core.character_voice import customer_display_name
+from app.core.character_voice import customer_display_name, sanitize_tone_profile_fields
 from app.models.creator_profile import CreatorProfile
 from app.models.interview_session import InterviewSession
 from app.models.personality_profile import PersonalityProfile
@@ -190,8 +190,10 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
         character = Character(name=customer_display_name(current_user), creator_id=profile.id)
         db.add(character)
     # インタビューで得たtone_profileをキャラクターに保存（チャットでの人格再現に使用）
+    # AIの応答が文字列を期待するフィールド（reaction_patterns等）でdict/listを返すことがあるため、
+    # 保存前に文字列へ矯正する（[object Object]表示バグの対策）
     if tone_profile_data:
-        character.tone_profile = tone_profile_data
+        character.tone_profile = sanitize_tone_profile_fields(tone_profile_data)
 
     db.commit()
     db.refresh(personality)

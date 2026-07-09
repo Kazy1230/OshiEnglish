@@ -8,6 +8,7 @@ from app.core.security import get_current_user, get_current_creator_or_admin
 from app.core.uploads import validate_image_content
 from app.core.llm import generate_text, LLMError
 from app.core import studio_prompts as prompts
+from app.core.character_voice import sanitize_tone_profile_fields
 from app.models.character import Character
 from app.models.customer import Customer
 from app.models.creator_profile import CreatorProfile
@@ -57,7 +58,12 @@ def list_characters(current_user=Depends(get_current_creator_or_admin), db: Sess
 
 @router.get("/{character_id}")
 def get_character(character_id: int, current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
-    return _get_owned_character(db, character_id, current_user)
+    char = _get_owned_character(db, character_id, current_user)
+    if char.tone_profile:
+        # 過去にAIの応答をそのまま保存し、reaction_patterns等がdict/listのまま入っている
+        # 既存データがあり得るため、表示前に文字列へ矯正する（[object Object]表示バグの対策）
+        char.tone_profile = sanitize_tone_profile_fields(char.tone_profile)
+    return char
 
 @router.get("/theme/{character_id}")
 def get_character_theme(
@@ -110,6 +116,9 @@ def update_character(character_id: int, data: CharacterUpdate, current_user=Depe
     payload = data.model_dump(exclude_none=True)
     if current_user.role != "admin":
         payload.pop("creator_id", None)  # クリエイターは所有権の付け替え不可
+    if "tone_profile" in payload:
+        # 保存前に文字列であるべきフィールドを矯正する（[object Object]表示バグの対策）
+        payload["tone_profile"] = sanitize_tone_profile_fields(payload["tone_profile"])
     for key, val in payload.items():
         setattr(char, key, val)
     db.commit()
