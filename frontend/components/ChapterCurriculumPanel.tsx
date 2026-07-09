@@ -60,22 +60,22 @@ const PACE_OPTIONS = [
 
 const CARD_TYPE_ICON: Record<string, string> = {
   video: "▶",
-  assignment: "✏",
-  test: "📝",
+  build_task: "✏",
+  quiz: "📝",
   message: "💬",
 };
 
 const CARD_TYPE_LABEL: Record<string, string> = {
   video: "動画",
-  assignment: "課題",
-  test: "テスト",
+  build_task: "課題",
+  quiz: "クイズ",
   message: "メッセージ",
 };
 
 const CARD_TYPE_COLOR: Record<string, string> = {
   video: "#3b82f6",
-  assignment: "#f59e0b",
-  test: "#8b5cf6",
+  build_task: "#f59e0b",
+  quiz: "#8b5cf6",
   message: "#10b981",
 };
 

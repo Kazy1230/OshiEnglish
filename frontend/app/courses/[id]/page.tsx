@@ -16,6 +16,8 @@ type Lesson = {
 type PreviewCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean };
 type PreviewChapter = { id: number; order: number; title: string; goal: string | null; cards: PreviewCard[] };
 const CARD_TYPE_LABEL: Record<string, string> = { video: "動画", build_task: "課題", quiz: "クイズ", message: "メッセージ" };
+const CARD_TYPE_ICON: Record<string, string> = { video: "▶", build_task: "✏", quiz: "📝", message: "💬" };
+const CARD_TYPE_COLOR: Record<string, string> = { video: "#3b82f6", build_task: "#f59e0b", quiz: "#8b5cf6", message: "#10b981" };
 
 type CourseDetail = {
   id: number; title: string; description?: string | null; thumbnail_url?: string | null;
@@ -393,44 +395,88 @@ export default function CourseDetailPage() {
             )}
 
             {course.chapters && course.chapters.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-baseline justify-between">
-                  <h2 className="font-bold text-lg" style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}>カリキュラム</h2>
-                  <span className="text-xs" style={{ color: "var(--muted)" }}>{course.chapters.length}章</span>
+              <div className="flex flex-col gap-4">
+                <div className="card overflow-hidden p-0">
+                  <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>Curriculum</p>
+                    <p className="text-2xl font-black mt-1" style={{ color: "white", fontFamily: "var(--font-display)" }}>
+                      {course.chapters.length}章・{course.chapters.reduce((s, ch) => s + ch.cards.length, 0)}カード
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-3">
                   {course.chapters.map(ch => (
-                    <div key={ch.id} className="card flex flex-col gap-3">
+                    <div key={ch.id} className="card flex flex-col gap-4">
                       <div className="flex items-start gap-3">
                         <span
                           className="flex items-center justify-center flex-shrink-0 font-black"
-                          style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--primary)", color: "white", fontSize: 13 }}
+                          style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--primary)", color: "white", fontSize: 14 }}
                         >
                           {ch.order}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{ch.title}</p>
+                          <h2 className="font-bold text-base" style={{ color: "var(--text)" }}>{ch.title}</h2>
                           {ch.goal && <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>🎯 {ch.goal}</p>}
                         </div>
                       </div>
                       {ch.cards.length > 0 && (
-                        <div className="flex flex-col gap-1.5">
-                          {ch.cards.map(c => (
-                            <div key={c.id} className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl" style={{ background: "var(--surface)" }}>
-                              <span
-                                className="flex items-center justify-center flex-shrink-0"
-                                style={{ width: 26, height: 26, borderRadius: "50%", background: c.is_preview ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "var(--border)", fontSize: 12 }}
-                              >
-                                {c.is_preview ? "🔓" : "🔒"}
-                              </span>
-                              <span className="flex-1 text-sm truncate" style={{ color: "var(--text)" }}>{c.title || CARD_TYPE_LABEL[c.card_type] || c.card_type}</span>
-                              {c.is_preview && <span className="pill flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>無料</span>}
-                            </div>
-                          ))}
+                        <div className="flex flex-col gap-2">
+                          {ch.cards.map(c => {
+                            const typeColor = CARD_TYPE_COLOR[c.card_type] ?? "var(--muted)";
+                            return (
+                              <div key={c.id} className="hover-lift flex items-center gap-3 px-3.5 py-3 rounded-xl transition-colors" style={{ background: "var(--card)", border: "1px solid var(--border)", opacity: c.is_preview ? 1 : 0.7 }}>
+                                <span
+                                  className="flex items-center justify-center flex-shrink-0"
+                                  style={{ width: 32, height: 32, borderRadius: "50%", background: `${typeColor}1a`, color: typeColor, fontSize: 14 }}
+                                >
+                                  {CARD_TYPE_ICON[c.card_type] ?? "●"}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate" style={{ color: "var(--text)" }}>{c.title || CARD_TYPE_LABEL[c.card_type] || c.card_type}</p>
+                                  <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>{CARD_TYPE_LABEL[c.card_type] ?? c.card_type}</p>
+                                </div>
+                                {c.is_preview ? (
+                                  <span className="pill flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>無料</span>
+                                ) : (
+                                  <span className="flex-shrink-0" style={{ color: "var(--muted)", fontSize: 16 }}>🔒</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {course.has_days && (
+              <div className="card flex flex-col gap-5 overflow-hidden p-0">
+                <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>Program</p>
+                  <p className="text-2xl font-black mt-1" style={{ color: "white", fontFamily: "var(--font-display)" }}>30日間の伴走プログラム</p>
+                  <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.85)" }}>毎日のタスクとメンターへのチャットで、無理なく続けられます</p>
+                </div>
+                <div className="px-5 sm:px-6 pb-5 flex flex-col gap-4">
+                  {Array.from({ length: 5 }).map((_, wi) => {
+                    const start = wi * 7 + 1;
+                    const cellCount = Math.min(7, 30 - wi * 7);
+                    return (
+                      <div key={wi}>
+                        <p className="text-[11px] font-bold mb-2" style={{ color: "var(--muted)" }}>第{wi + 1}週</p>
+                        <div className="grid grid-cols-7 gap-1.5">
+                          {Array.from({ length: cellCount }).map((_, di) => (
+                            <div key={di} className="aspect-square flex flex-col items-center justify-center gap-0.5" style={{ borderRadius: 12, background: "var(--card)", border: "1.5px solid var(--border)" }}>
+                              <span className="text-sm" style={{ color: "var(--border)" }}>🔒</span>
+                              <span className="text-[10px] font-bold" style={{ color: "var(--muted)" }}>{start + di}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="text-xs text-center" style={{ color: "var(--muted)" }}>購入するとDay1の診断からあなた専用のプランが始まります</p>
                 </div>
               </div>
             )}
