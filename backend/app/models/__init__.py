@@ -37,3 +37,4 @@ from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.creator_content import CreatorContent
 from app.models.content_like import ContentLike
 from app.models.marketing_strategy import MarketingStrategy
+from app.models.content_idea import ContentIdea

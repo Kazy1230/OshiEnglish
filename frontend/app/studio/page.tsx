@@ -7,27 +7,18 @@ import { api, API_BASE } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
 import { ContentsPoolPanel } from "@/components/ContentsPoolPanel";
+import { IdeaPoolPanel } from "@/components/IdeaPoolPanel";
+import { Format, FORMATS } from "@/lib/contentFormats";
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type Idea = { title: string; hook: string; why: string };
 type Angle = { label: string; hook: string; why: string };
-type Format = {
-  key: string; label: string; icon: string; mediaType: "text" | "video";
-  defaultVal: number; unit: string; minVal: number; maxVal: number; hint: string;
-};
 type SavedDraft = {
   id: number; theme: string; format: string | null; target_level: string | null;
   voiced_content: string | null; memo: string | null; updated_at: string | null;
 };
 
-const FORMATS: Format[] = [
-  { key: "x", label: "X（ツイート）", icon: "𝕏", mediaType: "text", defaultVal: 140, unit: "文字", minVal: 50, maxVal: 280, hint: "短くパンチのある一言が刺さる" },
-  { key: "threads", label: "Threads", icon: "ꝋ", mediaType: "text", defaultVal: 500, unit: "文字", minVal: 100, maxVal: 500, hint: "少し長めで深みのある投稿" },
-  { key: "instagram_post", label: "インスタ投稿", icon: "📸", mediaType: "text", defaultVal: 1000, unit: "文字", minVal: 300, maxVal: 2000, hint: "絵文字＋ハッシュタグで拡散" },
-  { key: "instagram_reel", label: "インスタReels", icon: "🎞", mediaType: "video", defaultVal: 60, unit: "秒", minVal: 15, maxVal: 90, hint: "冒頭3秒でフックが命" },
-  { key: "youtube_short", label: "YouTubeショート", icon: "⚡", mediaType: "video", defaultVal: 60, unit: "秒", minVal: 15, maxVal: 60, hint: "縦型・60秒以内のテンポ重視" },
-  { key: "youtube", label: "YouTube動画", icon: "▶", mediaType: "video", defaultVal: 480, unit: "秒", minVal: 120, maxVal: 1800, hint: "じっくり解説・信頼構築に最適" },
-];
+export type PendingIdeaRequest = { format: Format; paramVal: number; ideaText: string };
 
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -36,10 +27,15 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 type Step = "format" | "ideas" | "angles" | "generating" | "result";
-type Panel = "create" | "drafts" | "marketing" | "contents";
+type Panel = "create" | "drafts" | "marketing" | "contents" | "ideas";
 
 // ── コンテンツ作成パネル ─────────────────────────────────────────
-function CreatePanel({ character, onSave }: { character: { id: number; name: string } | null; onSave: () => void }) {
+function CreatePanel({ character, onSave, pendingRequest, onPendingRequestHandled }: {
+  character: { id: number; name: string } | null;
+  onSave: () => void;
+  pendingRequest?: PendingIdeaRequest | null;
+  onPendingRequestHandled?: () => void;
+}) {
   const [subject, setSubject] = useState("");
   const [step, setStep] = useState<Step>("format");
   const [format, setFormat] = useState<Format | null>(null);
@@ -63,6 +59,33 @@ function CreatePanel({ character, onSave }: { character: { id: number; name: str
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (result) resultRef.current?.scrollIntoView({ behavior: "smooth" }); }, [result]);
+
+  async function startFromIdea(f: Format, pv: number, ideaText: string) {
+    setFormat(f);
+    setParamVal(pv);
+    const idea: Idea = {
+      title: ideaText.length > 30 ? ideaText.slice(0, 30) + "…" : ideaText,
+      hook: ideaText,
+      why: "アイデアプールから",
+    };
+    setIdeas([]); setAngles([]); setSelectedAngle(null); setResult("");
+    setSelectedIdea(idea); setLoadingAngles(true); setStep("angles");
+    try {
+      const res = await api.studioAngles(idea.title, idea.hook, f.key, character!.id, subject || undefined);
+      setAngles(res.angles || []);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "切り口提案に失敗しました", "error");
+    } finally { setLoadingAngles(false); }
+  }
+
+  useEffect(() => {
+    if (!pendingRequest || !character) return;
+    // アイデアプールからの遷移信号(親コンポーネントからのprops経由)を受けて切り口取得まで一気に進める
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    startFromIdea(pendingRequest.format, pendingRequest.paramVal, pendingRequest.ideaText);
+    onPendingRequestHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRequest, character]);
 
   const progressSteps = [
     { key: "format", label: "フォーマット" },
@@ -532,6 +555,7 @@ export default function StudioPage() {
   const [panel, setPanel] = useState<Panel>("create");
   const [draftsRefreshKey, setDraftsRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingIdeaRequest, setPendingIdeaRequest] = useState<PendingIdeaRequest | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -550,6 +574,7 @@ export default function StudioPage() {
     { key: "drafts", icon: "📁", label: "コンテンツ案" },
     { key: "marketing", icon: "📊", label: "マーケティング戦略" },
     { key: "contents", icon: "🗂️", label: "コンテンツプール" },
+    { key: "ideas", icon: "💡", label: "アイデアプール" },
   ];
 
   return (
@@ -596,7 +621,12 @@ export default function StudioPage() {
         {/* メインコンテンツ */}
         <main style={{ flex: 1, minWidth: 0 }}>
           {panel === "create" && (
-            <CreatePanel character={character} onSave={() => setDraftsRefreshKey(k => k + 1)} />
+            <CreatePanel
+              character={character}
+              onSave={() => setDraftsRefreshKey(k => k + 1)}
+              pendingRequest={pendingIdeaRequest}
+              onPendingRequestHandled={() => setPendingIdeaRequest(null)}
+            />
           )}
           {panel === "drafts" && (
             <DraftsPanel refreshKey={draftsRefreshKey} />
@@ -606,6 +636,12 @@ export default function StudioPage() {
           )}
           {panel === "contents" && (
             <ContentsPoolPanel />
+          )}
+          {panel === "ideas" && (
+            <IdeaPoolPanel onSendToStudio={(format, paramVal, ideaText) => {
+              setPendingIdeaRequest({ format, paramVal, ideaText });
+              setPanel("create");
+            }} />
           )}
         </main>
       </div>

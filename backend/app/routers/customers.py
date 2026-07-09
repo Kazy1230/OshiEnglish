@@ -198,6 +198,7 @@ def _cascade_delete_creator_data(db: Session, customer: Customer) -> None:
     from app.models.creator_content import CreatorContent
     from app.models.favorite import Favorite as FavoriteModel
     from app.models.marketing_strategy import MarketingStrategy
+    from app.models.content_idea import ContentIdea
 
     profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == customer.id).first()
     if not profile:
@@ -219,6 +220,7 @@ def _cascade_delete_creator_data(db: Session, customer: Customer) -> None:
         db.query(Character).filter(Character.id == character.id).delete(synchronize_session=False)
 
     db.query(ContentDraft).filter(ContentDraft.creator_id == profile.id).delete(synchronize_session=False)
+    db.query(ContentIdea).filter(ContentIdea.creator_id == profile.id).delete(synchronize_session=False)
     db.query(CreatorContent).filter(CreatorContent.creator_id == profile.id).delete(synchronize_session=False)
     db.query(FavoriteModel).filter(FavoriteModel.creator_id == profile.id).delete(synchronize_session=False)
     db.query(MarketingStrategy).filter(MarketingStrategy.creator_id == profile.id).delete(synchronize_session=False)
