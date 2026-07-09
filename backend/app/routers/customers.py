@@ -31,6 +31,7 @@ from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
 from app.models.card_progress import CardProgress
+from app.models.course_review import CourseReview
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ def _cascade_delete_learner_data(db: Session, user_id: int) -> None:
     db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
     db.query(NotificationSetting).filter(NotificationSetting.user_id == user_id).delete(synchronize_session=False)
     db.query(CardProgress).filter(CardProgress.user_id == user_id).delete(synchronize_session=False)
+    db.query(CourseReview).filter(CourseReview.user_id == user_id).delete(synchronize_session=False)
     db.query(LessonProgress).filter(LessonProgress.user_id == user_id).delete(synchronize_session=False)
     db.query(DayLog).filter(DayLog.user_id == user_id).delete(synchronize_session=False)
     db.query(DailySummary).filter(DailySummary.user_id == user_id).delete(synchronize_session=False)
@@ -211,6 +213,9 @@ def _cascade_delete_creator_data(db: Session, customer: Customer) -> None:
         course_ids = [r[0] for r in db.query(Course.id).filter(Course.character_id == character.id).all()]
         for course_id in course_ids:
             delete_course_cascade(db, course_id, force=True)
+        # customers.character_id はNOT NULL制約付きFKではないが、
+        # このキャラクターを選択している学習者が残っているとキャラクター削除時にIntegrityErrorになるため先にNULL化する
+        db.query(Customer).filter(Customer.character_id == character.id).update({"character_id": None}, synchronize_session=False)
         db.query(Character).filter(Character.id == character.id).delete(synchronize_session=False)
 
     db.query(ContentDraft).filter(ContentDraft.creator_id == profile.id).delete(synchronize_session=False)

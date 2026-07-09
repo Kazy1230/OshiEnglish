@@ -38,6 +38,7 @@ from app.models.textbook import Textbook
 from app.models.course_chapter import CourseChapter
 from app.models.chapter_card import ChapterCard
 from app.models.card_progress import CardProgress
+from app.models.course_review import CourseReview
 
 router = APIRouter(prefix="/admin", tags=["管理者機能"])
 
@@ -222,6 +223,7 @@ def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> N
     db.query(NotificationSetting).filter(NotificationSetting.course_id == course_id).delete(synchronize_session=False)
     db.query(Purchase).filter(Purchase.course_id == course_id).delete(synchronize_session=False)
     db.query(CourseSubscription).filter(CourseSubscription.course_id == course_id).delete(synchronize_session=False)
+    db.query(CourseReview).filter(CourseReview.course_id == course_id).delete(synchronize_session=False)
 
     db.query(Course).filter(Course.id == course_id).delete(synchronize_session=False)
 
