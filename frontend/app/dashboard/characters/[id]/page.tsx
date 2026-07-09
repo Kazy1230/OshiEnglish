@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { useRoleGuard } from "@/lib/useRoleGuard";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type ToneProfile = {
@@ -21,6 +21,7 @@ type ToneProfile = {
 export default function EditCharacterPage() {
   const { loading } = useRoleGuard(["creator", "admin"]);
   const params = useParams();
+  const router = useRouter();
   const characterId = Number(params.id);
 
   const [name, setName] = useState("");
@@ -110,7 +111,7 @@ export default function EditCharacterPage() {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     setSaving(true);
     try {
       const tone_profile = {
@@ -120,11 +121,22 @@ export default function EditCharacterPage() {
       };
       await api.updateCharacterFull(characterId, { name, description, tone_profile });
       toast("保存しました", "success");
+      return true;
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "保存に失敗しました", "error");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleComplete() {
+    const ok = await handleSave();
+    if (ok) router.push("/dashboard");
+  }
+
+  function handleCancel() {
+    router.push("/dashboard");
   }
 
   async function handlePreview() {
@@ -171,31 +183,74 @@ export default function EditCharacterPage() {
           <button onClick={handleGenerate} disabled={generating} className="btn-primary self-start disabled:opacity-50">
             {generating ? "生成中…" : "🤖 AIで提案する"}
           </button>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="名前" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <input value={tone.first_person || ""} onChange={e => setTone(t => ({ ...t, first_person: e.target.value }))} placeholder="一人称" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <textarea value={tone.speech_style || ""} onChange={e => setTone(t => ({ ...t, speech_style: e.target.value }))} placeholder="口調・話し方" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <textarea value={tone.personality || ""} onChange={e => setTone(t => ({ ...t, personality: e.target.value }))} placeholder="性格・特徴" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <input value={tone.catchphrase || ""} onChange={e => setTone(t => ({ ...t, catchphrase: e.target.value }))} placeholder="口癖・文末の癖" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <input value={ngText} onChange={e => setNgText(e.target.value)} placeholder="避けるべき表現(、区切り)" className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>名前</label>
+            <input value={name} onChange={e => setName(e.target.value)} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>一人称</label>
+            <input value={tone.first_person || ""} onChange={e => setTone(t => ({ ...t, first_person: e.target.value }))} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>口調・話し方</label>
+            <textarea value={tone.speech_style || ""} onChange={e => setTone(t => ({ ...t, speech_style: e.target.value }))} rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>性格・特徴</label>
+            <textarea value={tone.personality || ""} onChange={e => setTone(t => ({ ...t, personality: e.target.value }))} rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>口癖・文末の癖</label>
+            <input value={tone.catchphrase || ""} onChange={e => setTone(t => ({ ...t, catchphrase: e.target.value }))} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>避けるべき表現（、区切り）</label>
+            <input value={ngText} onChange={e => setNgText(e.target.value)} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
 
           <p className="text-xs font-bold mt-2" style={{ color: "var(--muted)" }}>— キャラ再現に効果的な追加設定 —</p>
-          <textarea value={tone.background || ""} onChange={e => setTone(t => ({ ...t, background: e.target.value }))} placeholder="背景設定・世界観（例：元落ちこぼれ英語学習者で苦労して習得。その経験を活かして学習者を励ます）" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <textarea value={tone.reaction_patterns || ""} onChange={e => setTone(t => ({ ...t, reaction_patterns: e.target.value }))} placeholder="感情・リアクションパターン（例：褒められると照れて否定する。学習者が失敗すると呆れながらもフォローする）" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <textarea value={samplesText} onChange={e => setSamplesText(e.target.value)} placeholder={"セリフサンプル（1行1例）\n例：「べ、別に教えてあげてもいいけど」\n「また間違えたの？まあ、最初はみんなそうだから」"} rows={4} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
-          <button onClick={handleSave} disabled={saving} className="btn-primary self-start disabled:opacity-50">
-            {saving ? "保存中…" : "保存する"}
-          </button>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>背景設定・世界観</label>
+            <textarea value={tone.background || ""} onChange={e => setTone(t => ({ ...t, background: e.target.value }))} placeholder="例：元落ちこぼれ英語学習者で苦労して習得。その経験を活かして学習者を励ます" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>感情・リアクションパターン</label>
+            <textarea value={tone.reaction_patterns || ""} onChange={e => setTone(t => ({ ...t, reaction_patterns: e.target.value }))} placeholder="例：褒められると照れて否定する。学習者が失敗すると呆れながらもフォローする" rows={2} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>セリフサンプル（1行1例）</label>
+            <textarea value={samplesText} onChange={e => setSamplesText(e.target.value)} placeholder={"例：「べ、別に教えてあげてもいいけど」\n「また間違えたの？まあ、最初はみんなそうだから」"} rows={4} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
         </div>
 
         <div className="card flex flex-col gap-3">
           <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>プレビューパネル(口調変換のリアルタイム確認)</label>
-          <textarea value={sampleText} onChange={e => setSampleText(e.target.value)} rows={3} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>変換前のサンプル文章</label>
+            <textarea value={sampleText} onChange={e => setSampleText(e.target.value)} rows={3} className="text-sm p-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          </div>
           <button onClick={handlePreview} disabled={previewing} className="btn-primary self-start disabled:opacity-50">
             {previewing ? "変換中…" : "🔄 プレビュー"}
           </button>
           {previewResult && (
             <p className="text-sm p-3 rounded-lg" style={{ background: "var(--example-bg, #eee)", color: "var(--text)" }}>{previewResult}</p>
           )}
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={handleCancel} className="btn-secondary flex-1">キャンセル</button>
+          <button onClick={handleComplete} disabled={saving} className="btn-primary flex-1 disabled:opacity-50">
+            {saving ? "保存中…" : "完了"}
+          </button>
         </div>
       </main>
     </div>

@@ -83,7 +83,7 @@ export default function DashboardPage() {
             {character && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Link href={`/dashboard/characters/${character.id}`} style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-                  人格: {character.name}
+                  プロフィール画面
                 </Link>
                 <div style={{ flex: 1, maxWidth: 120, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.25)" }}>
                   <div style={{ height: 4, borderRadius: 999, background: "white", width: `${completeness}%` }} />
