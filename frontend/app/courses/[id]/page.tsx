@@ -391,20 +391,38 @@ export default function CourseDetailPage() {
             )}
 
             {course.chapters && course.chapters.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>カリキュラム（{course.chapters.length}章）</p>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-bold text-lg" style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}>カリキュラム</h2>
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>{course.chapters.length}章</span>
+                </div>
                 <div className="flex flex-col gap-3">
                   {course.chapters.map(ch => (
-                    <div key={ch.id} className="rounded-xl px-4 py-3" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-                      <p className="text-sm font-bold" style={{ color: "var(--text)" }}>第{ch.order}章　{ch.title}</p>
-                      {ch.goal && <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>🎯 {ch.goal}</p>}
+                    <div key={ch.id} className="card flex flex-col gap-3">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className="flex items-center justify-center flex-shrink-0 font-black"
+                          style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--primary)", color: "white", fontSize: 13 }}
+                        >
+                          {ch.order}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{ch.title}</p>
+                          {ch.goal && <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>🎯 {ch.goal}</p>}
+                        </div>
+                      </div>
                       {ch.cards.length > 0 && (
-                        <div className="flex flex-col gap-1 mt-2">
+                        <div className="flex flex-col gap-1.5">
                           {ch.cards.map(c => (
-                            <div key={c.id} className="flex items-center gap-2 text-xs">
-                              <span>{c.is_preview ? "🔓" : "🔒"}</span>
-                              <span style={{ color: "var(--text)" }}>{c.title || CARD_TYPE_LABEL[c.card_type] || c.card_type}</span>
-                              {c.is_preview && <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>無料</span>}
+                            <div key={c.id} className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl" style={{ background: "var(--surface)" }}>
+                              <span
+                                className="flex items-center justify-center flex-shrink-0"
+                                style={{ width: 26, height: 26, borderRadius: "50%", background: c.is_preview ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "var(--border)", fontSize: 12 }}
+                              >
+                                {c.is_preview ? "🔓" : "🔒"}
+                              </span>
+                              <span className="flex-1 text-sm truncate" style={{ color: "var(--text)" }}>{c.title || CARD_TYPE_LABEL[c.card_type] || c.card_type}</span>
+                              {c.is_preview && <span className="pill flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>無料</span>}
                             </div>
                           ))}
                         </div>

@@ -65,6 +65,20 @@ const CARD_TYPE_ICON: Record<string, string> = {
   message: "💬",
 };
 
+const CARD_TYPE_LABEL: Record<string, string> = {
+  video: "動画",
+  assignment: "課題",
+  test: "テスト",
+  message: "メッセージ",
+};
+
+const CARD_TYPE_COLOR: Record<string, string> = {
+  video: "#3b82f6",
+  assignment: "#f59e0b",
+  test: "#8b5cf6",
+  message: "#10b981",
+};
+
 function YouTubeEmbed({ url }: { url: string }) {
   const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
   if (!match) return <p style={{ color: "var(--muted)" }}>URLが無効です</p>;
@@ -304,6 +318,11 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex items-baseline justify-between">
+        <h2 className="font-bold text-lg" style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}>カリキュラム</h2>
+        <span className="text-xs" style={{ color: "var(--muted)" }}>{chapters.length}章 · {progress?.total_cards ?? 0}カード</span>
+      </div>
+
       {/* ペース設定モーダル */}
       {showPaceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.5)" }}>
@@ -332,8 +351,19 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}>
           <div className="card max-w-2xl w-full flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold" style={{ color: "var(--primary)" }}>{selectedCard.title}</h2>
+            <div className="flex items-center gap-3">
+              <span
+                className="flex items-center justify-center flex-shrink-0"
+                style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: `${CARD_TYPE_COLOR[selectedCard.card_type] ?? "var(--muted)"}1a`,
+                  color: CARD_TYPE_COLOR[selectedCard.card_type] ?? "var(--muted)",
+                  fontSize: 16,
+                }}
+              >
+                {CARD_TYPE_ICON[selectedCard.card_type]}
+              </span>
+              <h2 className="font-bold flex-1" style={{ color: "var(--text)" }}>{selectedCard.title}</h2>
               <button onClick={() => setSelectedCard(null)} style={{ color: "var(--muted)", fontSize: "1.5rem", lineHeight: 1 }}>×</button>
             </div>
 
@@ -353,18 +383,28 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
 
       {/* 進捗バー */}
       {progress && (
-        <div className="card flex flex-col gap-2">
-          <div className="flex justify-between text-sm">
-            <span style={{ color: "var(--text)" }}>学習進捗</span>
-            <span style={{ color: "var(--accent)", fontWeight: 600 }}>{completionPct}%</span>
+        <div className="card overflow-hidden p-0">
+          <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>学習進捗</p>
+                <p className="text-3xl font-black mt-1" style={{ color: "white", fontFamily: "var(--font-display)" }}>{completionPct}%</p>
+              </div>
+              <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                {progress.completed_cards} / {progress.total_cards} カード
+              </p>
+            </div>
+            <div className="mt-3" style={{ background: "rgba(255,255,255,0.25)", borderRadius: 9999, height: 10 }}>
+              <div style={{ background: "white", width: `${completionPct}%`, height: "100%", borderRadius: 9999, transition: "width 0.4s" }} />
+            </div>
           </div>
-          <div style={{ background: "var(--border)", borderRadius: 9999, height: 8 }}>
-            <div style={{ background: "var(--accent)", width: `${completionPct}%`, height: "100%", borderRadius: 9999, transition: "width 0.4s" }} />
-          </div>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>
-            {progress.completed_cards} / {progress.total_cards} カード完了
-            {progress.target_pace && ` · ペース: ${PACE_OPTIONS.find(p => p.value === progress.target_pace)?.label ?? progress.target_pace}`}
-          </p>
+          {progress.target_pace && (
+            <div className="px-5 sm:px-6 py-2.5 flex items-center gap-2">
+              <span className="pill" style={{ background: "var(--surface)", color: "var(--text)" }}>
+                ⏱ {PACE_OPTIONS.find(p => p.value === progress.target_pace)?.label ?? progress.target_pace}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -372,39 +412,74 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       {chapters.map(chapter => {
         const chTotal = chapter.cards.length;
         const chDone = chapter.cards.filter(c => c.is_completed).length;
+        const chPct = chTotal > 0 ? Math.round((chDone / chTotal) * 100) : 0;
         return (
-          <div key={chapter.id} className="card flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-bold" style={{ color: "var(--primary)" }}>
-                第{chapter.order}章　{chapter.title}
-              </h2>
-              <span className="text-xs" style={{ color: "var(--muted)" }}>{chDone}/{chTotal}</span>
+          <div key={chapter.id} className="card flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <span
+                className="flex items-center justify-center flex-shrink-0 font-black"
+                style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: chPct >= 100 ? "var(--accent)" : "var(--primary)",
+                  color: "white", fontSize: 14,
+                }}
+              >
+                {chPct >= 100 ? "✓" : chapter.order}
+              </span>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-bold text-base" style={{ color: "var(--text)" }}>{chapter.title}</h2>
+                {chapter.goal && (
+                  <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>🎯 {chapter.goal}</p>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0" style={{ width: 64 }}>
+                <span className="text-xs font-bold" style={{ color: chPct >= 100 ? "var(--accent)" : "var(--muted)" }}>{chDone}/{chTotal}</span>
+                <div style={{ width: "100%", background: "var(--border)", borderRadius: 9999, height: 5 }}>
+                  <div style={{ background: chPct >= 100 ? "var(--accent)" : "var(--primary)", width: `${chPct}%`, height: "100%", borderRadius: 9999, transition: "width 0.4s" }} />
+                </div>
+              </div>
             </div>
-            {chapter.goal && <p className="text-sm" style={{ color: "var(--muted)" }}>{chapter.goal}</p>}
 
-            <div className="flex flex-col gap-1">
-              {chapter.cards.map(card => (
-                <button
-                  key={card.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded text-left transition-colors"
-                  style={{
-                    background: card.is_completed ? "var(--surface)" : "transparent",
-                    border: "1px solid var(--border)",
-                    opacity: card.youtube_available === false ? 0.6 : 1,
-                  }}
-                  onClick={() => setSelectedCard(card)}
-                >
-                  <span style={{ fontSize: "1rem", width: 20, textAlign: "center" }}>
-                    {card.is_completed ? "✓" : CARD_TYPE_ICON[card.card_type]}
-                  </span>
-                  <span className="flex-1 text-sm" style={{ color: card.is_completed ? "var(--muted)" : "var(--text)" }}>
-                    {card.title}
-                  </span>
-                  {card.youtube_available === false && (
-                    <span className="text-xs" style={{ color: "#ef4444" }}>非公開</span>
-                  )}
-                </button>
-              ))}
+            <div className="flex flex-col gap-2">
+              {chapter.cards.map(card => {
+                const typeColor = CARD_TYPE_COLOR[card.card_type] ?? "var(--muted)";
+                const unavailable = card.youtube_available === false;
+                return (
+                  <button
+                    key={card.id}
+                    className="hover-lift flex items-center gap-3 px-3.5 py-3 rounded-xl text-left transition-colors"
+                    style={{
+                      background: card.is_completed ? "var(--surface)" : "var(--card)",
+                      border: `1px solid ${card.is_completed ? "var(--border)" : "var(--border)"}`,
+                      opacity: unavailable ? 0.55 : 1,
+                    }}
+                    onClick={() => setSelectedCard(card)}
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 32, height: 32, borderRadius: "50%",
+                        background: card.is_completed ? "var(--accent)" : `${typeColor}1a`,
+                        color: card.is_completed ? "white" : typeColor,
+                        fontSize: 14,
+                      }}
+                    >
+                      {card.is_completed ? "✓" : CARD_TYPE_ICON[card.card_type]}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: card.is_completed ? "var(--muted)" : "var(--text)" }}>
+                        {card.title}
+                      </p>
+                      <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>{CARD_TYPE_LABEL[card.card_type] ?? card.card_type}</p>
+                    </div>
+                    {unavailable ? (
+                      <span className="pill flex-shrink-0" style={{ background: "#fee2e2", color: "#dc2626" }}>非公開</span>
+                    ) : (
+                      <span className="flex-shrink-0" style={{ color: "var(--muted)", fontSize: 18 }}>›</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         );
