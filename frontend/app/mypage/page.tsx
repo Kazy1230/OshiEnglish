@@ -223,14 +223,9 @@ export default function MyPage() {
                         : `あと${Math.max(0, c.total_lessons - c.completed_count)}${unit}で達成！`}
                     </p>
 
-                    <div className="flex flex-col gap-2 mt-1">
-                      <Link href={`/courses/${c.course_id}/chat`} className="btn-primary w-full text-center py-3">
-                        伴走チャットを再開する
-                      </Link>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Link href={`/courses/${c.course_id}/schedule`} className="btn-ghost text-xs py-2 text-center">30日スケジュール</Link>
-                        <Link href={`/courses/${c.course_id}`} className="btn-ghost text-xs py-2 text-center">コース詳細</Link>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <Link href={`/courses/${c.course_id}`} className="btn-ghost text-xs py-2 text-center">コース詳細</Link>
+                      <Link href={`/courses/${c.course_id}/chat`} className="btn-primary text-xs py-2 text-center">伴走チャット</Link>
                     </div>
                   </div>
                 );

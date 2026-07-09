@@ -93,8 +93,8 @@ export const api = {
   generateCreatorIntro: () => apiFetch("/creators/me/generate-intro", { method: "POST" }),
 
   // AIインタビュー（人格収集）
-  startInterview: (baseType?: string, gender?: string) =>
-    apiFetch("/interview/start", { method: "POST", body: JSON.stringify({ base_type: baseType ?? null, gender: gender ?? null }) }),
+  startInterview: (baseType?: string, gender?: string, subject?: string) =>
+    apiFetch("/interview/start", { method: "POST", body: JSON.stringify({ base_type: baseType ?? null, gender: gender ?? null, subject: subject ?? null }) }),
   submitInterviewAnswer: (answer: string) => apiFetch("/interview/answer", { method: "POST", body: JSON.stringify({ answer }) }),
   generatePersonalityProfile: () => apiFetch("/interview/generate-profile", { method: "POST" }),
   getPersonalityProfile: () => apiFetch("/interview/profile"),
@@ -324,6 +324,11 @@ export const api = {
   getCurriculumMeta: (courseId: number) => apiFetch(`/courses/${courseId}`),
   updateCurriculumMeta: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/curriculum-meta`, { method: "PUT", body: JSON.stringify(data) }),
+  uploadCourseThumbnail: (courseId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiUpload(`/courses/${courseId}/thumbnail`, formData);
+  },
   getCurriculumPrompt: (courseId: number) => apiFetch(`/courses/${courseId}/curriculum-prompt`),
   listChapters: (courseId: number) => apiFetch(`/courses/${courseId}/chapters`),
   createChapter: (courseId: number, data: object) =>

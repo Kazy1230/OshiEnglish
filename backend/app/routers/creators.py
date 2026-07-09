@@ -303,7 +303,7 @@ def generate_my_intro(current_user=Depends(get_current_creator_or_admin), db: Se
         raise HTTPException(status_code=400, detail="先にAIインタビューで人格プロファイルを作成してください")
 
     interview_session = db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).first()
-    subject = (interview_session.subject if interview_session else None) or "english"
+    subject = (interview_session.subject if interview_session else None) or profile.speciality
 
     try:
         _intro_msgs = creator_prompts.build_self_intro_messages(personality.profile, profile.speciality, profile.experience, subject=subject)

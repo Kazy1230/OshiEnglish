@@ -1,13 +1,16 @@
 ﻿import json
+import os
 import re
+import uuid
 from typing import Optional, List
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, model_validator
 
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_user_optional
+from app.core.uploads import validate_image_content
 from app.models.course import Course
 from app.models.course_chapter import CourseChapter
 from app.models.chapter_card import ChapterCard
@@ -27,6 +30,12 @@ from app.models.course_diagnosis_question import CourseDiagnosisQuestion
 from app.models.learner_profile import LearnerProfile
 
 router = APIRouter(tags=["コース・レッスン"])
+
+# サムネイル画像保存先（main.py で /static にマウントされているディレクトリ配下）
+_THUMBNAIL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "course_thumbnails")
+os.makedirs(_THUMBNAIL_DIR, exist_ok=True)
+_ALLOWED_THUMBNAIL_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+_MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 # ----- 権限ヘルパー -----
@@ -110,6 +119,13 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
     data = _serialize_course_card(course)
     data["is_purchased"] = unlocked
     data["chapter_count"] = len(course.chapters)
+    purchase_count = db.query(Purchase).filter(
+        Purchase.course_id == course.id, Purchase.status == "succeeded"
+    ).count()
+    subscription_count = db.query(CourseSubscription).filter(
+        CourseSubscription.course_id == course.id, CourseSubscription.status == "active"
+    ).count()
+    data["enrollment_count"] = purchase_count + subscription_count
     data["has_diagnosis"] = (
         db.query(LearnerProfile).filter(
             LearnerProfile.user_id == user_id, LearnerProfile.course_id == course.id,
@@ -126,6 +142,26 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
     data["my_subscription"] = (
         {"id": subscription.id, "tier": subscription.tier, "status": subscription.status} if subscription else None
     )
+    chapters = sorted(course.chapters, key=lambda ch: ch.order)
+    data["chapters"] = [
+        {
+            "id": ch.id,
+            "order": ch.order,
+            "title": ch.title,
+            "goal": ch.goal,
+            "cards": [
+                {
+                    "id": c.id,
+                    "order": c.order,
+                    "card_type": c.card_type,
+                    "title": c.title,
+                    "is_preview": c.is_preview,
+                }
+                for c in sorted(ch.cards, key=lambda c: c.order)
+            ],
+        }
+        for ch in chapters
+    ]
     return data
 
 
@@ -454,6 +490,10 @@ def submit_course_for_review(course_id: int, current_user=Depends(get_current_us
     chapter_count = len(course.chapters)
     if chapter_count == 0:
         raise HTTPException(status_code=400, detail="章（カリキュラム）を1つ以上追加してから公開申請してください")
+    if any(len(ch.cards) == 0 for ch in course.chapters):
+        raise HTTPException(status_code=400, detail="カードが1枚もない章があります。すべての章にカードを追加してください")
+    if not course.completion_video_url:
+        raise HTTPException(status_code=400, detail="卒業動画を設定してから公開申請してください")
     if current_user.role != "admin":
         profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
         if not profile or profile.status != "active":
@@ -464,6 +504,42 @@ def submit_course_for_review(course_id: int, current_user=Depends(get_current_us
     return _serialize_course_detail(db, course, current_user)
 
 
+@router.post("/courses/{course_id}/thumbnail")
+async def upload_course_thumbnail(
+    course_id: int,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """コースのサムネイル画像をアップロードする（PNG/JPG/WEBP, 5MBまで）"""
+    course = _get_owned_course(db, course_id, current_user)
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _ALLOWED_THUMBNAIL_EXT:
+        raise HTTPException(status_code=400, detail="対応形式は PNG / JPG / JPEG / WEBP のみです")
+
+    contents = await file.read()
+    if len(contents) > _MAX_THUMBNAIL_SIZE:
+        raise HTTPException(status_code=400, detail="画像サイズは5MB以下にしてください")
+    validate_image_content(contents, ext)
+
+    if course.thumbnail_url:
+        old_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", course.thumbnail_url.replace("/static/", "", 1))
+        if os.path.isfile(old_path):
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+    filename = f"course_{course_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(_THUMBNAIL_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    course.thumbnail_url = f"/static/course_thumbnails/{filename}"
+    db.commit()
+    db.refresh(course)
+    return {"message": "サムネイルをアップロードしました", "thumbnail_url": course.thumbnail_url}
 
 
 # ----- 参考資料 -----

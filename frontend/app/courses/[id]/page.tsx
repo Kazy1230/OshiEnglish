@@ -7,16 +7,22 @@ import { getToken } from "@/lib/auth";
 import { CourseCheckoutModal } from "@/components/CourseCheckoutModal";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
+import { ChapterCurriculumPanel } from "@/components/ChapterCurriculumPanel";
 
 type Lesson = {
   id: number; order: number; title: string; content_type: "text" | "video";
   body?: string | null; youtube_url?: string | null; is_preview: boolean;
 };
+type PreviewCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean };
+type PreviewChapter = { id: number; order: number; title: string; goal: string | null; cards: PreviewCard[] };
+const CARD_TYPE_LABEL: Record<string, string> = { video: "動画", build_task: "課題", quiz: "クイズ", message: "メッセージ" };
+
 type CourseDetail = {
   id: number; title: string; description?: string | null; thumbnail_url?: string | null;
   category?: string | null; status: string; price: number; is_free: boolean;
   tier_a_price?: number | null; tier_b_price?: number | null;
   chapter_count?: number;
+  chapters?: PreviewChapter[];
   character: { id: number; name: string; avatar_url?: string | null; creator_id: number | null };
   lessons: Lesson[];
   is_purchased: boolean;
@@ -383,6 +389,31 @@ export default function CourseDetailPage() {
                 </div>
               </div>
             )}
+
+            {course.chapters && course.chapters.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>カリキュラム（{course.chapters.length}章）</p>
+                <div className="flex flex-col gap-3">
+                  {course.chapters.map(ch => (
+                    <div key={ch.id} className="rounded-xl px-4 py-3" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+                      <p className="text-sm font-bold" style={{ color: "var(--text)" }}>第{ch.order}章　{ch.title}</p>
+                      {ch.goal && <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>🎯 {ch.goal}</p>}
+                      {ch.cards.length > 0 && (
+                        <div className="flex flex-col gap-1 mt-2">
+                          {ch.cards.map(c => (
+                            <div key={c.id} className="flex items-center gap-2 text-xs">
+                              <span>{c.is_preview ? "🔓" : "🔒"}</span>
+                              <span style={{ color: "var(--text)" }}>{c.title || CARD_TYPE_LABEL[c.card_type] || c.card_type}</span>
+                              {c.is_preview && <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>無料</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -613,19 +644,9 @@ export default function CourseDetailPage() {
           </>
         )}
 
-        {/* ===== v2.0コース：学習開始ボタン ===== */}
+        {/* ===== v2.0コース：学習UI（コース詳細に統合） ===== */}
         {unlocked && !course.has_days && (course.chapter_count ?? 0) > 0 && (
-          <div className="card flex flex-col gap-4 overflow-hidden p-0">
-            <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
-              <p className="text-lg font-black text-white">学習を始めよう</p>
-              <p className="text-sm text-white/80 mt-1">{course.chapter_count} 章のカリキュラムが用意されています</p>
-            </div>
-            <div className="px-6 pb-6">
-              <Link href={`/courses/${courseId}/learn`} className="btn-primary inline-block">
-                カリキュラムを見る →
-              </Link>
-            </div>
-          </div>
+          <ChapterCurriculumPanel courseId={courseId} />
         )}
 
         {/* ===== 非30日コース：レッスン閲覧 ===== */}

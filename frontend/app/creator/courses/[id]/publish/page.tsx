@@ -16,6 +16,7 @@ type CourseMeta = {
   is_free: boolean;
   tier_a_price: number | null;
   tier_b_price: number | null;
+  completion_video_url: string | null;
 };
 
 type Chapter = { id: number; cards: unknown[] };
@@ -71,8 +72,10 @@ export default function CoursePublishPage() {
   const checks = [
     { label: "章が1つ以上ある", ok: chapters.length > 0 },
     { label: "カードが1つ以上ある", ok: totalCards > 0 },
+    { label: "すべての章にカードがある", ok: chapters.length > 0 && chapters.every(ch => ch.cards.length > 0) },
     { label: "コースタイトルが設定されている", ok: !!meta.title },
     { label: "分野が設定されている", ok: !!meta.subject },
+    { label: "卒業動画が設定されている", ok: !!meta.completion_video_url },
   ];
   const allOk = checks.every(c => c.ok);
 

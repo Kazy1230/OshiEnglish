@@ -5,6 +5,9 @@ import { useRoleGuard } from "@/lib/useRoleGuard";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
+import { RevenuePanel } from "@/components/RevenuePanel";
+import { AnalyticsPanel } from "@/components/AnalyticsPanel";
+import { InboxPanel } from "@/components/InboxPanel";
 
 type CharacterSummary = { id: number; name: string; description?: string | null; image_url?: string | null; tone_profile?: Record<string, unknown> | null };
 type PurchasedCourse = { course_id: number; title: string; total_lessons: number; completed_count: number };
@@ -22,12 +25,9 @@ function toneCompleteness(tone?: Record<string, unknown> | null): number {
 }
 
 const TILES = [
-  { href: "/creator/courses/new", icon: "📅", label: "コース作成", desc: "30日伴走コース", needsApproval: true },
+  { href: "/creator/courses", icon: "📚", label: "コース一覧", desc: "作成したコース", needsApproval: false },
   { href: "/studio", icon: "🎬", label: "スタジオ", desc: "コンテンツ生成AI", needsApproval: true },
   { href: "/creator/contents", icon: "🗂️", label: "コンテンツプール", desc: "教材URLを管理", needsApproval: true },
-  { href: "/creator/analytics", icon: "📊", label: "分析", desc: "質問・進捗ダッシュボード", needsApproval: true },
-  { href: "/creator/revenue", icon: "💰", label: "収益", desc: "売上・報酬管理", needsApproval: false },
-  { href: "/creator/courses", icon: "📚", label: "コース一覧", desc: "作成したコース", needsApproval: false },
 ];
 
 export default function DashboardPage() {
@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [overdueCount, setOverdueCount] = useState(0);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [reviewCourseCount, setReviewCourseCount] = useState(0);
+  const [supportTab, setSupportTab] = useState<"analytics" | "inbox">("inbox");
 
   useEffect(() => {
     if (loading) return;
@@ -180,6 +181,49 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+
+        {/* 収益 */}
+        {isApproved && (
+          <div>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>収益</h2>
+            <RevenuePanel />
+          </div>
+        )}
+
+        {/* 分析＋受講者対応（統合） */}
+        {isApproved && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() => setSupportTab("inbox")}
+                className="text-xs font-bold px-3 py-1.5 rounded-full"
+                style={{
+                  background: supportTab === "inbox" ? "var(--primary)" : "var(--card)",
+                  color: supportTab === "inbox" ? "#fff" : "var(--muted)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                受講者対応{overdueCount > 0 && ` (${overdueCount})`}
+              </button>
+              <button
+                onClick={() => setSupportTab("analytics")}
+                className="text-xs font-bold px-3 py-1.5 rounded-full"
+                style={{
+                  background: supportTab === "analytics" ? "var(--primary)" : "var(--card)",
+                  color: supportTab === "analytics" ? "#fff" : "var(--muted)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                分析
+              </button>
+            </div>
+            {supportTab === "inbox" ? (
+              <InboxPanel onOverdueCountChange={setOverdueCount} />
+            ) : (
+              <AnalyticsPanel />
+            )}
+          </div>
+        )}
 
         {/* 人格プロフィール補完 */}
         {character && completeness < 100 && (

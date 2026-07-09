@@ -19,6 +19,7 @@ export default function ChapterSkeletonPage() {
   const [chapters, setChapters] = useState<ChapterDraft[]>([{ title: "", goal: "" }]);
   const [saving, setSaving] = useState(false);
   const [existingCount, setExistingCount] = useState(0);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -27,6 +28,7 @@ export default function ChapterSkeletonPage() {
       api.listChapters(courseId),
     ]).then(([meta, existing]) => {
       setCourseTitle(meta.title || "");
+      setLocked(meta.status === "published" && meta.enrollment_count > 0);
       if (existing.length > 0) {
         setExistingCount(existing.length);
         setChapters(existing.map((ch: { title: string; goal: string | null }) => ({ title: ch.title, goal: ch.goal || "" })));
@@ -87,6 +89,25 @@ export default function ChapterSkeletonPage() {
   }
 
   if (loading) return <Skeleton />;
+
+  if (locked) {
+    return (
+      <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
+        <AppHeader role="creator" title="章立てを入力" />
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+          <div className="card text-center py-12">
+            <p className="text-sm mb-4" style={{ color: "var(--text)" }}>
+              受講者がいる公開中のコースのため、章立て全体の作り直しはできません。
+            </p>
+            <p className="text-xs mb-6" style={{ color: "var(--muted)" }}>
+              カードの内容編集はカリキュラム編集画面から行えます。
+            </p>
+            <button type="button" className="btn-secondary" onClick={() => router.back()}>戻る</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>

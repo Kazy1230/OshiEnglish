@@ -52,6 +52,8 @@ type CourseMeta = {
   id: number;
   title: string;
   status: string;
+  enrollment_count: number;
+  thumbnail_url: string | null;
   subject: string | null;
   curriculum_purpose: string | null;
   curriculum_target_audience: string | null;
@@ -86,7 +88,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 // ---- SortableCard ----
 function SortableCard({
-  card, courseId, chapterId, onDelete, onDuplicate, onUpdate,
+  card, courseId, chapterId, onDelete, onDuplicate, onUpdate, locked,
 }: {
   card: Card;
   courseId: number;
@@ -94,6 +96,7 @@ function SortableCard({
   onDelete: (id: number) => void;
   onDuplicate: (id: number) => void;
   onUpdate: (id: number, data: Partial<Card>) => void;
+  locked: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -144,28 +147,16 @@ function SortableCard({
         <button onClick={() => setExpanded(e => !e)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--primary)" }}>
           {expanded ? "閉じる" : "編集"}
         </button>
-        <button onClick={() => onDuplicate(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--muted)" }}>複製</button>
-        <button onClick={() => onDelete(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "#fee2e2", color: "#dc2626" }}>削除</button>
+        {!locked && (
+          <>
+            <button onClick={() => onDuplicate(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--muted)" }}>複製</button>
+            <button onClick={() => onDelete(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "#fee2e2", color: "#dc2626" }}>削除</button>
+          </>
+        )}
       </div>
 
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3 border-t pt-3" style={{ borderColor: "var(--border, #e5e7eb)" }}>
-          <div className="flex gap-2 flex-wrap">
-            {CARD_TYPES.map(t => (
-              <button key={t.value} type="button"
-                onClick={() => setLocalCard(c => ({ ...c, card_type: t.value }))}
-                className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
-                style={{
-                  background: localCard.card_type === t.value ? "var(--primary)" : "var(--bg)",
-                  color: localCard.card_type === t.value ? "#fff" : "var(--muted)",
-                  border: "1px solid var(--border, #e5e7eb)",
-                }}
-              >
-                {t.icon} {t.label}
-              </button>
-            ))}
-          </div>
-
           <div>
             <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タイトル</label>
             <input value={localCard.title || ""} onChange={e => setLocalCard(c => ({ ...c, title: e.target.value }))} placeholder="カードのタイトル" />
@@ -228,12 +219,13 @@ function SortableCard({
 
 // ---- ChapterSection（1章分のカードビルダー） ----
 function ChapterSection({
-  chapter, courseId, onDeleteChapter, onChapterUpdate,
+  chapter, courseId, onDeleteChapter, onChapterUpdate, locked,
 }: {
   chapter: Chapter;
   courseId: number;
   onDeleteChapter: (id: number) => void;
   onChapterUpdate: (chapterId: number, cards: Card[]) => void;
+  locked: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [cards, setCards] = useState<Card[]>([...chapter.cards].sort((a, b) => a.order - b.order));
@@ -342,33 +334,41 @@ function ChapterSection({
           </div>
           <span className="text-xs flex-shrink-0" style={{ color: "var(--muted)" }}>{open ? "▲" : "▼"}</span>
         </button>
-        <button
-          onClick={() => onDeleteChapter(chapter.id)}
-          className="text-xs px-2 py-1 rounded flex-shrink-0"
-          style={{ background: "#fee2e2", color: "#dc2626" }}
-        >削除</button>
+        {!locked && (
+          <button
+            onClick={() => onDeleteChapter(chapter.id)}
+            className="text-xs px-2 py-1 rounded flex-shrink-0"
+            style={{ background: "#fee2e2", color: "#dc2626" }}
+          >削除</button>
+        )}
       </div>
 
       {/* カードビルダー（展開時） */}
       {open && (
         <div className="border-t px-4 pb-4 pt-3" style={{ borderColor: "var(--border, #e5e7eb)" }}>
           {/* カード追加ボタン */}
-          <div className="flex gap-2 flex-wrap mb-4">
-            {CARD_TYPES.map(t => (
-              <button key={t.value} type="button"
-                onClick={() => handleAddCard(t.value)}
-                disabled={addingType !== null}
-                className="text-xs px-3 py-1.5 rounded-xl font-medium transition"
-                style={{
-                  background: addingType === t.value ? "var(--primary)" : "var(--card, #fff)",
-                  color: addingType === t.value ? "#fff" : "var(--text)",
-                  border: "1px solid var(--border, #e5e7eb)",
-                }}
-              >
-                {t.icon} {t.label}を追加
-              </button>
-            ))}
-          </div>
+          {locked ? (
+            <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: "#fef3c7", color: "#92400e" }}>
+              受講者がいる公開中のコースのため、カードの追加・削除はできません。内容の編集・並び替えは可能です。
+            </p>
+          ) : (
+            <div className="flex gap-2 flex-wrap mb-4">
+              {CARD_TYPES.map(t => (
+                <button key={t.value} type="button"
+                  onClick={() => handleAddCard(t.value)}
+                  disabled={addingType !== null}
+                  className="text-xs px-3 py-1.5 rounded-xl font-medium transition"
+                  style={{
+                    background: addingType === t.value ? "var(--primary)" : "var(--card, #fff)",
+                    color: addingType === t.value ? "#fff" : "var(--text)",
+                    border: "1px solid var(--border, #e5e7eb)",
+                  }}
+                >
+                  {t.icon} {t.label}を追加
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* カード一覧 */}
           {cards.length === 0 ? (
@@ -386,6 +386,7 @@ function ChapterSection({
                       onDelete={handleDelete}
                       onDuplicate={handleDuplicate}
                       onUpdate={handleUpdate}
+                      locked={locked}
                     />
                   ))}
                 </div>
@@ -465,6 +466,7 @@ export default function CurriculumHubPage() {
 
   const totalCards = chapters.reduce((s, ch) => s + ch.cards.length, 0);
   const statusInfo = STATUS_LABEL[meta.status] ?? { label: meta.status, color: "#6b7280" };
+  const locked = meta.status === "published" && meta.enrollment_count > 0;
 
   return (
     <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
@@ -529,10 +531,18 @@ export default function CurriculumHubPage() {
         {/* 章一覧ヘッダー */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-base" style={{ color: "var(--text)" }}>章一覧</h2>
-          <Link href={`/creator/courses/${courseId}/chapters`}>
-            <button className="btn-secondary text-sm">章立てを編集</button>
-          </Link>
+          {!locked && (
+            <Link href={`/creator/courses/${courseId}/chapters`}>
+              <button className="btn-secondary text-sm">章立てを編集</button>
+            </Link>
+          )}
         </div>
+
+        {locked && (
+          <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: "#fef3c7", color: "#92400e" }}>
+            受講者がいる公開中のコースのため、章の追加・削除・並べ替えはできません。カードの内容編集は可能です。
+          </p>
+        )}
 
         {/* 章一覧 */}
         {chapters.length === 0 ? (
@@ -547,6 +557,7 @@ export default function CurriculumHubPage() {
             {chapters.map(ch => (
               <ChapterSection
                 key={ch.id}
+                locked={locked}
                 chapter={ch}
                 courseId={courseId}
                 onDeleteChapter={handleDeleteChapter}
@@ -556,10 +567,16 @@ export default function CurriculumHubPage() {
           </div>
         )}
 
+        {/* サムネイル */}
+        <div className="card mt-6">
+          <h3 className="font-semibold text-sm mb-3" style={{ color: "var(--text)" }}>コースサムネイル</h3>
+          <ThumbnailInput courseId={courseId} currentUrl={meta.thumbnail_url} />
+        </div>
+
         {/* 卒業動画 */}
         <div className="card mt-6">
-          <h3 className="font-semibold text-sm mb-3" style={{ color: "var(--text)" }}>卒業動画（任意）</h3>
-          <p className="text-xs mb-2" style={{ color: "var(--muted)" }}>全カード完了時に再生される動画URL</p>
+          <h3 className="font-semibold text-sm mb-3" style={{ color: "var(--text)" }}>卒業動画（必須）</h3>
+          <p className="text-xs mb-2" style={{ color: "var(--muted)" }}>全カード完了時に再生される動画URL。公開申請には設定が必要です。</p>
           <CompletionVideoInput courseId={courseId} currentUrl={meta.completion_video_url} />
         </div>
 
@@ -573,6 +590,45 @@ export default function CurriculumHubPage() {
           </Link>
         </div>
       </main>
+    </div>
+  );
+}
+
+function ThumbnailInput({ courseId, currentUrl }: { courseId: number; currentUrl: string | null }) {
+  const [thumbnailUrl, setThumbnailUrl] = useState(currentUrl);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await api.uploadCourseThumbnail(courseId, file);
+      setThumbnailUrl(res.thumbnail_url);
+      toast("サムネイルを更新しました", "success");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "アップロードに失敗しました", "error");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      {thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumbnailUrl} alt="" className="w-32 h-20 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid var(--border, #e5e7eb)" }} />
+      ) : (
+        <div className="w-32 h-20 rounded-lg flex items-center justify-center text-2xl flex-shrink-0" style={{ background: "var(--bg)", border: "1px solid var(--border, #e5e7eb)" }}>🖼️</div>
+      )}
+      <div className="flex flex-col gap-1">
+        <p className="text-xs" style={{ color: "var(--muted)" }}>PNG / JPG / WEBP、5MBまで</p>
+        <label className="btn-secondary text-xs cursor-pointer inline-block w-fit" style={{ opacity: uploading ? 0.5 : 1 }}>
+          {uploading ? "処理中…" : thumbnailUrl ? "変更する" : "アップロードする"}
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleSelect} disabled={uploading} className="hidden" />
+        </label>
+      </div>
     </div>
   );
 }
@@ -594,11 +650,22 @@ function CompletionVideoInput({ courseId, currentUrl }: { courseId: number; curr
   }
 
   return (
-    <div className="flex gap-2">
-      <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://youtu.be/..." className="flex-1" />
-      <button onClick={handleSave} disabled={saving} className="btn-secondary text-sm flex-shrink-0">
-        {saving ? "保存中" : "保存"}
-      </button>
+    <div>
+      <div className="flex gap-2">
+        <input
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://youtu.be/..."
+          className="flex-1"
+          style={!url ? { borderColor: "#dc2626" } : undefined}
+        />
+        <button onClick={handleSave} disabled={saving} className="btn-secondary text-sm flex-shrink-0">
+          {saving ? "保存中" : "保存"}
+        </button>
+      </div>
+      {!url && (
+        <p className="text-xs mt-1" style={{ color: "#dc2626" }}>卒業動画が未設定です。公開申請前に設定してください。</p>
+      )}
     </div>
   );
 }

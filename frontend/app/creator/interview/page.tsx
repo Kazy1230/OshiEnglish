@@ -28,6 +28,7 @@ export default function CreatorInterviewPage() {
   const { loading } = useRoleGuard(["creator", "admin"]);
   const [step, setStep] = useState<"checking" | "done" | "gender" | "preset" | "interview">("checking");
   const [gender, setGender] = useState<string | undefined>(undefined);
+  const [speciality, setSpeciality] = useState<string | undefined>(undefined);
   const [history, setHistory] = useState<ChatItem[]>([]);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [answer, setAnswer] = useState("");
@@ -41,12 +42,15 @@ export default function CreatorInterviewPage() {
     api.getPersonalityProfile()
       .then(() => setStep("done"))
       .catch(() => setStep("gender"));
+    api.getMyCreatorProfile()
+      .then((profile: { speciality?: string | null }) => setSpeciality(profile.speciality || undefined))
+      .catch(() => {});
   }, [loading]);
 
   function beginInterview(baseType?: string) {
     setStarting(true);
     setStep("interview");
-    api.startInterview(baseType, gender).then(res => {
+    api.startInterview(baseType, gender, speciality).then(res => {
       setProgress(res.progress);
       if (res.status === "completed") {
         setCompleted(true);

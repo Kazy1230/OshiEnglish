@@ -66,16 +66,19 @@ export default function NewCoursePage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const course = await api.createCourse({
-        title,
-        subject,
-        price: 0,
-        is_free: isFree,
-        tier_a_price: isFree ? null : Number(tierAPrice),
-        tier_b_price: enableTierB ? Number(tierBPrice) : null,
-      });
-      const id = course.id;
-      setCourseId(id);
+      let id: number = courseId ?? 0;
+      if (!id) {
+        const course = await api.createCourse({
+          title,
+          subject,
+          price: 0,
+          is_free: isFree,
+          tier_a_price: isFree ? null : Number(tierAPrice),
+          tier_b_price: enableTierB ? Number(tierBPrice) : null,
+        });
+        id = course.id;
+        setCourseId(id);
+      }
       await api.updateCurriculumMeta(id, {
         purpose,
         target_audience: targetAudience,
@@ -189,9 +192,12 @@ export default function NewCoursePage() {
               )}
             </div>
 
-            <button type="submit" className="btn-primary" disabled={!character}>
-              次へ：カリキュラムの壁打ち
-            </button>
+            <div className="flex gap-3">
+              <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>戻る</button>
+              <button type="submit" className="btn-primary flex-1" disabled={!character}>
+                次へ：カリキュラムの壁打ち
+              </button>
+            </div>
           </form>
         )}
 
@@ -280,9 +286,12 @@ export default function NewCoursePage() {
               </ol>
             </div>
 
-            <button onClick={handleGoToChapters} className="btn-primary">
-              次へ：章立てを入力する
-            </button>
+            <div className="flex gap-3">
+              <button type="button" className="btn-secondary flex-1" onClick={() => setStep(1)}>戻る</button>
+              <button onClick={handleGoToChapters} className="btn-primary flex-1">
+                次へ：章立てを入力する
+              </button>
+            </div>
           </div>
         )}
       </main>

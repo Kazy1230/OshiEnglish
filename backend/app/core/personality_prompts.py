@@ -55,7 +55,9 @@ MAX_FOLLOW_UPS = 3
 
 
 def get_fixed_questions(subject: str | None) -> list[str]:
-    return _SUBJECT_QUESTIONS.get(subject or "english", _QUESTIONS_GENERIC)
+    if not subject:
+        return _QUESTIONS_GENERIC
+    return _SUBJECT_QUESTIONS.get(subject, _QUESTIONS_GENERIC)
 
 
 _SUBJECT_LABEL: dict[str, str] = {
@@ -67,7 +69,9 @@ _SUBJECT_LABEL: dict[str, str] = {
 
 
 def _subject_label(subject: str | None) -> str:
-    return _SUBJECT_LABEL.get(subject or "english", "スキル学習")
+    if not subject:
+        return "スキル学習"
+    return _SUBJECT_LABEL.get(subject, subject)
 
 
 def build_follow_up_decision_system(subject: str | None) -> str:

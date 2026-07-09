@@ -53,6 +53,24 @@ def _require_purchase(db: Session, user_id: int, course_id: int) -> Purchase:
     return purchase
 
 
+def _has_enrolled_learners(db: Session, course_id: int) -> bool:
+    purchase_count = db.query(Purchase).filter(
+        Purchase.course_id == course_id, Purchase.status == "succeeded"
+    ).count()
+    if purchase_count > 0:
+        return True
+    subscription_count = db.query(CourseSubscription).filter(
+        CourseSubscription.course_id == course_id, CourseSubscription.status == "active"
+    ).count()
+    return subscription_count > 0
+
+
+def _block_structural_edit_if_locked(db: Session, course: Course) -> None:
+    """公開済みで受講者がいるコースは、章/カードの追加・削除（総カード数が変わる操作）を禁止する。"""
+    if course.status == "published" and _has_enrolled_learners(db, course.id):
+        raise HTTPException(status_code=403, detail="受講者がいる公開中のコースは、章・カードの追加/削除はできません")
+
+
 def _card_count(db: Session, course_id: int) -> int:
     return (
         db.query(ChapterCard)
@@ -228,7 +246,8 @@ def create_chapter(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    _get_owned_course(db, course_id, current_user)
+    course = _get_owned_course(db, course_id, current_user)
+    _block_structural_edit_if_locked(db, course)
     max_order = db.query(CourseChapter).filter(CourseChapter.course_id == course_id).count()
     ch = CourseChapter(
         course_id=course_id,
@@ -274,7 +293,8 @@ def delete_chapter(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    _get_owned_course(db, course_id, current_user)
+    course = _get_owned_course(db, course_id, current_user)
+    _block_structural_edit_if_locked(db, course)
     ch = db.query(CourseChapter).filter(CourseChapter.id == chapter_id, CourseChapter.course_id == course_id).first()
     if not ch:
         raise HTTPException(status_code=404, detail="章が見つかりません")
@@ -293,7 +313,8 @@ def create_card(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    _get_owned_course(db, course_id, current_user)
+    course = _get_owned_course(db, course_id, current_user)
+    _block_structural_edit_if_locked(db, course)
     ch = db.query(CourseChapter).filter(CourseChapter.id == chapter_id, CourseChapter.course_id == course_id).first()
     if not ch:
         raise HTTPException(status_code=404, detail="章が見つかりません")
@@ -342,7 +363,8 @@ def delete_card(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    _get_owned_course(db, course_id, current_user)
+    course = _get_owned_course(db, course_id, current_user)
+    _block_structural_edit_if_locked(db, course)
     card = db.query(ChapterCard).filter(ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="カードが見つかりません")
@@ -396,7 +418,8 @@ def duplicate_card(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    _get_owned_course(db, course_id, current_user)
+    course = _get_owned_course(db, course_id, current_user)
+    _block_structural_edit_if_locked(db, course)
     src = db.query(ChapterCard).filter(ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id).first()
     if not src:
         raise HTTPException(status_code=404, detail="カードが見つかりません")
@@ -764,7 +787,8 @@ def create_review(
     total = _card_count(db, course_id)
     completed = _completed_card_count(db, current_user.id, course_id)
     pct = round(completed / total * 100) if total > 0 else 0
-    if not purchase.is_graduated and pct < 50:
+    is_graduated = purchase.is_graduated if purchase else False
+    if not is_graduated and pct < 50:
         raise HTTPException(status_code=400, detail="レビューは進捗50%以上から投稿できます")
 
     existing = db.query(CourseReview).filter(
