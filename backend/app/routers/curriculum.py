@@ -3,7 +3,7 @@ import httpx
 from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -121,6 +121,14 @@ class CardUpdate(BaseModel):
     quiz_options: Optional[List[dict]] = None
     is_preview: Optional[bool] = None
     order: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _validate_title(self):
+        # titleが空文字のまま保存されると、学習者向けカリキュラム表示でカード種別名
+        # （「動画」「課題」等）しか出せず何を学ぶか伝わらないため、空欄保存を禁止する
+        if self.title is not None and not self.title.strip():
+            raise ValueError("カードのタイトルを入力してください")
+        return self
 
 class ReorderRequest(BaseModel):
     ids: List[int]

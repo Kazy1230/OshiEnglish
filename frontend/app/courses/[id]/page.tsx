@@ -423,6 +423,8 @@ export default function CourseDetailPage() {
                         <div className="flex flex-col gap-2">
                           {ch.cards.map(c => {
                             const typeColor = CARD_TYPE_COLOR[c.card_type] ?? "var(--muted)";
+                            const hasTitle = !!c.title?.trim();
+                            const displayTitle = hasTitle ? c.title : (CARD_TYPE_LABEL[c.card_type] ?? c.card_type);
                             return (
                               <div key={c.id} className="hover-lift flex items-center gap-3 px-3.5 py-3 rounded-xl transition-colors" style={{ background: "var(--card)", border: "1px solid var(--border)", opacity: c.is_preview ? 1 : 0.7 }}>
                                 <span
@@ -432,8 +434,10 @@ export default function CourseDetailPage() {
                                   {CARD_TYPE_ICON[c.card_type] ?? "●"}
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate" style={{ color: "var(--text)" }}>{c.title || CARD_TYPE_LABEL[c.card_type] || c.card_type}</p>
-                                  <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>{CARD_TYPE_LABEL[c.card_type] ?? c.card_type}</p>
+                                  <p className="text-sm font-medium truncate" style={{ color: "var(--text)" }}>{displayTitle}</p>
+                                  {hasTitle && (
+                                    <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>{CARD_TYPE_LABEL[c.card_type] ?? c.card_type}</p>
+                                  )}
                                 </div>
                                 {c.is_preview ? (
                                   <span className="pill flex-shrink-0" style={{ background: "var(--accent)", color: "white" }}>無料</span>

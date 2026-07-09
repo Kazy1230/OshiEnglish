@@ -444,6 +444,8 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
               {chapter.cards.map(card => {
                 const typeColor = CARD_TYPE_COLOR[card.card_type] ?? "var(--muted)";
                 const unavailable = card.youtube_available === false;
+                const hasTitle = !!card.title?.trim();
+                const displayTitle = hasTitle ? card.title : (CARD_TYPE_LABEL[card.card_type] ?? card.card_type);
                 return (
                   <button
                     key={card.id}
@@ -468,9 +470,11 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate" style={{ color: card.is_completed ? "var(--muted)" : "var(--text)" }}>
-                        {card.title}
+                        {displayTitle}
                       </p>
-                      <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>{CARD_TYPE_LABEL[card.card_type] ?? card.card_type}</p>
+                      {hasTitle && (
+                        <p className="text-[11px] mt-0.5" style={{ color: "var(--muted)" }}>{CARD_TYPE_LABEL[card.card_type] ?? card.card_type}</p>
+                      )}
                     </div>
                     {unavailable ? (
                       <span className="pill flex-shrink-0" style={{ background: "#fee2e2", color: "#dc2626" }}>非公開</span>

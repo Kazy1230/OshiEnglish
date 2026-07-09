@@ -76,6 +76,10 @@ function SortableCard({
   const [quizOptions, setQuizOptions] = useState<QuizOption[]>(card.quiz_options || [{ text: "", is_correct: true }, { text: "", is_correct: false }]);
 
   async function handleSave() {
+    if (!localCard.title || !localCard.title.trim()) {
+      toast("カードのタイトルを入力してください。学習者にはこのタイトルで内容が伝わります", "error");
+      return;
+    }
     setSaving(true);
     try {
       const data: Record<string, unknown> = {
@@ -146,8 +150,10 @@ function SortableCard({
           </div>
 
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>タイトル</label>
-            <input value={localCard.title || ""} onChange={e => setLocalCard(c => ({ ...c, title: e.target.value }))} placeholder="カードのタイトル" />
+            <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+              タイトル <span style={{ color: "#dc2626" }}>*必須</span>
+            </label>
+            <input value={localCard.title || ""} onChange={e => setLocalCard(c => ({ ...c, title: e.target.value }))} placeholder="例：現在完了形とは（何を学ぶかが伝わるタイトルにしてください）" />
           </div>
 
           {(localCard.card_type === "video") && (
