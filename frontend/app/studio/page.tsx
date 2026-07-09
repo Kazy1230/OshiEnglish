@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { api, API_BASE } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { AppHeader } from "@/components/AppHeader";
+import { ContentsPoolPanel } from "@/components/ContentsPoolPanel";
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type Idea = { title: string; hook: string; why: string };
@@ -35,7 +36,7 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 type Step = "format" | "ideas" | "angles" | "generating" | "result";
-type Panel = "create" | "drafts" | "marketing";
+type Panel = "create" | "drafts" | "marketing" | "contents";
 
 // ── コンテンツ作成パネル ─────────────────────────────────────────
 function CreatePanel({ character, onSave }: { character: { id: number; name: string } | null; onSave: () => void }) {
@@ -548,6 +549,7 @@ export default function StudioPage() {
     { key: "create", icon: "✍️", label: "コンテンツ作成" },
     { key: "drafts", icon: "📁", label: "コンテンツ案" },
     { key: "marketing", icon: "📊", label: "マーケティング戦略" },
+    { key: "contents", icon: "🗂️", label: "コンテンツプール" },
   ];
 
   return (
@@ -601,6 +603,9 @@ export default function StudioPage() {
           )}
           {panel === "marketing" && (
             <MarketingPanel />
+          )}
+          {panel === "contents" && (
+            <ContentsPoolPanel />
           )}
         </main>
       </div>

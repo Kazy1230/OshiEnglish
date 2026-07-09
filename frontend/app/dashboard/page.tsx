@@ -27,7 +27,6 @@ function toneCompleteness(tone?: Record<string, unknown> | null): number {
 const TILES = [
   { href: "/creator/courses", icon: "📚", label: "コース一覧", desc: "作成したコース", needsApproval: false },
   { href: "/studio", icon: "🎬", label: "スタジオ", desc: "コンテンツ生成AI", needsApproval: true },
-  { href: "/creator/contents", icon: "🗂️", label: "コンテンツプール", desc: "教材URLを管理", needsApproval: true },
 ];
 
 export default function DashboardPage() {
