@@ -5,16 +5,25 @@ import { api } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 
+type QuizOption = { text: string };
+
 type Card = {
   id: number;
   order: number;
-  card_type: "video" | "assignment" | "test" | "message";
+  card_type: "video" | "build_task" | "quiz" | "message";
   title: string;
   body: string | null;
   youtube_url: string | null;
   is_preview: boolean;
   youtube_available: boolean | null;
   is_completed: boolean;
+  submission_format: "text" | "video" | "photo" | null;
+  quiz_options: QuizOption[] | null;
+  submission_text: string | null;
+  submission_url: string | null;
+  ai_feedback: string | null;
+  creator_comment: string | null;
+  quiz_is_correct: boolean | null;
 };
 
 type Chapter = {
@@ -120,6 +129,21 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
   const [completing, setCompleting] = useState(false);
   const [graduated, setGraduated] = useState(false);
   const [nextCourses, setNextCourses] = useState<NextCourse[]>([]);
+  const [completionNote, setCompletionNote] = useState<string | null>(null);
+  const [courseType, setCourseType] = useState<"self_paced" | "pace_based">("self_paced");
+  const chapterLabel = courseType === "pace_based" ? "Day" : "第";
+  const chapterUnit = courseType === "pace_based" ? "日次セット" : "章";
+
+  // build_task提出
+  const [assignmentText, setAssignmentText] = useState("");
+  const [assignmentUrl, setAssignmentUrl] = useState("");
+  const [assignmentPhotoFile, setAssignmentPhotoFile] = useState<File | null>(null);
+  const [submittingAssignment, setSubmittingAssignment] = useState(false);
+
+  // quiz回答
+  const [quizSelectedIndex, setQuizSelectedIndex] = useState<number | null>(null);
+  const [submittingQuiz, setSubmittingQuiz] = useState(false);
+  const [quizFeedback, setQuizFeedback] = useState<{ is_correct: boolean; correct_answer_text: string | null } | null>(null);
 
   // レビュー
   const [myReview, setMyReview] = useState<Review | null>(null);
@@ -137,6 +161,7 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       api.getMyReview(courseId).catch(() => null),
     ]).then(([chs, prog, review]) => {
       setChapters(chs.chapters ?? chs);
+      if (chs.course_type) setCourseType(chs.course_type);
       setProgress(prog);
       if (!prog.target_pace) setShowPaceModal(true);
       if (prog.is_graduated) {
@@ -156,6 +181,99 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       .finally(() => setFetching(false));
   }, [courseId]);
 
+  // カードを開くたびに前回の入力状態をリセットする
+  useEffect(() => {
+    setAssignmentText(selectedCard?.submission_text ?? "");
+    setAssignmentUrl(selectedCard?.submission_url ?? "");
+    setAssignmentPhotoFile(null);
+    setQuizSelectedIndex(null);
+    setQuizFeedback(null);
+  }, [selectedCard?.id, selectedCard?.submission_text, selectedCard?.submission_url]);
+
+  function patchCard(cardId: number, patch: Partial<Card>) {
+    setChapters(prev => prev.map(ch => ({
+      ...ch,
+      cards: ch.cards.map(c => c.id === cardId ? { ...c, ...patch } : c),
+    })));
+    setSelectedCard(prev => prev && prev.id === cardId ? { ...prev, ...patch } : prev);
+  }
+
+  function bumpProgressIfNewlyCompleted(card: Card) {
+    if (card.is_completed) return;
+    setProgress(p => {
+      if (!p) return p;
+      const newCompleted = p.completed_cards + 1;
+      const isNowGraduated = newCompleted >= p.total_cards;
+      if (isNowGraduated) {
+        api.graduateCourse(courseId).then(res => {
+          setNextCourses(res.next_courses ?? []);
+        }).catch(() => {});
+        setGraduated(true);
+      }
+      return { ...p, completed_cards: newCompleted, is_graduated: isNowGraduated };
+    });
+  }
+
+  async function submitAssignment(card: Card) {
+    if (submittingAssignment) return;
+    const format = card.submission_format || "text";
+    if (format === "text" && !assignmentText.trim()) {
+      toast("提出内容を入力してください");
+      return;
+    }
+    if ((format === "video") && !assignmentUrl.trim()) {
+      toast("動画のURLを入力してください");
+      return;
+    }
+    if (format === "photo" && !assignmentPhotoFile && !assignmentUrl) {
+      toast("写真を選択してください");
+      return;
+    }
+    setSubmittingAssignment(true);
+    try {
+      let url = format === "video" ? assignmentUrl.trim() : "";
+      if (format === "photo") {
+        if (assignmentPhotoFile) {
+          const uploaded = await api.uploadSubmissionPhoto(card.id, assignmentPhotoFile);
+          url = uploaded.url;
+        } else {
+          url = assignmentUrl;
+        }
+      }
+      const res = await api.submitAssignment(card.id, {
+        text: format === "text" ? assignmentText.trim() : undefined,
+        url: url || undefined,
+      });
+      bumpProgressIfNewlyCompleted(card);
+      patchCard(card.id, {
+        is_completed: true,
+        submission_text: format === "text" ? assignmentText.trim() : null,
+        submission_url: url || null,
+        ai_feedback: res.ai_feedback,
+      });
+      toast("提出しました");
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : "提出に失敗しました", "error");
+    } finally {
+      setSubmittingAssignment(false);
+    }
+  }
+
+  async function submitQuizAnswer(card: Card) {
+    if (quizSelectedIndex === null || submittingQuiz) return;
+    setSubmittingQuiz(true);
+    try {
+      const res = await api.submitQuizAnswer(card.id, quizSelectedIndex);
+      setQuizFeedback(res);
+      bumpProgressIfNewlyCompleted(card);
+      patchCard(card.id, { is_completed: true, quiz_is_correct: res.is_correct });
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : "採点に失敗しました", "error");
+    } finally {
+      setSubmittingQuiz(false);
+    }
+  }
+
   async function setPace(pace: string) {
     try {
       await api.setPace(courseId, pace);
@@ -171,25 +289,13 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
     if (card.is_completed || completing) return;
     setCompleting(true);
     try {
-      await api.completeCard(card.id);
-      setChapters(prev => prev.map(ch => ({
-        ...ch,
-        cards: ch.cards.map(c => c.id === card.id ? { ...c, is_completed: true } : c),
-        completed_count: ch.cards.filter(c => c.id === card.id || c.is_completed).length,
-      })));
-      setProgress(p => {
-        if (!p) return p;
-        const newCompleted = p.completed_cards + 1;
-        const isNowGraduated = newCompleted >= p.total_cards;
-        if (isNowGraduated) {
-          api.graduateCourse(courseId).then(res => {
-            setNextCourses(res.next_courses ?? []);
-          }).catch(() => {});
-          setGraduated(true);
-        }
-        return { ...p, completed_cards: newCompleted, is_graduated: isNowGraduated };
-      });
+      const res = await api.completeCard(card.id);
+      bumpProgressIfNewlyCompleted(card);
+      patchCard(card.id, { is_completed: true });
       setSelectedCard(null);
+      if (res?.completion_message) {
+        setCompletionNote(res.completion_message);
+      }
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : String(e));
     } finally {
@@ -320,8 +426,16 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-baseline justify-between">
         <h2 className="font-bold text-lg" style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}>カリキュラム</h2>
-        <span className="text-xs" style={{ color: "var(--muted)" }}>{chapters.length}章 · {progress?.total_cards ?? 0}カード</span>
+        <span className="text-xs" style={{ color: "var(--muted)" }}>{chapters.length}{chapterUnit} · {progress?.total_cards ?? 0}カード</span>
       </div>
+
+      {/* 完了時メッセージ（次への橋渡しの一言） */}
+      {completionNote && (
+        <div className="card flex items-center justify-between gap-3" style={{ border: "1.5px solid var(--accent)" }}>
+          <p className="text-sm" style={{ color: "var(--text)" }}>💬 {completionNote}</p>
+          <button onClick={() => setCompletionNote(null)} style={{ color: "var(--muted)", fontSize: "1.2rem", lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+      )}
 
       {/* ペース設定モーダル */}
       {showPaceModal && (
@@ -370,12 +484,111 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
             {selectedCard.youtube_url && <YouTubeEmbed url={selectedCard.youtube_url} />}
             {selectedCard.body && <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{selectedCard.body}</p>}
 
-            {!selectedCard.is_completed ? (
-              <button className="btn-primary" onClick={() => completeCard(selectedCard)} disabled={completing}>
-                {completing ? "記録中..." : "完了にする"}
-              </button>
-            ) : (
-              <p className="text-sm font-medium text-center" style={{ color: "var(--accent)" }}>✓ 完了済み</p>
+            {/* video / message: シンプルな完了ボタン */}
+            {(selectedCard.card_type === "video" || selectedCard.card_type === "message") && (
+              !selectedCard.is_completed ? (
+                <button className="btn-primary" onClick={() => completeCard(selectedCard)} disabled={completing}>
+                  {completing ? "記録中..." : "完了にする"}
+                </button>
+              ) : (
+                <p className="text-sm font-medium text-center" style={{ color: "var(--accent)" }}>✓ 完了済み</p>
+              )
+            )}
+
+            {/* build_task: 提出形式に応じた入力 + AI一次判定 */}
+            {selectedCard.card_type === "build_task" && (
+              <div className="flex flex-col gap-3">
+                {(selectedCard.submission_format ?? "text") === "text" && (
+                  <textarea
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)", minHeight: 100, resize: "vertical" }}
+                    placeholder="ここに提出内容を入力…"
+                    value={assignmentText}
+                    onChange={e => setAssignmentText(e.target.value)}
+                    disabled={submittingAssignment}
+                  />
+                )}
+                {selectedCard.submission_format === "video" && (
+                  <input
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
+                    placeholder="YouTubeのURLを貼り付け…"
+                    value={assignmentUrl}
+                    onChange={e => setAssignmentUrl(e.target.value)}
+                    disabled={submittingAssignment}
+                  />
+                )}
+                {selectedCard.submission_format === "photo" && (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={e => setAssignmentPhotoFile(e.target.files?.[0] ?? null)}
+                      disabled={submittingAssignment}
+                    />
+                    {selectedCard.submission_url && !assignmentPhotoFile && (
+                      <img src={selectedCard.submission_url} alt="提出済みの写真" style={{ maxHeight: 200, borderRadius: 8, objectFit: "contain" }} />
+                    )}
+                  </div>
+                )}
+
+                <button className="btn-primary" onClick={() => submitAssignment(selectedCard)} disabled={submittingAssignment}>
+                  {submittingAssignment ? "送信中..." : selectedCard.is_completed ? "再提出する" : "提出する"}
+                </button>
+
+                {selectedCard.ai_feedback && (
+                  <div className="rounded-lg p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <p className="text-xs font-bold mb-1" style={{ color: "var(--primary)" }}>フィードバック</p>
+                    <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{selectedCard.ai_feedback}</p>
+                    {selectedCard.creator_comment && (
+                      <div className="mt-2 pt-2" style={{ borderTop: "1px dashed var(--border)" }}>
+                        <p className="text-xs font-bold mb-1" style={{ color: "var(--accent)" }}>先生から一言</p>
+                        <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{selectedCard.creator_comment}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* quiz: 選択肢と即時採点 */}
+            {selectedCard.card_type === "quiz" && (
+              <div className="flex flex-col gap-3">
+                {(selectedCard.quiz_options ?? []).map((opt, i) => (
+                  <button
+                    key={i}
+                    className="text-left px-3.5 py-2.5 rounded-lg text-sm transition-colors"
+                    style={{
+                      background: quizSelectedIndex === i ? "color-mix(in srgb, var(--primary) 12%, transparent)" : "var(--surface)",
+                      border: `1.5px solid ${quizSelectedIndex === i ? "var(--primary)" : "var(--border)"}`,
+                      color: "var(--text)",
+                    }}
+                    onClick={() => setQuizSelectedIndex(i)}
+                    disabled={submittingQuiz}
+                  >
+                    {opt.text}
+                  </button>
+                ))}
+                <button
+                  className="btn-primary"
+                  onClick={() => submitQuizAnswer(selectedCard)}
+                  disabled={quizSelectedIndex === null || submittingQuiz}
+                >
+                  {submittingQuiz ? "採点中..." : "回答する"}
+                </button>
+                {quizFeedback && (
+                  <p className="text-sm font-medium text-center" style={{ color: quizFeedback.is_correct ? "var(--accent)" : "#dc2626" }}>
+                    {quizFeedback.is_correct
+                      ? "🎉 正解です！"
+                      : `△ 不正解でした。正解は「${quizFeedback.correct_answer_text ?? ""}」`}
+                  </p>
+                )}
+                {!quizFeedback && selectedCard.is_completed && (
+                  <p className="text-sm font-medium text-center" style={{ color: selectedCard.quiz_is_correct ? "var(--accent)" : "var(--muted)" }}>
+                    {selectedCard.quiz_is_correct ? "✓ 正解済み" : "回答済み（もう一度挑戦できます）"}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -427,6 +640,9 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
                 {chPct >= 100 ? "✓" : chapter.order}
               </span>
               <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--muted)" }}>
+                  {courseType === "pace_based" ? `${chapterLabel}${chapter.order}` : `${chapterLabel}${chapter.order}${chapterUnit}`}
+                </p>
                 <h2 className="font-bold text-base" style={{ color: "var(--text)" }}>{chapter.title}</h2>
                 {chapter.goal && (
                   <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>🎯 {chapter.goal}</p>

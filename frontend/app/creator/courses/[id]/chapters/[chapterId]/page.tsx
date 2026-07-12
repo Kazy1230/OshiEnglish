@@ -37,7 +37,15 @@ type Card = {
   is_preview: boolean;
   quiz_options: QuizOption[] | null;
   youtube_available: boolean | null;
+  submission_format: string | null;
+  completion_message: string | null;
 };
+
+const SUBMISSION_FORMATS = [
+  { value: "text", label: "テキスト" },
+  { value: "video", label: "動画（YouTube URL）" },
+  { value: "photo", label: "写真" },
+] as const;
 
 type Chapter = {
   id: number;
@@ -91,6 +99,12 @@ function SortableCard({
       };
       if (localCard.card_type === "quiz") {
         data.quiz_options = quizOptions;
+      }
+      if (localCard.card_type === "build_task") {
+        data.submission_format = localCard.submission_format || "text";
+      }
+      if (localCard.card_type === "video" || localCard.card_type === "message") {
+        data.completion_message = localCard.completion_message;
       }
       await api.updateCard(courseId, chapterId, card.id, data);
       onUpdate(card.id, { ...localCard, quiz_options: localCard.card_type === "quiz" ? quizOptions : null });
@@ -165,8 +179,50 @@ function SortableCard({
 
           {(localCard.card_type === "message" || localCard.card_type === "build_task") && (
             <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>本文</label>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>
+                {localCard.card_type === "build_task" ? "課題の指示文" : "本文"}
+              </label>
               <textarea rows={4} value={localCard.body || ""} onChange={e => setLocalCard(c => ({ ...c, body: e.target.value }))} placeholder="内容を入力…" className="w-full" />
+            </div>
+          )}
+
+          {localCard.card_type === "build_task" && (
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>提出形式</label>
+              <div className="flex gap-2 flex-wrap">
+                {SUBMISSION_FORMATS.map(f => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => setLocalCard(c => ({ ...c, submission_format: f.value }))}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
+                    style={{
+                      background: (localCard.submission_format || "text") === f.value ? "var(--primary)" : "var(--bg)",
+                      color: (localCard.submission_format || "text") === f.value ? "#fff" : "var(--muted)",
+                      border: "1px solid var(--border, #e5e7eb)",
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                学習者が提出した内容にAIが即座に定性的なフィードバックを返します。あなたのレビュー・追加コメントは任意です。
+              </p>
+            </div>
+          )}
+
+          {(localCard.card_type === "video" || localCard.card_type === "message") && (
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>完了時メッセージ（任意）</label>
+              <textarea
+                rows={2}
+                value={localCard.completion_message || ""}
+                onChange={e => setLocalCard(c => ({ ...c, completion_message: e.target.value }))}
+                placeholder="例：お疲れさま！次はいよいよ実践編だよ。"
+                className="w-full"
+              />
+              <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>完了時に学習者へ表示される、次への橋渡しの一言です</p>
             </div>
           )}
 

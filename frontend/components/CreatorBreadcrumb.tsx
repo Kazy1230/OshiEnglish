@@ -15,6 +15,7 @@ const ROUTES: { pattern: RegExp; trail: (m: RegExpMatchArray) => Crumb[] }[] = [
   { pattern: /^\/creator\/courses\/\d+\/publish$/, trail: () => [COURSES_ROOT, { label: "公開設定" }] },
   { pattern: /^\/creator\/courses\/\d+\/preview$/, trail: () => [COURSES_ROOT, { label: "プレビュー" }] },
   { pattern: /^\/creator\/courses\/\d+\/enrollments$/, trail: () => [COURSES_ROOT, { label: "受講者一覧" }] },
+  { pattern: /^\/creator\/courses\/\d+\/submissions$/, trail: () => [COURSES_ROOT, { label: "課題の提出物" }] },
   { pattern: /^\/creator\/courses\/\d+\/calendar$/, trail: () => [COURSES_ROOT, { label: "カレンダー" }] },
   { pattern: /^\/creator\/courses\/\d+\/textbooks$/, trail: () => [COURSES_ROOT, { label: "教材設定" }] },
   { pattern: /^\/creator\/interview$/, trail: () => [{ label: "AIインタビュー" }] },

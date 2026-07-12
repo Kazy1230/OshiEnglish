@@ -195,6 +195,52 @@ def build_greeting_message_user() -> list[dict]:
     return [{"role": "user", "content": "学習者を迎える最初のメッセージを生成してください。"}]
 
 
+def build_assignment_feedback_system(
+    personality_profile: dict,
+    tone_profile: dict | None = None,
+    course_overview: str | None = None,
+) -> str:
+    """課題(build_task)提出直後のAI一次判定用システムプロンプト（修正.md 2節）。
+    厳密な数値判定ではなく、基準を満たしていそうかの定性的な評価＋励ましのコメントに留める。
+    クリエイターのレビューは任意のボーナスであり、このAIコメントが提出直後のメイン応答になる。"""
+    personality_block = _build_personality_block(personality_profile, tone_profile)
+    course_block = f"\n\n【このコースについて】\n{course_overview}" if course_overview else ""
+    return f"""あなたは学習コーチとして、以下の人格で学習者が提出した課題にコメントしてください。
+
+【人格設定】
+{personality_block}{course_block}
+
+【判定方針】
+- 提出内容が課題の評価基準を満たしていそうかを定性的に見る（画像からの寸法判定などの精度不安を前提とし、厳密な数値判定はしない）
+- まず取り組みを認め、良かった点を具体的に挙げる
+- 基準を満たしていなさそうな場合も、否定せず次に試すとよいことを1つ提案する
+- あなたのコメントの後、クリエイター本人が気が向いたときに追加でコメントすることがある旨は書かない（自然に振る舞う）
+
+3〜4文程度の自然なチャットメッセージとして書いてください。前置きや説明は不要です。"""
+
+
+def build_assignment_feedback_user(
+    task_instruction: str | None,
+    assessment_criteria: list[str] | None,
+    submission_format: str,
+    submission_text: str | None,
+    submission_url: str | None,
+) -> list[dict]:
+    criteria_text = "\n".join(f"- {c}" for c in assessment_criteria) if assessment_criteria else "（特に設定なし）"
+    lines = [
+        f"課題の指示: {task_instruction or '（指示文なし）'}",
+        f"評価基準:\n{criteria_text}",
+        f"提出形式: {submission_format}",
+    ]
+    if submission_text:
+        lines.append(f"提出内容（テキスト）:\n{submission_text}")
+    if submission_url:
+        kind = "動画URL" if submission_format == "video" else "写真URL"
+        lines.append(f"提出内容（{kind}）: {submission_url}")
+    lines.append("上記の提出物にコメントしてください。")
+    return [{"role": "user", "content": "\n\n".join(lines)}]
+
+
 def build_reminder_message_system(personality_profile: dict, tier: int, tone_profile: dict | None = None) -> str:
     """改善提案書5節: 3段階リマインドメール。tierは未開封日数に応じた1/2/3のトーン段階。
     personality_profile（指導哲学）とtone_profile（口癖・セリフ例）を両方渡し、口調がぶれないようにする。"""
@@ -233,12 +279,21 @@ def build_reengagement_message_system(tone_profile: dict, character_name: str, p
 - 80文字以内。キャラクターの口調を必ず守る。説明文や前置きは不要。"""
 
 
-def build_reengagement_message_user(last_summary: str | None, days_inactive: int) -> list[dict]:
+def build_reengagement_message_user(
+    last_summary: str | None,
+    days_inactive: int,
+    tone_hint: str | None = None,
+    last_chapter_title: str | None = None,
+) -> list[dict]:
+    lines = [f"{days_inactive}日ぶりに学習者が戻ってきます。"]
+    if tone_hint:
+        lines.append(f"【今回のトーン】{tone_hint}")
+    if last_chapter_title:
+        lines.append(f"学習者が最後に取り組んでいた内容:「{last_chapter_title}」")
     if last_summary:
-        content = f"最後の会話の要約: 「{last_summary}」\n{days_inactive}日ぶりに学習者が戻ってきます。続きへの好奇心を引き出すメッセージを生成してください。"
-    else:
-        content = f"{days_inactive}日ぶりに学習者が戻ってきます。また話したかったというキャラクターらしいメッセージを生成してください。"
-    return [{"role": "user", "content": content}]
+        lines.append(f"最後の会話の要約: 「{last_summary}」")
+    lines.append("続きへの好奇心を引き出すメッセージを生成してください。")
+    return [{"role": "user", "content": "\n".join(lines)}]
 
 
 DAILY_SUMMARY_SYSTEM = """以下の会話を3文以内・100トークン以内に圧縮してください。

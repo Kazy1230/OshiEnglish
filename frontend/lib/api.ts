@@ -369,6 +369,18 @@ export const api = {
   getLearnerProgress: (courseId: number) => apiFetch(`/courses/${courseId}/progress`),
   graduateCourse: (courseId: number) =>
     apiFetch(`/courses/${courseId}/graduate`, { method: "POST" }),
+  uploadSubmissionPhoto: (cardId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiUpload(`/cards/${cardId}/submission-photo`, formData);
+  },
+  submitAssignment: (cardId: number, data: { text?: string; url?: string }) =>
+    apiFetch(`/cards/${cardId}/submit-assignment`, { method: "POST", body: JSON.stringify(data) }),
+  submitQuizAnswer: (cardId: number, selectedIndex: number) =>
+    apiFetch(`/cards/${cardId}/quiz-answer`, { method: "POST", body: JSON.stringify({ selected_index: selectedIndex }) }),
+  listCourseSubmissions: (courseId: number) => apiFetch(`/courses/${courseId}/submissions`),
+  commentOnSubmission: (cardProgressId: number, comment: string) =>
+    apiFetch(`/submissions/${cardProgressId}/comment`, { method: "PUT", body: JSON.stringify({ comment }) }),
 
   // レビュー
   listCourseReviews: (courseId: number) =>

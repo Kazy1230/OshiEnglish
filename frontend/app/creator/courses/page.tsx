@@ -71,6 +71,7 @@ export default function CreatorCoursesPage() {
                 <div className="flex gap-2 flex-wrap">
                   <Link href={`/creator/courses/${c.id}/curriculum`} className="btn-ghost flex-1 text-center">カリキュラム編集</Link>
                   <Link href={`/creator/courses/${c.id}/enrollments`} className="btn-ghost flex-1 text-center">申込者一覧</Link>
+                  <Link href={`/creator/courses/${c.id}/submissions`} className="btn-ghost flex-1 text-center">課題の提出物</Link>
                 </div>
               </div>
             ))}

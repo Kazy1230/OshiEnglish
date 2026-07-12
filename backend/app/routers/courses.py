@@ -104,6 +104,8 @@ def _serialize_course_card(course: Course) -> dict:
         "is_free": course.is_free,
         "tier_a_price": course.tier_a_price,
         "tier_b_price": course.tier_b_price,
+        "course_type": course.course_type,
+        "pace_unit_description": course.pace_unit_description,
         "is_suspended": course.is_suspended,
         "suspension_reason": course.suspension_reason,
         "completion_video_url": course.completion_video_url,
@@ -167,6 +169,9 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
 
 # ----- リクエストスキーマ -----
 
+COURSE_TYPES = ("self_paced", "pace_based")
+
+
 class CourseCreate(BaseModel):
     creator_id: Optional[int] = None
     title: str
@@ -178,6 +183,8 @@ class CourseCreate(BaseModel):
     is_free: bool = False
     tier_a_price: Optional[int] = None
     tier_b_price: Optional[int] = None
+    course_type: str = "self_paced"
+    pace_unit_description: Optional[str] = None
     curriculum_target_audience: Optional[str] = None
     curriculum_topics: Optional[str] = None
     curriculum_style: Optional[str] = None
@@ -193,6 +200,10 @@ class CourseCreate(BaseModel):
             raise ValueError("Tier Aの価格は980〜1980円/月で指定してください")
         if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 5000):
             raise ValueError("Tier Bの価格は2980〜5000円/月で指定してください")
+        if self.course_type not in COURSE_TYPES:
+            raise ValueError(f"course_typeは{COURSE_TYPES}のいずれかを指定してください")
+        if self.course_type == "self_paced":
+            self.pace_unit_description = None
         return self
 
 
@@ -397,6 +408,8 @@ def create_course(data: CourseCreate, current_user=Depends(get_current_user), db
         personality_profile_id=personality.id if personality else None,
         tier_a_price=data.tier_a_price,
         tier_b_price=data.tier_b_price,
+        course_type=data.course_type,
+        pace_unit_description=data.pace_unit_description,
         curriculum_target_audience=data.curriculum_target_audience,
         curriculum_topics=data.curriculum_topics,
         curriculum_style=data.curriculum_style,

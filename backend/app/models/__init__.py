@@ -39,3 +39,4 @@ from app.models.content_like import ContentLike
 from app.models.marketing_strategy import MarketingStrategy
 from app.models.content_idea import ContentIdea
 from app.models.chat_greeting import ChatGreeting
+from app.models.reengagement_state import ReengagementState

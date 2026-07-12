@@ -1,13 +1,21 @@
 """カリキュラム（章/カード）CRUD + 学習進捗 + 卒業"""
+import os
+import uuid
 import httpx
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.llm import generate_text, LLMError
+from app.core.config import settings
+from app.core.email import send_email
+from app.core.uploads import validate_image_content
+from app.core import chat_prompts as prompts
+from app.routers.chat import _build_course_overview
 from app.models.course import Course
 from app.models.course_chapter import CourseChapter
 from app.models.chapter_card import ChapterCard
@@ -18,8 +26,16 @@ from app.models.course_subscription import CourseSubscription
 from app.models.notification import Notification
 from app.models.course_review import CourseReview
 from app.models.character import Character
+from app.models.personality_profile import PersonalityProfile
+from app.models.customer import Customer
 
 router = APIRouter(tags=["カリキュラム"])
+
+# 課題提出（写真）の保存先
+_SUBMISSION_MEDIA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "submission_media")
+os.makedirs(_SUBMISSION_MEDIA_DIR, exist_ok=True)
+_ALLOWED_PHOTO_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+_MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 # ── ヘルパー ─────────────────────────────────────────────────────
@@ -112,6 +128,8 @@ class CardCreate(BaseModel):
     quiz_options: Optional[List[dict]] = None  # [{text: str, is_correct: bool}]
     is_preview: bool = False
     order: Optional[int] = None
+    submission_format: Optional[str] = None  # build_task用: text / video / photo
+    completion_message: Optional[str] = None  # video/message用
 
 class CardUpdate(BaseModel):
     card_type: Optional[str] = None
@@ -121,6 +139,14 @@ class CardUpdate(BaseModel):
     quiz_options: Optional[List[dict]] = None
     is_preview: Optional[bool] = None
     order: Optional[int] = None
+    submission_format: Optional[str] = None
+    completion_message: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_submission_format(self):
+        if self.submission_format is not None and self.submission_format not in ("text", "video", "photo"):
+            raise ValueError("submission_formatは'text'/'video'/'photo'のいずれかを指定してください")
+        return self
 
     @model_validator(mode="after")
     def _validate_title(self):
@@ -233,6 +259,9 @@ def list_chapters(
                 "youtube_url": c.youtube_url,
                 "is_preview": c.is_preview,
                 "youtube_available": c.youtube_available,
+                "quiz_options": c.quiz_options,
+                "submission_format": c.submission_format,
+                "completion_message": c.completion_message,
             }
             for c in ch.cards
         ]
@@ -335,6 +364,8 @@ def create_card(
         youtube_url=data.youtube_url,
         is_preview=data.is_preview,
         order=data.order if data.order is not None else max_order,
+        submission_format=data.submission_format or ("text" if data.card_type == "build_task" else None),
+        completion_message=data.completion_message,
     )
     db.add(card)
     db.commit()
@@ -355,7 +386,7 @@ def update_card(
     card = db.query(ChapterCard).filter(ChapterCard.id == card_id, ChapterCard.chapter_id == chapter_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="カードが見つかりません")
-    for field in ("card_type", "title", "body", "youtube_url", "quiz_options", "is_preview", "order"):
+    for field in ("card_type", "title", "body", "youtube_url", "quiz_options", "is_preview", "order", "submission_format", "completion_message"):
         val = getattr(data, field)
         if val is not None:
             setattr(card, field, val)
@@ -441,11 +472,79 @@ def duplicate_card(
         quiz_options=src.quiz_options,
         is_preview=src.is_preview,
         order=max_order,
+        submission_format=src.submission_format,
+        completion_message=src.completion_message,
     )
     db.add(new_card)
     db.commit()
     db.refresh(new_card)
     return {"id": new_card.id, "order": new_card.order}
+
+
+# ── クリエイター: 提出物レビュー（任意） ────────────────────────────
+# 修正.md 2節: AIの一次判定がメインであり、クリエイターの確認・追加コメントは強制しない任意機能。
+
+@router.get("/courses/{course_id}/submissions")
+def list_submissions(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """このコースの課題(build_task)提出一覧をAIコメント付きで返す。要(コースのクリエイター本人)"""
+    _get_owned_course(db, course_id, current_user)
+    rows = (
+        db.query(CardProgress, ChapterCard, Customer)
+        .join(ChapterCard, CardProgress.card_id == ChapterCard.id)
+        .join(CourseChapter, ChapterCard.chapter_id == CourseChapter.id)
+        .join(Customer, CardProgress.user_id == Customer.id)
+        .filter(CourseChapter.course_id == course_id, ChapterCard.card_type == "build_task", CardProgress.submitted_at.isnot(None))
+        .order_by(CardProgress.submitted_at.desc())
+        .all()
+    )
+    return [
+        {
+            "card_progress_id": prog.id,
+            "card_id": card.id,
+            "card_title": card.title,
+            "learner_email": learner.email,
+            "submission_text": prog.submission_text,
+            "submission_url": prog.submission_url,
+            "submitted_at": prog.submitted_at,
+            "ai_feedback": prog.ai_feedback,
+            "creator_comment": prog.creator_comment,
+            "creator_commented_at": prog.creator_commented_at,
+        }
+        for prog, card, learner in rows
+    ]
+
+
+class SubmissionCommentCreate(BaseModel):
+    comment: str
+
+
+@router.put("/submissions/{card_progress_id}/comment")
+def comment_on_submission(
+    card_progress_id: int,
+    data: SubmissionCommentCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """提出物にクリエイターが任意でコメントを追加する。要(コースのクリエイター本人)"""
+    prog = db.query(CardProgress).filter(CardProgress.id == card_progress_id).first()
+    if not prog:
+        raise HTTPException(status_code=404, detail="提出物が見つかりません")
+    card = db.query(ChapterCard).filter(ChapterCard.id == prog.card_id).first()
+    course = db.query(Course).filter(Course.id == card.chapter.course_id).first() if card else None
+    if not course:
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+    _get_owned_course(db, course.id, current_user)
+
+    if not data.comment.strip():
+        raise HTTPException(status_code=400, detail="コメントを入力してください")
+    prog.creator_comment = data.comment
+    prog.creator_commented_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
 
 
 # ── クリエイター: YouTube メタデータ取得 ─────────────────────────
@@ -554,19 +653,21 @@ def get_curriculum(
     if not course:
         raise HTTPException(status_code=404, detail="コースが見つかりません")
 
-    completed_ids = set(
-        row.card_id for row in
-        db.query(CardProgress.card_id)
+    progress_by_card = {
+        row.card_id: row for row in
+        db.query(CardProgress)
         .join(ChapterCard, CardProgress.card_id == ChapterCard.id)
         .join(CourseChapter, ChapterCard.chapter_id == CourseChapter.id)
-        .filter(CourseChapter.course_id == course_id, CardProgress.user_id == current_user.id, CardProgress.is_completed == True)
+        .filter(CourseChapter.course_id == course_id, CardProgress.user_id == current_user.id)
         .all()
-    )
+    }
+    completed_ids = {card_id for card_id, prog in progress_by_card.items() if prog.is_completed}
 
     chapters_data = []
     for ch in sorted(course.chapters, key=lambda c: c.order):
         cards_data = []
         for card in sorted(ch.cards, key=lambda c: c.order):
+            prog = progress_by_card.get(card.id)
             cards_data.append({
                 "id": card.id,
                 "order": card.order,
@@ -577,6 +678,16 @@ def get_curriculum(
                 "is_preview": card.is_preview,
                 "youtube_available": card.youtube_available,
                 "is_completed": card.id in completed_ids,
+                "submission_format": card.submission_format if card.card_type == "build_task" else None,
+                # 正解フラグ(is_correct)は学習者に送らず、選択肢テキストのみ渡す（カンニング防止）
+                "quiz_options": (
+                    [{"text": o.get("text", "")} for o in card.quiz_options] if card.card_type == "quiz" and card.quiz_options else None
+                ),
+                "submission_text": prog.submission_text if prog else None,
+                "submission_url": prog.submission_url if prog else None,
+                "ai_feedback": prog.ai_feedback if prog else None,
+                "creator_comment": prog.creator_comment if prog else None,
+                "quiz_is_correct": prog.quiz_is_correct if prog else None,
             })
         chapters_data.append({
             "id": ch.id,
@@ -599,6 +710,7 @@ def get_curriculum(
 
     return {
         "course_id": course_id,
+        "course_type": course.course_type,
         "completion_video_url": course.completion_video_url,
         "total_cards": total,
         "completed_cards": completed,
@@ -668,7 +780,175 @@ def complete_card(
 
     total = _card_count(db, course_id)
     completed = _completed_card_count(db, current_user.id, course_id)
-    return {"total": total, "completed": completed, "progress_pct": round(completed / total * 100) if total > 0 else 0}
+    return {
+        "total": total,
+        "completed": completed,
+        "progress_pct": round(completed / total * 100) if total > 0 else 0,
+        "completion_message": card.completion_message,
+    }
+
+
+# ── 学習者: 課題(build_task)提出 ────────────────────────────────────
+# 修正.md 2節: 提出直後にAIが一次判定＋励ましのFBを返す。クリエイターのレビューは任意（ボーナスの関係性）。
+
+def _notify_creator_of_submission(db: Session, course: Course, card: ChapterCard, learner: Customer):
+    """課題提出があったことをクリエイターにメールで通知する（ベストエフォート）。確認・追加コメントは任意。"""
+    if not course.character or not course.character.creator_id:
+        return
+    creator_profile = db.query(CreatorProfile).filter(CreatorProfile.id == course.character.creator_id).first()
+    if not creator_profile:
+        return
+    creator_user = db.query(Customer).filter(Customer.id == creator_profile.user_id).first()
+    if not creator_user or not creator_user.email:
+        return
+    send_email(
+        creator_user.email,
+        "【ManaVillage】学習者から課題提出がありました",
+        f"<p>「{course.title}」の「{card.title or '課題'}」に学習者から提出がありました。"
+        f"AIが一次コメント済みです。気が向いたときに管理画面から確認・コメントしてください（確認は任意です）。</p>",
+    )
+
+
+@router.post("/cards/{card_id}/submission-photo")
+async def upload_submission_photo(
+    card_id: int,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """課題提出用の写真をアップロードする（PNG/JPG/WEBP, 5MBまで）。返却されたurlをsubmit-assignmentに渡す。"""
+    card = db.query(ChapterCard).filter(ChapterCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="カードが見つかりません")
+    _require_purchase(db, current_user.id, card.chapter.course_id)
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _ALLOWED_PHOTO_EXT:
+        raise HTTPException(status_code=400, detail="対応形式は PNG / JPG / JPEG / WEBP のみです")
+    contents = await file.read()
+    if len(contents) > _MAX_PHOTO_SIZE:
+        raise HTTPException(status_code=400, detail="画像サイズは5MB以下にしてください")
+    validate_image_content(contents, ext)
+
+    filename = f"submission_{card_id}_{current_user.id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(_SUBMISSION_MEDIA_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+    return {"url": f"/static/submission_media/{filename}"}
+
+
+class SubmissionCreate(BaseModel):
+    text: Optional[str] = None
+    url: Optional[str] = None
+
+
+@router.post("/cards/{card_id}/submit-assignment")
+def submit_assignment(
+    card_id: int,
+    data: SubmissionCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    card = db.query(ChapterCard).filter(ChapterCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="カードが見つかりません")
+    if card.card_type != "build_task":
+        raise HTTPException(status_code=400, detail="このカードは課題ではありません")
+
+    course_id = card.chapter.course_id
+    _require_purchase(db, current_user.id, course_id)
+
+    submission_format = card.submission_format or "text"
+    if submission_format == "text" and not (data.text or "").strip():
+        raise HTTPException(status_code=400, detail="提出内容を入力してください")
+    if submission_format in ("video", "photo") and not (data.url or "").strip():
+        raise HTTPException(status_code=400, detail="提出物のURLがありません")
+
+    course = db.query(Course).filter(Course.id == course_id).first()
+    personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+    personality_profile = personality.profile if personality and personality.profile else {}
+    tone_profile = (course.character.tone_profile if course.character else None) or {}
+    course_overview = _build_course_overview(course)
+
+    try:
+        ai_feedback = generate_text(
+            prompts.build_assignment_feedback_system(personality_profile, tone_profile, course_overview),
+            prompts.build_assignment_feedback_user(
+                card.body, card.chapter.assessment_criteria, submission_format, data.text, data.url,
+            ),
+            max_tokens=300,
+            model=settings.DEEPSEEK_MODEL_LITE,
+        )
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"AIコメントの生成に失敗しました: {e}") from e
+
+    now = datetime.now(timezone.utc)
+    prog = db.query(CardProgress).filter(
+        CardProgress.user_id == current_user.id, CardProgress.card_id == card_id,
+    ).first()
+    if not prog:
+        prog = CardProgress(user_id=current_user.id, card_id=card_id)
+        db.add(prog)
+    prog.submission_text = data.text
+    prog.submission_url = data.url
+    prog.submitted_at = now
+    prog.ai_feedback = ai_feedback
+    prog.is_completed = True
+    prog.completed_at = now
+    db.commit()
+
+    _notify_creator_of_submission(db, course, card, current_user)
+
+    total = _card_count(db, course_id)
+    completed = _completed_card_count(db, current_user.id, course_id)
+    return {
+        "ai_feedback": ai_feedback,
+        "total": total,
+        "completed": completed,
+        "progress_pct": round(completed / total * 100) if total > 0 else 0,
+    }
+
+
+# ── 学習者: クイズ回答 ────────────────────────────────────────────
+
+class QuizAnswerRequest(BaseModel):
+    selected_index: int
+
+
+@router.post("/cards/{card_id}/quiz-answer")
+def submit_quiz_answer(
+    card_id: int,
+    data: QuizAnswerRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """クイズの回答を採点し、正解・不正解の即時フィードバックのみを返す（完了時メッセージは重複するため設定しない）。"""
+    card = db.query(ChapterCard).filter(ChapterCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="カードが見つかりません")
+    if card.card_type != "quiz" or not card.quiz_options:
+        raise HTTPException(status_code=400, detail="このカードはクイズではありません")
+    if not (0 <= data.selected_index < len(card.quiz_options)):
+        raise HTTPException(status_code=400, detail="選択肢の指定が不正です")
+
+    _require_purchase(db, current_user.id, card.chapter.course_id)
+
+    is_correct = bool(card.quiz_options[data.selected_index].get("is_correct"))
+    correct_text = next((o.get("text", "") for o in card.quiz_options if o.get("is_correct")), None)
+
+    now = datetime.now(timezone.utc)
+    prog = db.query(CardProgress).filter(
+        CardProgress.user_id == current_user.id, CardProgress.card_id == card_id,
+    ).first()
+    if not prog:
+        prog = CardProgress(user_id=current_user.id, card_id=card_id)
+        db.add(prog)
+    prog.quiz_is_correct = is_correct
+    prog.is_completed = True
+    prog.completed_at = now
+    db.commit()
+
+    return {"is_correct": is_correct, "correct_answer_text": None if is_correct else correct_text}
 
 
 # ── 学習者: 卒業 ────────────────────────────────────────────────

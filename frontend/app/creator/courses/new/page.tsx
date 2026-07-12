@@ -26,6 +26,8 @@ export default function NewCoursePage() {
   const [tierBPrice, setTierBPrice] = useState("3980");
   const [enableTierA, setEnableTierA] = useState(true);
   const [enableTierB, setEnableTierB] = useState(true);
+  const [courseType, setCourseType] = useState<"self_paced" | "pace_based">("self_paced");
+  const [paceUnitDescription, setPaceUnitDescription] = useState("");
 
   // Step 1: 壁打ち相談
   const [purpose, setPurpose] = useState("");
@@ -80,6 +82,8 @@ export default function NewCoursePage() {
           is_free: isFree,
           tier_a_price: !isFree && enableTierA ? Number(tierAPrice) : null,
           tier_b_price: enableTierB ? Number(tierBPrice) : null,
+          course_type: courseType,
+          pace_unit_description: courseType === "pace_based" ? (paceUnitDescription || null) : null,
         });
         id = course.id;
         setCourseId(id);
@@ -168,6 +172,38 @@ export default function NewCoursePage() {
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>コース名 *</label>
               <input value={title} onChange={e => setTitle(e.target.value)} required placeholder="例：TOEIC800達成への道" />
+            </div>
+
+            <div className="border-t pt-4" style={{ borderColor: "var(--border, #e5e7eb)" }}>
+              <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>このコースは、どちらのタイプですか？</h3>
+              <div className="flex flex-col gap-2">
+                <label
+                  className="flex items-start gap-2 text-sm p-3 rounded-lg cursor-pointer"
+                  style={{ border: `1.5px solid ${courseType === "self_paced" ? "var(--primary)" : "var(--border, #e5e7eb)"}` }}
+                >
+                  <input type="radio" name="courseType" className="mt-0.5" checked={courseType === "self_paced"} onChange={() => setCourseType("self_paced")} />
+                  <span>
+                    <span className="font-bold block" style={{ color: "var(--text)" }}>自由進行型</span>
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>学習者が自分のペースで完成を目指す（建築・会話練習など）</span>
+                  </span>
+                </label>
+                <label
+                  className="flex items-start gap-2 text-sm p-3 rounded-lg cursor-pointer"
+                  style={{ border: `1.5px solid ${courseType === "pace_based" ? "var(--primary)" : "var(--border, #e5e7eb)"}` }}
+                >
+                  <input type="radio" name="courseType" className="mt-0.5" checked={courseType === "pace_based"} onChange={() => setCourseType("pace_based")} />
+                  <span>
+                    <span className="font-bold block" style={{ color: "var(--text)" }}>ペース管理型</span>
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>毎日/毎週のペースで継続することが重要（単語・リスニングなど）</span>
+                  </span>
+                </label>
+              </div>
+              {courseType === "pace_based" && (
+                <div className="mt-3">
+                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>1回あたりの分量の目安</label>
+                  <input value={paceUnitDescription} onChange={e => setPaceUnitDescription(e.target.value)} placeholder="例：1日10単語" />
+                </div>
+              )}
             </div>
 
             <div className="border-t pt-4" style={{ borderColor: "var(--border, #e5e7eb)" }}>

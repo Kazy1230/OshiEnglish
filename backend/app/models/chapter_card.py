@@ -18,6 +18,11 @@ class ChapterCard(Base):
     youtube_url = Column(String(500), nullable=True)
     is_preview = Column(Boolean, nullable=False, default=False)
     quiz_options = Column(JSON, nullable=True)  # [{text: str, is_correct: bool}] quiz種別用
+    # build_task種別の提出形式（修正.md 2節）: text / video（YouTube URL） / photo
+    submission_format = Column(String(20), nullable=True)
+    # video/message種別の完了時メッセージ（次への橋渡し的な一言）。build_task/quizはAI/採点結果が
+    # その役割を兼ねるため固定メッセージは設定しない
+    completion_message = Column(Text, nullable=True)
     # YouTube oEmbed による可用性チェック結果
     youtube_available = Column(Boolean, nullable=True)
     youtube_checked_at = Column(DateTime(timezone=True), nullable=True)

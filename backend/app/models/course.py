@@ -18,6 +18,12 @@ class Course(Base):
     status = Column(String(20), nullable=False, default="draft")  # draft / published / unpublished
     price = Column(Integer, nullable=False, default=0)  # 単位: 円
     is_free = Column(Boolean, nullable=False, default=False)
+    # コースの型（修正.md 1節）。self_paced=自由進行型（成果物完成型・期限は目安のみ）、
+    # pace_based=ペース管理型（単語学習等、一定ペースでの継続が学習効果の本質となる反復・積み上げ型）。
+    # 伴走のタイミング（沈黙ベース再エンゲージメントの閾値・トーン）を型ごとに出し分けるために使う。
+    course_type = Column(String(20), nullable=False, default="self_paced")
+    # ペース管理型の場合の1回あたりの分量の目安（例: "1日10単語"）。自由進行型では未使用。
+    pace_unit_description = Column(String(255), nullable=True)
     # --- カリキュラム（v2.0: 章/カード構造に移行） ---
     personality_profile_id = Column(Integer, ForeignKey("personality_profiles.id"), nullable=True, index=True)
     # カリキュラム作成時の入力（外部AIとの壁打ち用プロンプト生成に使用）
