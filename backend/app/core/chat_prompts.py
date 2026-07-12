@@ -63,25 +63,35 @@ def _build_personality_block(personality_profile: dict | None, tone_profile: dic
     return combined or "（人格設定なし）"
 
 
-def build_answer_system(personality_profile: dict, message_type: str, tone_profile: dict | None = None, subject: str = "english") -> list[dict]:
+def build_answer_system(
+    personality_profile: dict,
+    message_type: str,
+    tone_profile: dict | None = None,
+    subject: str = "english",
+    course_overview: str | None = None,
+) -> list[dict]:
     """人格プロファイル部分（同じコースの全チャットで不変）とメッセージ種別ごとの回答スタイル（可変）を
     別々のcontent blockに分け、人格プロファイル側にcache_controlを付けてPrompt Cachingを有効化する
     （詳細設計書2.5節：システムプロンプトのキャッシュでAPIコストを削減）。
     personality_profile（指導哲学）とtone_profile（Characterの口調・口癖・セリフ例）を両方渡し、
-    どちらか一方が空でも人格を組み立てられるようにする。"""
+    どちらか一方が空でも人格を組み立てられるようにする。
+    course_overview（このコース固有の目的・対象者・トピック・指導スタイル）も同じコース内では
+    不変なため、人格プロファイルと同じキャッシュブロックに含める。"""
     from app.core.subject_config import get_subject_config
     config = get_subject_config(subject)
     answer_style_by_type = config.answer_style_by_type
     style = answer_style_by_type.get(message_type, answer_style_by_type.get("content", ""))
 
     personality_block = _build_personality_block(personality_profile, tone_profile)
+    course_block = f"\n\n【このコースについて】\n{course_overview}" if course_overview else ""
 
     preamble = f"""あなたは学習コーチです。以下の人格でチャットしています。
 学習者と友人のように自然に会話し、絶対に一貫した人格・口調を保ってください。
 返答は短くテンポよく。前後の文脈を踏まえて会話を続けてください。
+このコースの目的・対象者・扱うトピック・指導スタイルを踏まえずに一般論だけで答えることは絶対にしないでください。
 
 【人格設定】
-{personality_block}"""
+{personality_block}{course_block}"""
     suffix = f"""【今回の回答スタイル】
 {style}
 
@@ -106,6 +116,7 @@ def build_answer_messages(
     today_tasks: list[dict] | None = None,
     recent_summaries: list[str] | None = None,
     conversation_history: list[dict] | None = None,
+    curriculum_progress: str | None = None,
 ) -> list[dict]:
     content_note = ""
     if linked_content_title and linked_content_url:
@@ -114,6 +125,8 @@ def build_answer_messages(
             f"必ず自然な形で紹介に含めてください → 「{linked_content_title}」({linked_content_url})"
         )
     context_note = ""
+    if curriculum_progress:
+        context_note += f"\n\n{curriculum_progress}"
     if today_tasks:
         context_note += f"\n\n【今日のタスク】\n{today_tasks}"
     if recent_summaries:
@@ -123,28 +136,63 @@ def build_answer_messages(
     return messages
 
 
-def build_today_message_system(personality_profile: dict, message_kind: str, tone_profile: dict | None = None) -> str:
+def build_today_message_system(
+    personality_profile: dict,
+    message_kind: str,
+    tone_profile: dict | None = None,
+    course_overview: str | None = None,
+) -> str:
     """Layer3: 朝/夜の声かけメッセージ生成用システムプロンプト。message_kindは'morning'/'evening'。
     personality_profile（指導哲学）とtone_profile（口癖・セリフ例）を両方渡し、口調がぶれないようにする。"""
     kind_label = "朝の声かけ" if message_kind == "morning" else "夜のリマインド"
     personality_block = _build_personality_block(personality_profile, tone_profile)
+    course_block = f"\n\n【このコースについて】\n{course_overview}" if course_overview else ""
     return f"""あなたは学習コーチとして、以下の人格で学習者に{kind_label}メッセージを送ってください。
 
 【人格設定】
-{personality_block}
+{personality_block}{course_block}
 
 直近の学習状況を踏まえて、今日の{kind_label}メッセージを生成してください。
 200文字以内。上記の人格の口調を必ず守ること。説明文や前置きは不要です。"""
 
 
-def build_today_message_user(day_number: int, today_tasks: list[dict], recent_summaries: list[str]) -> list[dict]:
+def build_today_message_user(
+    day_number: int,
+    today_tasks: list[dict],
+    recent_summaries: list[str],
+    curriculum_progress: str | None = None,
+) -> list[dict]:
     content = (
         f"今日はDay {day_number}です。\n\n"
         f"【今日のタスク】\n{today_tasks}\n\n"
         f"【直近3日間のサマリー】\n{_format_summaries(recent_summaries)}\n\n"
-        f"上記の文脈を踏まえ、今日のメッセージを生成してください。"
+        + (f"{curriculum_progress}\n\n" if curriculum_progress else "")
+        + "上記の文脈を踏まえ、今日のメッセージを生成してください。"
     )
     return [{"role": "user", "content": content}]
+
+
+def build_greeting_message_system(
+    personality_profile: dict,
+    tone_profile: dict | None = None,
+    course_overview: str | None = None,
+) -> str:
+    """学習者が初めてこのコースのチャットを開いたときの、最初の一言用システムプロンプト。
+    一度生成した内容はChatGreetingとして永続化し、再生成しない前提（呼び出しは学習者ごとに1回のみ）。"""
+    personality_block = _build_personality_block(personality_profile, tone_profile)
+    course_block = f"\n\n【このコースについて】\n{course_overview}" if course_overview else ""
+    return f"""あなたは学習コーチとして、以下の人格で学習者を迎える最初のメッセージを送ってください。
+学習者はこのコースを購入したばかりで、まだ一度もチャットしたことがありません。
+
+【人格設定】
+{personality_block}{course_block}
+
+このコースで何を学べるか・どんなゴールを目指すのかが伝わるように、歓迎の言葉を伝えてください。
+120文字以内。上記の人格の口調を必ず守ること。説明文や前置きは不要です。"""
+
+
+def build_greeting_message_user() -> list[dict]:
+    return [{"role": "user", "content": "学習者を迎える最初のメッセージを生成してください。"}]
 
 
 def build_reminder_message_system(personality_profile: dict, tier: int, tone_profile: dict | None = None) -> str:

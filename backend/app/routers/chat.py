@@ -27,6 +27,8 @@ from app.models.learner_profile import LearnerProfile
 from app.models.learner_course_day import LearnerCourseDay
 from app.models.daily_summary import DailySummary
 from app.models.day_log import DayLog
+from app.models.card_progress import CardProgress
+from app.models.chat_greeting import ChatGreeting
 from app.routers.courses import _is_accessible
 
 # チャット入力は1メッセージ単位の文字数制限を撤廃し、1日の合計入力文字数で制限する（DAILY_CHARACTER_LIMIT文字/日）
@@ -141,6 +143,78 @@ def _get_current_day_number(db: Session, user_id: int, course_id: int) -> int:
     return min(completed + 1, 30)
 
 
+def _build_course_overview(course: Course) -> str:
+    """コース固有の目的・対象者・トピック・指導スタイルをプロンプト用テキストに変換する。
+    人格プロファイル（クリエイター個人の口調・哲学）とは別に、このコース固有の内容を
+    チャットAIに常に伝えるための情報（コース内容・学習哲学を無視した回答になるのを防ぐ）。"""
+    parts = []
+    if course.subject:
+        parts.append(f"分野: {course.subject}")
+    if course.title:
+        parts.append(f"コース名: {course.title}")
+    if course.curriculum_purpose:
+        parts.append(f"このコースの目的・ゴール: {course.curriculum_purpose}")
+    if course.curriculum_target_audience:
+        parts.append(f"対象者: {course.curriculum_target_audience}")
+    if course.curriculum_topics:
+        parts.append(f"扱っているトピック: {course.curriculum_topics}")
+    if course.curriculum_style:
+        parts.append(f"このコースでの指導スタイル・こだわり: {course.curriculum_style}")
+    return "\n".join(parts)
+
+
+def _build_curriculum_progress_text(db: Session, course: Course, user_id: int) -> str:
+    """章/カード構造のカリキュラムにおける学習者の現在地点をプロンプト用テキストに変換する。
+    伴走チャットがカリキュラムや進捗を無視した返信をしないよう、実際の進捗管理システム
+    （CourseChapter/ChapterCard/CardProgress）から現在地を組み立てる。"""
+    chapters = sorted(course.chapters, key=lambda c: c.order)
+    if not chapters:
+        return ""
+
+    card_ids = [c.id for ch in chapters for c in ch.cards]
+    completed_ids: set[int] = set()
+    if card_ids:
+        completed_ids = {
+            row[0] for row in db.query(CardProgress.card_id).filter(
+                CardProgress.user_id == user_id,
+                CardProgress.card_id.in_(card_ids),
+                CardProgress.is_completed == True,  # noqa: E712
+            ).all()
+        }
+
+    lines = ["【カリキュラムの構成と学習者の進捗】"]
+    current_chapter = None
+    next_card_title = None
+    for i, ch in enumerate(chapters, start=1):
+        cards = sorted(ch.cards, key=lambda c: c.order)
+        done = sum(1 for c in cards if c.id in completed_ids)
+        total = len(cards)
+        is_chapter_done = total > 0 and done == total
+        if is_chapter_done:
+            marker = "完了"
+        elif done > 0:
+            marker = f"進行中（{done}/{total}）"
+        else:
+            marker = "未着手"
+        lines.append(f"第{i}章「{ch.title}」（{marker}）")
+        if current_chapter is None and not is_chapter_done:
+            current_chapter = ch
+            for c in cards:
+                if c.id not in completed_ids:
+                    next_card_title = c.title
+                    break
+
+    if current_chapter:
+        lines.append(f"学習者は現在「{current_chapter.title}」に取り組んでいます。")
+        if next_card_title:
+            lines.append(f"次に取り組むべき内容:「{next_card_title}」")
+        if current_chapter.goal:
+            lines.append(f"この章の目標: {current_chapter.goal}")
+    else:
+        lines.append("学習者はこのコースの全カリキュラムを完了しています。")
+    return "\n".join(lines)
+
+
 def _get_today_context(db: Session, user_id: int, course_id: int) -> tuple[int, list, list[str]]:
     """今日のタスク(Layer2)と直近3日分の圧縮サマリー(Layer3用コンテキスト)を取得する。"""
     day_number = _get_current_day_number(db, user_id, course_id)
@@ -232,6 +306,8 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     personality = _get_personality_profile(db, course) or {}
     tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
+    course_overview = _build_course_overview(course)
+    curriculum_progress = _build_curriculum_progress_text(db, course, current_user.id)
     existing_category_names = [
         c.name for c in db.query(QuestionCategory).filter(QuestionCategory.creator_id == creator_id).all()
     ] if creator_id else []
@@ -281,10 +357,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
         linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
         try:
             draft_body = generate_text(
-                prompts.build_answer_system(personality, message_type, tone_profile),
+                prompts.build_answer_system(personality, message_type, tone_profile, subject=course.subject or "english", course_overview=course_overview),
                 prompts.build_answer_messages(
                     data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
-                    today_tasks, recent_summaries, conversation_history,
+                    today_tasks, recent_summaries, conversation_history, curriculum_progress=curriculum_progress,
                 ),
                 max_tokens=400,
                 model=settings.DEEPSEEK_MODEL,
@@ -305,10 +381,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
     answer_model = prompts.select_answer_model(message_type, data.body, settings.DEEPSEEK_MODEL_LITE, settings.DEEPSEEK_MODEL)
     try:
         answer_body = generate_text(
-            prompts.build_answer_system(personality, message_type, tone_profile),
+            prompts.build_answer_system(personality, message_type, tone_profile, subject=course.subject or "english", course_overview=course_overview),
             prompts.build_answer_messages(
                 data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
-                today_tasks, recent_summaries, conversation_history,
+                today_tasks, recent_summaries, conversation_history, curriculum_progress=curriculum_progress,
             ),
             max_tokens=400,
             model=answer_model,
@@ -346,6 +422,8 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
     personality = _get_personality_profile(db, course) or {}
     tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
+    course_overview = _build_course_overview(course)
+    curriculum_progress = _build_curriculum_progress_text(db, course, current_user.id)
     existing_category_names = [
         c.name for c in db.query(QuestionCategory).filter(QuestionCategory.creator_id == creator_id).all()
     ] if creator_id else []
@@ -385,11 +463,11 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
     db.refresh(question)
     question_id = question.id
 
-    system_prompt = prompts.build_answer_system(personality, message_type, tone_profile)
+    system_prompt = prompts.build_answer_system(personality, message_type, tone_profile, subject=course.subject or "english", course_overview=course_overview)
     messages_list = prompts.build_answer_messages(
         data.body, linked_content.title if linked_content else None,
         linked_content.url if linked_content else None,
-        today_tasks, recent_summaries, conversation_history,
+        today_tasks, recent_summaries, conversation_history, curriculum_progress=curriculum_progress,
     )
     answer_model = prompts.select_answer_model(message_type, data.body, settings.DEEPSEEK_MODEL_LITE, settings.DEEPSEEK_MODEL)
     user_id = current_user.id
@@ -446,16 +524,58 @@ def get_today_message(course_id: int, type: str = "morning", current_user=Depend
     personality = _get_personality_profile(db, course) or {}
     tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
+    course_overview = _build_course_overview(course)
+    curriculum_progress = _build_curriculum_progress_text(db, course, current_user.id)
     try:
         message = generate_text(
-            prompts.build_today_message_system(personality, type, tone_profile),
-            prompts.build_today_message_user(day_number, today_tasks, recent_summaries),
+            prompts.build_today_message_system(personality, type, tone_profile, course_overview=course_overview),
+            prompts.build_today_message_user(day_number, today_tasks, recent_summaries, curriculum_progress=curriculum_progress),
             max_tokens=300,
             model=settings.DEEPSEEK_MODEL_LITE,
         )
     except LLMError as e:
         raise HTTPException(status_code=500, detail=f"メッセージの生成に失敗しました: {e}") from e
     return {"day_number": day_number, "type": type, "message": message}
+
+
+@router.get("/{course_id}/greeting")
+def get_greeting_message(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """チャット履歴が空の学習者向けの最初の一言。一度生成したら永続化し、再度開いても同じ文面を返す
+    （毎回別のメッセージが生成されてしまう問題への対応）。要(購入済み学習者)"""
+    course = _get_accessible_course(db, course_id, current_user)
+    existing = db.query(ChatGreeting).filter(
+        ChatGreeting.user_id == current_user.id, ChatGreeting.course_id == course_id,
+    ).first()
+    if existing:
+        return {"message": existing.message}
+
+    personality = _get_personality_profile(db, course) or {}
+    tone_profile = (course.character.tone_profile if course.character else None) or {}
+    course_overview = _build_course_overview(course)
+    try:
+        message = generate_text(
+            prompts.build_greeting_message_system(personality, tone_profile, course_overview=course_overview),
+            prompts.build_greeting_message_user(),
+            max_tokens=200,
+            model=settings.DEEPSEEK_MODEL_LITE,
+        )
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"挨拶メッセージの生成に失敗しました: {e}") from e
+
+    greeting = ChatGreeting(user_id=current_user.id, course_id=course_id, message=message)
+    db.add(greeting)
+    try:
+        db.commit()
+    except Exception:
+        # 同時リクエストでの重複作成（unique制約違反）はベストエフォートで既存のものを使う
+        db.rollback()
+        existing = db.query(ChatGreeting).filter(
+            ChatGreeting.user_id == current_user.id, ChatGreeting.course_id == course_id,
+        ).first()
+        if existing:
+            return {"message": existing.message}
+        raise
+    return {"message": message}
 
 
 @router.post("/{course_id}/daily-summary")

@@ -269,6 +269,7 @@ export const api = {
   getChatHistory: (courseId: number) => apiFetch(`/chat/${courseId}/history`),
   getTodayMessage: (courseId: number, type: "morning" | "evening") =>
     apiFetch(`/chat/${courseId}/today-message?type=${type}`),
+  getGreeting: (courseId: number) => apiFetch(`/chat/${courseId}/greeting`),
   postDailySummary: (courseId: number) => apiFetch(`/chat/${courseId}/daily-summary`, { method: "POST" }),
 
   // クリエイター向け：Tier B未回答質問の承認

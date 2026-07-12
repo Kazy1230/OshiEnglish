@@ -24,6 +24,7 @@ export default function NewCoursePage() {
   const [isFree, setIsFree] = useState(false);
   const [tierAPrice, setTierAPrice] = useState("1480");
   const [tierBPrice, setTierBPrice] = useState("3980");
+  const [enableTierA, setEnableTierA] = useState(true);
   const [enableTierB, setEnableTierB] = useState(true);
 
   // Step 1: 壁打ち相談
@@ -59,6 +60,10 @@ export default function NewCoursePage() {
     if (!character) { toast("先にAIインタビューを完了して人格(キャラクター)を作成してください", "error"); return; }
     if (!subject.trim()) { toast("分野を入力してください", "error"); return; }
     if (!title.trim()) { toast("コース名を入力してください", "error"); return; }
+    if (!isFree && !enableTierA && !enableTierB) {
+      toast("Tier AまたはTier Bのどちらかは提供する必要があります", "error");
+      return;
+    }
     setStep(1);
   }
 
@@ -73,7 +78,7 @@ export default function NewCoursePage() {
           subject,
           price: 0,
           is_free: isFree,
-          tier_a_price: isFree ? null : Number(tierAPrice),
+          tier_a_price: !isFree && enableTierA ? Number(tierAPrice) : null,
           tier_b_price: enableTierB ? Number(tierBPrice) : null,
         });
         id = course.id;
@@ -171,8 +176,20 @@ export default function NewCoursePage() {
                 <input type="checkbox" checked={isFree} onChange={e => setIsFree(e.target.checked)} />
                 <span style={{ color: "var(--text)" }}>無料コースにする</span>
               </label>
+              <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+                {isFree
+                  ? "無料コースは、必要であればTier B（AI＋クリエイター添削）のみを有料オプションとして追加できます。"
+                  : "有料コースは「Tier Aのみ」「Tier A＋Tier B」「Tier Bのみ」の3パターンから選べます。"}
+              </p>
+
               {!isFree && (
-                <div className="flex flex-col gap-2 mb-2">
+                <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
+                  <input type="checkbox" checked={enableTierA} onChange={e => setEnableTierA(e.target.checked)} />
+                  <span style={{ color: "var(--text)" }}>Tier A（AIのみ）を提供する</span>
+                </label>
+              )}
+              {!isFree && enableTierA && (
+                <div className="flex flex-col gap-2 mb-2 ml-6">
                   <div>
                     <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>Tier A（AIのみ）月額</label>
                     <input type="number" min="980" max="1980" value={tierAPrice} onChange={e => setTierAPrice(e.target.value)} />
@@ -185,10 +202,13 @@ export default function NewCoursePage() {
                 <span style={{ color: "var(--text)" }}>Tier B（AI＋クリエイター添削）を提供する</span>
               </label>
               {enableTierB && (
-                <div>
+                <div className="ml-6">
                   <input type="number" min="2980" max="5000" value={tierBPrice} onChange={e => setTierBPrice(e.target.value)} />
                   <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>2,980〜5,000円/月</p>
                 </div>
+              )}
+              {!isFree && !enableTierA && !enableTierB && (
+                <p className="text-xs mt-1" style={{ color: "#dc2626" }}>Tier AまたはTier Bのどちらかは提供する必要があります</p>
               )}
             </div>
 

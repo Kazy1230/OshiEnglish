@@ -581,7 +581,7 @@ export default function StudioPage() {
     <div className="studio-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="AIコンテンツ生成スタジオ" />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6" style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col lg:flex-row" style={{ gap: 24, alignItems: "flex-start" }}>
 
         {/* サイドバー（デスクトップ） */}
         <aside className="hidden lg:flex flex-col gap-2 flex-shrink-0" style={{ width: 200, position: "sticky", top: 72 }}>

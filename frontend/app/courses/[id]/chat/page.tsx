@@ -34,7 +34,9 @@ export default function CourseChatPage() {
   const [upgradeCta, setUpgradeCta] = useState<{ topic: string } | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [tier, setTier] = useState<"A" | "B" | null>(null);
-  const [completedDays, setCompletedDays] = useState(0);
+  const [progress, setProgress] = useState<{ completed: number; total: number; currentChapterTitle: string | null }>({
+    completed: 0, total: 0, currentChapterTitle: null,
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
   const textInputRef = useRef<HTMLInputElement>(null);
@@ -56,11 +58,20 @@ export default function CourseChatPage() {
         setCharacter(detail.character ?? null);
         setTier(detail.my_subscription?.tier ?? null);
 
-        const [history, logs] = await Promise.all([
+        type CurriculumChapter = { title: string; is_completed: boolean };
+        type Curriculum = { total_cards: number; completed_cards: number; chapters: CurriculumChapter[] };
+        const [history, curriculum] = await Promise.all([
           api.getChatHistory(courseId),
-          api.listDayLogs(courseId).catch(() => []),
+          api.getLearnerCurriculum(courseId).catch(() => null) as Promise<Curriculum | null>,
         ]);
-        setCompletedDays(logs.filter((l: { is_completed: boolean }) => l.is_completed).length);
+        if (curriculum) {
+          const currentChapter = curriculum.chapters.find(ch => !ch.is_completed);
+          setProgress({
+            completed: curriculum.completed_cards,
+            total: curriculum.total_cards,
+            currentChapterTitle: currentChapter?.title ?? null,
+          });
+        }
 
         const converted: ChatMessage[] = [];
         for (const q of history) {
@@ -75,11 +86,10 @@ export default function CourseChatPage() {
         }
 
         if (converted.length === 0) {
-          // キャラクターの挨拶を取得して最初のメッセージとして表示
+          // 最初の挨拶を取得して表示する。一度生成された挨拶はサーバー側で永続化されるため、
+          // 何も送らずに再度開いても同じ文面が表示される（開くたびに別の文面が生成される問題への対応）
           try {
-            const hour = new Date().getHours();
-            const msgType = hour < 17 ? "morning" : "evening";
-            const greet = await api.getTodayMessage(courseId, msgType);
+            const greet = await api.getGreeting(courseId);
             if (greet?.message) {
               converted.push({ id: "greeting", role: "assistant", body: greet.message });
             }
@@ -209,14 +219,24 @@ export default function CourseChatPage() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }}>
-              <div className="h-1 rounded-full" style={{ background: "white", width: `${Math.round((completedDays / 30) * 100)}%` }} />
+          {progress.total > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }}>
+                <div className="h-1 rounded-full" style={{ background: "white", width: `${Math.round((progress.completed / progress.total) * 100)}%` }} />
+              </div>
+              <span className="text-xs whitespace-nowrap text-white/80">{progress.completed}/{progress.total}レッスン</span>
             </div>
-            <span className="text-xs whitespace-nowrap text-white/80">{completedDays}/30日</span>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* 現在地（伴走感の起点：今どこに取り組んでいるかを常に表示） */}
+      {progress.currentChapterTitle && (
+        <div className="flex items-center gap-2 px-4 sm:px-6 py-2 flex-shrink-0 text-xs" style={{ background: "var(--card)", borderBottom: "1px solid var(--border)", color: "var(--muted)" }}>
+          <span>📍</span>
+          <span className="truncate">今取り組んでいるのは「<span className="font-bold" style={{ color: "var(--text)" }}>{progress.currentChapterTitle}</span>」だよ</span>
+        </div>
+      )}
 
       {/* メッセージ一覧 */}
       <main className="flex-1 min-h-0 max-w-2xl w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 overflow-y-auto">
