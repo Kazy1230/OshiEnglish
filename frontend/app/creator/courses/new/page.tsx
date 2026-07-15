@@ -27,7 +27,6 @@ export default function NewCoursePage() {
   const [enableTierA, setEnableTierA] = useState(true);
   const [enableTierB, setEnableTierB] = useState(true);
   const [courseType, setCourseType] = useState<"self_paced" | "pace_based">("self_paced");
-  const [paceUnitDescription, setPaceUnitDescription] = useState("");
 
   // Step 1: 壁打ち相談
   const [purpose, setPurpose] = useState("");
@@ -83,7 +82,6 @@ export default function NewCoursePage() {
           tier_a_price: !isFree && enableTierA ? Number(tierAPrice) : null,
           tier_b_price: enableTierB ? Number(tierBPrice) : null,
           course_type: courseType,
-          pace_unit_description: courseType === "pace_based" ? (paceUnitDescription || null) : null,
         });
         id = course.id;
         setCourseId(id);
@@ -158,7 +156,7 @@ export default function NewCoursePage() {
                 🎭 このコースは「<span className="font-bold" style={{ color: "var(--primary)" }}>{character.name}</span>」として公開されます。
               </p>
             ) : (
-              <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "#fef3c7", color: "#92400e" }}>
+              <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
                 先に<a href="/creator/interview" style={{ color: "var(--accent)" }}>AIインタビュー</a>を完了して人格(キャラクター)を作成してください。
               </p>
             )}
@@ -198,53 +196,51 @@ export default function NewCoursePage() {
                   </span>
                 </label>
               </div>
-              {courseType === "pace_based" && (
-                <div className="mt-3">
-                  <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>1回あたりの分量の目安</label>
-                  <input value={paceUnitDescription} onChange={e => setPaceUnitDescription(e.target.value)} placeholder="例：1日10単語" />
-                </div>
-              )}
             </div>
 
             <div className="border-t pt-4" style={{ borderColor: "var(--border, #e5e7eb)" }}>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>料金設定</h3>
-              <label className="flex items-center gap-2 text-sm mb-3 cursor-pointer">
-                <input type="checkbox" checked={isFree} onChange={e => setIsFree(e.target.checked)} />
-                <span style={{ color: "var(--text)" }}>無料コースにする</span>
-              </label>
+              <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text)" }}>料金設定</h3>
               <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
                 {isFree
                   ? "無料コースは、必要であればTier B（AI＋クリエイター添削）のみを有料オプションとして追加できます。"
                   : "有料コースは「Tier Aのみ」「Tier A＋Tier B」「Tier Bのみ」の3パターンから選べます。"}
               </p>
 
-              {!isFree && (
-                <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
-                  <input type="checkbox" checked={enableTierA} onChange={e => setEnableTierA(e.target.checked)} />
-                  <span style={{ color: "var(--text)" }}>Tier A（AIのみ）を提供する</span>
-                </label>
-              )}
-              {!isFree && enableTierA && (
-                <div className="flex flex-col gap-2 mb-2 ml-6">
-                  <div>
-                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>Tier A（AIのみ）月額</label>
-                    <input type="number" min="980" max="1980" value={tierAPrice} onChange={e => setTierAPrice(e.target.value)} />
-                    <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>980〜1,980円/月</p>
-                  </div>
-                </div>
-              )}
-              <label className="flex items-center gap-2 text-sm mb-2 cursor-pointer">
-                <input type="checkbox" checked={enableTierB} onChange={e => setEnableTierB(e.target.checked)} />
-                <span style={{ color: "var(--text)" }}>Tier B（AI＋クリエイター添削）を提供する</span>
+              <label
+                className="flex items-center justify-between gap-2 text-sm p-3 rounded-lg cursor-pointer mb-3"
+                style={{ border: `1.5px solid ${isFree ? "var(--primary)" : "var(--border, #e5e7eb)"}`, background: isFree ? "var(--surface)" : "transparent" }}
+              >
+                <span className="font-bold" style={{ color: "var(--text)" }}>無料コースにする</span>
+                <input type="checkbox" checked={isFree} onChange={e => setIsFree(e.target.checked)} />
               </label>
-              {enableTierB && (
-                <div className="ml-6">
-                  <input type="number" min="2980" max="5000" value={tierBPrice} onChange={e => setTierBPrice(e.target.value)} />
-                  <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>2,980〜5,000円/月</p>
-                </div>
-              )}
+
+              <div className="flex flex-col gap-3">
+                {!isFree && (
+                  <PriceTierCard
+                    label="Tier A"
+                    description="AIのみが伴走"
+                    enabled={enableTierA}
+                    onToggle={v => setEnableTierA(v)}
+                    price={tierAPrice}
+                    onPriceChange={setTierAPrice}
+                    min={980}
+                    max={20000}
+                  />
+                )}
+                <PriceTierCard
+                  label="Tier B"
+                  description="AI＋クリエイター添削"
+                  enabled={enableTierB}
+                  onToggle={v => setEnableTierB(v)}
+                  price={tierBPrice}
+                  onPriceChange={setTierBPrice}
+                  min={2980}
+                  max={100000}
+                />
+              </div>
+
               {!isFree && !enableTierA && !enableTierB && (
-                <p className="text-xs mt-1" style={{ color: "#dc2626" }}>Tier AまたはTier Bのどちらかは提供する必要があります</p>
+                <p className="text-xs mt-2" style={{ color: "#dc2626" }}>Tier AまたはTier Bのどちらかは提供する必要があります</p>
               )}
             </div>
 
@@ -334,7 +330,7 @@ export default function NewCoursePage() {
               </button>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: "#fef9c3", color: "#713f12" }}>
+            <div className="rounded-xl p-4" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
               <p className="text-sm font-semibold mb-1">次のステップ</p>
               <ol className="text-xs space-y-1 list-decimal list-inside">
                 <li>上のプロンプトをChatGPT / Claude などにコピーして壁打ちする</li>
@@ -351,6 +347,53 @@ export default function NewCoursePage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function PriceTierCard({ label, description, enabled, onToggle, price, onPriceChange, min, max }: {
+  label: string;
+  description: string;
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+  price: string;
+  onPriceChange: (v: string) => void;
+  min: number;
+  max: number;
+}) {
+  return (
+    <div
+      className="rounded-lg p-3 transition-colors"
+      style={{ border: `1.5px solid ${enabled ? "var(--primary)" : "var(--border, #e5e7eb)"}`, background: enabled ? "var(--surface)" : "transparent" }}
+    >
+      <label className="flex items-center justify-between gap-2 text-sm cursor-pointer">
+        <span>
+          <span className="font-bold" style={{ color: "var(--text)" }}>{label}</span>
+          <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>{description}</span>
+        </span>
+        <input type="checkbox" checked={enabled} onChange={e => onToggle(e.target.checked)} />
+      </label>
+      {enabled && (
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-1 px-3 py-2 rounded-lg" style={{ background: "var(--card)", border: "1px solid var(--border, #e5e7eb)" }}>
+            <span className="text-sm font-bold" style={{ color: "var(--muted)" }}>¥</span>
+            <input
+              type="number"
+              min={min}
+              max={max}
+              value={price}
+              onChange={e => onPriceChange(e.target.value)}
+              style={{ border: "none", padding: 0, background: "transparent" }}
+            />
+            <span className="text-xs whitespace-nowrap" style={{ color: "var(--muted)" }}>/月</span>
+          </div>
+        </div>
+      )}
+      {enabled && (
+        <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+          {min.toLocaleString()}〜{max.toLocaleString()}円/月の範囲で設定できます
+        </p>
+      )}
     </div>
   );
 }

@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { setToken } from "@/lib/auth";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
 
 function SignupForm() {
   const router = useRouter();
@@ -16,7 +14,6 @@ function SignupForm() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, toggleMode] = useDarkMode();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,9 +36,6 @@ function SignupForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative" style={{ background: "var(--bg)" }}>
-      <div className="absolute top-4 right-4">
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onSurface" />
-      </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black" style={{ color: "var(--primary)" }}>ManaVillage</h1>
@@ -69,7 +63,7 @@ function SignupForm() {
             </div>
 
             {error && (
-              <p role="alert" className="text-sm text-red-500 bg-red-50 rounded-lg p-2 text-center">{error}</p>
+              <p role="alert" className="text-sm rounded-lg p-2 text-center" style={{ background: "rgba(239,68,68,0.14)", color: "#f87171" }}>{error}</p>
             )}
 
             <button type="submit" className="btn-primary text-center w-full mt-1" disabled={loading} aria-busy={loading}>

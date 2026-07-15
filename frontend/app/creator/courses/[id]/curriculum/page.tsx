@@ -142,7 +142,7 @@ function SortableCard({
           <p className="text-xs" style={{ color: "var(--muted)" }}>{typeInfo.label}</p>
         </div>
         {card.is_preview && (
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1d4ed8" }}>無料</span>
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.16)", color: "#60a5fa" }}>無料</span>
         )}
         <button onClick={() => setExpanded(e => !e)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--primary)" }}>
           {expanded ? "閉じる" : "編集"}
@@ -150,7 +150,7 @@ function SortableCard({
         {!locked && (
           <>
             <button onClick={() => onDuplicate(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--muted)" }}>複製</button>
-            <button onClick={() => onDelete(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "#fee2e2", color: "#dc2626" }}>削除</button>
+            <button onClick={() => onDelete(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "rgba(239,68,68,0.16)", color: "#f87171" }}>削除</button>
           </>
         )}
       </div>
@@ -338,7 +338,7 @@ function ChapterSection({
           <button
             onClick={() => onDeleteChapter(chapter.id)}
             className="text-xs px-2 py-1 rounded flex-shrink-0"
-            style={{ background: "#fee2e2", color: "#dc2626" }}
+            style={{ background: "rgba(239,68,68,0.16)", color: "#f87171" }}
           >削除</button>
         )}
       </div>
@@ -348,7 +348,7 @@ function ChapterSection({
         <div className="border-t px-4 pb-4 pt-3" style={{ borderColor: "var(--border, #e5e7eb)" }}>
           {/* カード追加ボタン */}
           {locked ? (
-            <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: "#fef3c7", color: "#92400e" }}>
+            <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
               受講者がいる公開中のコースのため、カードの追加・削除はできません。内容の編集・並び替えは可能です。
             </p>
           ) : (
@@ -539,7 +539,7 @@ export default function CurriculumHubPage() {
         </div>
 
         {locked && (
-          <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: "#fef3c7", color: "#92400e" }}>
+          <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
             受講者がいる公開中のコースのため、章の追加・削除・並べ替えはできません。カードの内容編集は可能です。
           </p>
         )}

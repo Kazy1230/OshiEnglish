@@ -4,15 +4,12 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { resolveTheme, type CharacterTheme } from "@/lib/theme";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { PublicHeader } from "@/components/PublicHeader";
 
 export default function PolicyPage() {
   const router = useRouter();
-  const [mode, toggleMode] = useDarkMode();
   const [theme, setTheme] = useState<CharacterTheme | null>(null);
-  const t = resolveTheme(theme, mode);
+  const t = resolveTheme(theme, "dark");
   const loggedIn = !!getToken();
 
   useEffect(() => {

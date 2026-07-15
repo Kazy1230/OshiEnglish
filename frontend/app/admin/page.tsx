@@ -4,8 +4,6 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
 import { AdminSkeleton } from "@/components/Skeleton";
-import { useDarkMode } from "@/lib/darkMode";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
 import type { Tab } from "./types";
 import { CreatorApplicationsTab } from "./tabs/CreatorApplicationsTab";
 import { CreatorsTab } from "./tabs/CreatorsTab";
@@ -29,7 +27,6 @@ export default function AdminPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("creator_applications");
   const [loading, setLoading] = useState(true);
-  const [mode, toggleMode] = useDarkMode();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -63,7 +60,7 @@ export default function AdminPage() {
         <span style={{ color: "#e0e7ff", fontWeight: 800, fontSize: 13, letterSpacing: "0.1em" }}>
           MANAVILLAGE ADMIN
         </span>
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+        <span style={{ width: 20 }} />
       </div>
 
       {/* ── サイドバー ── */}
@@ -84,16 +81,13 @@ export default function AdminPage() {
           className="hidden md:flex flex-col gap-0.5 px-5 pt-6 pb-5"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p style={{ color: "#ffffff", fontWeight: 800, fontSize: 15, letterSpacing: "0.04em" }}>
-                ManaVillage
-              </p>
-              <p style={{ color: "var(--primary)", fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 2 }}>
-                Admin Console
-              </p>
-            </div>
-            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
+          <div>
+            <p style={{ color: "#ffffff", fontWeight: 800, fontSize: 15, letterSpacing: "0.04em" }}>
+              ManaVillage
+            </p>
+            <p style={{ color: "var(--primary)", fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 2 }}>
+              Admin Console
+            </p>
           </div>
         </div>
 

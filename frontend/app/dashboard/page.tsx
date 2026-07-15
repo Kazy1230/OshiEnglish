@@ -121,21 +121,21 @@ export default function DashboardPage() {
         {(overdueCount > 0 || reviewCourseCount > 0) && (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {overdueCount > 0 && (
-              <Link href="/creator/inbox" style={{ textDecoration: "none", flex: 1, minWidth: 200, display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "#fff5f5", border: "1.5px solid #feb2b2" }}>
+              <Link href="/creator/inbox" style={{ textDecoration: "none", flex: 1, minWidth: 200, display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(239,68,68,0.12)", border: "1.5px solid rgba(239,68,68,0.35)" }}>
                 <span style={{ fontSize: 22 }}>⚠️</span>
                 <div>
-                  <p style={{ fontWeight: 800, color: "#e53e3e", margin: 0, fontSize: 14 }}>Tier B質問 {overdueCount}件未対応</p>
-                  <p style={{ color: "#c53030", fontSize: 12, margin: 0 }}>クリックして対応する</p>
+                  <p style={{ fontWeight: 800, color: "#f87171", margin: 0, fontSize: 14 }}>Tier B質問 {overdueCount}件未対応</p>
+                  <p style={{ color: "#fca5a5", fontSize: 12, margin: 0 }}>クリックして対応する</p>
                 </div>
-                <span style={{ marginLeft: "auto", color: "#e53e3e", fontSize: 18 }}>→</span>
+                <span style={{ marginLeft: "auto", color: "#f87171", fontSize: 18 }}>→</span>
               </Link>
             )}
             {reviewCourseCount > 0 && (
-              <Link href="/creator/courses" style={{ textDecoration: "none", flex: 1, minWidth: 200, display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "#fffbeb", border: "1.5px solid #f6c90e" }}>
+              <Link href="/creator/courses" style={{ textDecoration: "none", flex: 1, minWidth: 200, display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(245,158,11,0.12)", border: "1.5px solid rgba(245,158,11,0.35)" }}>
                 <span style={{ fontSize: 22 }}>📋</span>
                 <div>
-                  <p style={{ fontWeight: 800, color: "#92400e", margin: 0, fontSize: 14 }}>審査中コース {reviewCourseCount}件</p>
-                  <p style={{ color: "#78350f", fontSize: 12, margin: 0 }}>運営が確認中です</p>
+                  <p style={{ fontWeight: 800, color: "#fbbf24", margin: 0, fontSize: 14 }}>審査中コース {reviewCourseCount}件</p>
+                  <p style={{ color: "#fcd34d", fontSize: 12, margin: 0 }}>運営が確認中です</p>
                 </div>
               </Link>
             )}

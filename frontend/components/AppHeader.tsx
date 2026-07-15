@@ -1,8 +1,6 @@
 "use client";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationBell } from "@/components/NotificationBell";
-import { useDarkMode } from "@/lib/darkMode";
 import { CreatorBreadcrumb } from "@/components/CreatorBreadcrumb";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -32,7 +30,6 @@ export function AppHeader({
   overdueCount?: number;
 }) {
   const pathname = usePathname();
-  const [mode, toggleMode] = useDarkMode();
   const homeHref = role === "creator" ? "/dashboard" : "/";
 
   return (
@@ -75,7 +72,6 @@ export function AppHeader({
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {role && <NotificationBell />}
-          <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onColor" />
           <LogoutButton variant="onColor" />
         </div>
       </header>

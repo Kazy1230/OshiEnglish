@@ -134,13 +134,13 @@ function SortableCard({
           <p className="text-xs" style={{ color: "var(--muted)" }}>{typeInfo.label}</p>
         </div>
         {card.is_preview && (
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1d4ed8" }}>無料</span>
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.16)", color: "#60a5fa" }}>無料</span>
         )}
         <button onClick={() => setExpanded(e => !e)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--primary)" }}>
           {expanded ? "閉じる" : "編集"}
         </button>
         <button onClick={() => onDuplicate(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--muted)" }}>複製</button>
-        <button onClick={() => onDelete(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "#fee2e2", color: "#dc2626" }}>削除</button>
+        <button onClick={() => onDelete(card.id)} className="text-xs px-2 py-1 rounded" style={{ background: "rgba(239,68,68,0.16)", color: "#f87171" }}>削除</button>
       </div>
 
       {expanded && (

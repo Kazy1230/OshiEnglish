@@ -152,7 +152,7 @@ export default function CoursePublishPage() {
 
         {/* 注意事項 */}
         {!submitted && (
-          <div className="rounded-xl p-4 mb-6" style={{ background: "#fef9c3", color: "#713f12" }}>
+          <div className="rounded-xl p-4 mb-6" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
             <p className="text-sm font-semibold mb-2">審査申請について</p>
             <ul className="text-xs space-y-1 list-disc list-inside">
               <li>申請後、管理者がコース内容を確認します（通常1〜3営業日）</li>

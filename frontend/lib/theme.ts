@@ -224,7 +224,7 @@ function toDarkScheme(light: ResolvedScheme): ResolvedScheme {
 }
 
 /** color_scheme の欠損値をデフォルトで補完し、必要に応じてダークモード配色に変換する */
-export function resolveTheme(theme?: CharacterTheme | null, mode: ThemeMode = "light"): ResolvedScheme {
+export function resolveTheme(theme?: CharacterTheme | null, mode: ThemeMode = "dark"): ResolvedScheme {
   const cs = theme?.color_scheme ?? {};
   const def = defaultTheme.color_scheme!;
   const light: ResolvedScheme = {

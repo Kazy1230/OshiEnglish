@@ -1,12 +1,9 @@
 "use client";
 import Link from "next/link";
-import { DarkModeToggle } from "@/components/DarkModeToggle";
-import { useDarkMode } from "@/lib/darkMode";
 import { getToken } from "@/lib/auth";
 import { useEffect, useState } from "react";
 
 export function PublicHeader() {
-  const [mode, toggleMode] = useDarkMode();
   const [loggedIn, setLoggedIn] = useState(false);
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
 
@@ -34,7 +31,6 @@ export function PublicHeader() {
             <Link href="/signup" className="btn-primary text-sm py-1.5 px-4">はじめる</Link>
           </div>
         )}
-        <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onSurface" />
       </div>
     </header>
   );

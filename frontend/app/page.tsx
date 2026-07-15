@@ -1,10 +1,8 @@
 "use client";
 
-import { DarkModeToggle } from "@/components/DarkModeToggle";
 import { LogoutButton } from "@/components/LogoutButton";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { useDarkMode } from "@/lib/darkMode";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -56,7 +54,6 @@ function tierLabel(c: CourseCard) {
 
 export default function Home() {
   const router = useRouter();
-  const [mode, toggleMode] = useDarkMode();
   const [loggedIn, setLoggedIn] = useState(false);
   const [checkingRole, setCheckingRole] = useState(true);
   const [courses, setCourses] = useState<CourseCard[]>([]);
@@ -122,7 +119,6 @@ export default function Home() {
             <Link href="/creators" className="hover:opacity-75 transition-opacity">クリエイター</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
-            <DarkModeToggle mode={mode} onToggle={toggleMode} variant="onSurface" />
             {loggedIn ? (
               <>
                 <Link href="/mypage" className="text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
@@ -345,20 +341,6 @@ export default function Home() {
           </div>
         </section>
       </main>
-
-      <footer className="border-t" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="font-black text-sm" style={{ color: "var(--primary)" }}>
-            Mana<span style={{ color: "var(--accent)" }}>Village</span>
-          </p>
-          <div className="flex items-center gap-5 text-sm" style={{ color: "var(--muted)" }}>
-            <Link href="/creators" className="hover:opacity-75 transition-opacity">クリエイターを探す</Link>
-            <Link href="/creator/apply" className="hover:opacity-75 transition-opacity">クリエイター申請</Link>
-            <Link href="/login" className="hover:opacity-75 transition-opacity">ログイン</Link>
-          </div>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>© ManaVillage</p>
-        </div>
-      </footer>
     </div>
   );
 }

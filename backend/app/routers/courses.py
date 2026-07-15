@@ -196,10 +196,10 @@ class CourseCreate(BaseModel):
         if self.is_free:
             self.price = 0
             self.tier_a_price = None
-        if self.tier_a_price is not None and not (980 <= self.tier_a_price <= 1980):
-            raise ValueError("Tier Aの価格は980〜1980円/月で指定してください")
-        if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 5000):
-            raise ValueError("Tier Bの価格は2980〜5000円/月で指定してください")
+        if self.tier_a_price is not None and not (980 <= self.tier_a_price <= 20000):
+            raise ValueError("Tier Aの価格は980〜20000円/月で指定してください")
+        if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 100000):
+            raise ValueError("Tier Bの価格は2980〜100000円/月で指定してください")
         if self.course_type not in COURSE_TYPES:
             raise ValueError(f"course_typeは{COURSE_TYPES}のいずれかを指定してください")
         if self.course_type == "self_paced":
@@ -226,10 +226,10 @@ class CourseUpdate(BaseModel):
     def _validate_status(self):
         if self.status is not None and self.status not in ("draft", "unpublished"):
             raise ValueError("status は 'draft' / 'unpublished' のいずれかを指定してください（公開には運営の承認が必要です）")
-        if self.tier_a_price is not None and not (980 <= self.tier_a_price <= 1980):
-            raise ValueError("Tier Aの価格は980〜1980円/月で指定してください")
-        if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 5000):
-            raise ValueError("Tier Bの価格は2980〜5000円/月で指定してください")
+        if self.tier_a_price is not None and not (980 <= self.tier_a_price <= 20000):
+            raise ValueError("Tier Aの価格は980〜20000円/月で指定してください")
+        if self.tier_b_price is not None and not (2980 <= self.tier_b_price <= 100000):
+            raise ValueError("Tier Bの価格は2980〜100000円/月で指定してください")
         return self
 
 

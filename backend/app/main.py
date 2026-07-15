@@ -247,6 +247,10 @@ _ensure_column("courses", "curriculum_existing_videos", "TEXT NULL")
 # --- チャプターカード: quiz 種別の選択肢 ---
 _ensure_column("chapter_cards", "quiz_options", "JSON NULL")
 
+# --- 修正.md: コース型選択（自由進行型/ペース管理型）・沈黙ベース再エンゲージメント ---
+_ensure_column("courses", "course_type", "VARCHAR(20) NOT NULL DEFAULT 'self_paced'")
+_ensure_column("courses", "pace_unit_description", "VARCHAR(255) NULL")
+
 
 def _migrate_legacy_characters_to_creator():
     from app.core.creator_migration import migrate_legacy_characters_to_creator

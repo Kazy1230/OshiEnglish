@@ -127,7 +127,7 @@ export function IdeaPoolPanel({ onSendToStudio }: { onSendToStudio: (format: For
               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <button onClick={() => openEdit(idea)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--muted)" }}>編集</button>
                 <button onClick={() => openPicker(idea)} className="text-xs px-3 py-1.5 rounded-lg font-bold" style={{ background: "var(--primary)", color: "white" }}>スタジオで作る</button>
-                <button onClick={() => handleDelete(idea.id)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "#fee2e2", color: "#dc2626" }}>削除</button>
+                <button onClick={() => handleDelete(idea.id)} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "rgba(239,68,68,0.16)", color: "#f87171" }}>削除</button>
               </div>
             </div>
           ))}

@@ -1,67 +1,38 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600;700;900&display=swap');
 @import "tailwindcss";
 
+/* ManaVillageはダークモードのみをサポートする（ライトモードは廃止） */
 :root {
-  --bg: #f9f7f3;
-  --card: #ffffff;
-  --primary: #0f0e0a;
-  --accent: #b5803a;
-  --text: #1c1a14;
-  --muted: #7c7060;
-  --border: #e5dfd4;
-  --surface: #f3ede4;
+  --bg: #0c0b08;
+  --card: #18160f;
+  --primary: #f0e8d8;
+  --accent: #d9a75c;
+  --text: #f5efe0;
+  --muted: #ab9b83;
+  --border: #3a3225;
+  --surface: #201d14;
   --font-display: 'Cormorant Garamond', 'Georgia', serif;
   --font-body: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
 }
 
-/* ダークモード（<html class="dark"> が付与されたときに上書き） */
-:root.dark {
-  --bg: #0c0b08;
-  --card: #18160f;
-  --primary: #f0e8d8;
-  --accent: #d4a055;
-  --text: #f2ead8;
-  --muted: #9a8870;
-  --border: #2e2820;
-  --surface: #201d14;
-}
-
-/* 管理者画面専用テーマ — クリーンホワイト×インディゴ */
+/* 管理者画面専用テーマ — ダークネイビー×インディゴ */
 .admin-theme {
-  --bg: #f8f9fc;
-  --card: #ffffff;
-  --primary: #4f46e5;
-  --accent: #10b981;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --surface: #f1f3f9;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --sidebar-bg: #1e1b4b;
-  --sidebar-text: #c7d2fe;
-  --sidebar-muted: #6b7280;
-  --sidebar-active-bg: rgba(99,102,241,0.25);
-  --sidebar-active-text: #ffffff;
-  --sidebar-hover-bg: rgba(255,255,255,0.07);
-}
-:root.dark .admin-theme {
   --bg: #0f1117;
   --card: #181c24;
-  --primary: #818cf8;
+  --primary: #8b93f8;
   --accent: #34d399;
   --text: #f1f5f9;
-  --muted: #64748b;
-  --border: #252d3d;
+  --muted: #8b96ac;
+  --border: #2c3648;
   --surface: #141820;
   --danger: #f87171;
   --warning: #fbbf24;
   --sidebar-bg: #0c0e18;
   --sidebar-text: #c7d2fe;
-  --sidebar-muted: #475569;
-  --sidebar-active-bg: rgba(99,102,241,0.20);
+  --sidebar-muted: #7c88a3;
+  --sidebar-active-bg: rgba(99,102,241,0.24);
   --sidebar-active-text: #e0e7ff;
-  --sidebar-hover-bg: rgba(255,255,255,0.05);
+  --sidebar-hover-bg: rgba(255,255,255,0.06);
 }
 
 /* 管理画面専用: コンパクトなカード */
@@ -282,24 +253,15 @@ input:focus, textarea:focus, select:focus {
 
 /* ===== ゾーン別テーマ ===== */
 
-/* クリエイターゾーン：温かみのあるエディトリアル・ワークショップ調 */
+/* クリエイターゾーン：温かみのあるエディトリアル・ワークショップ調（ダーク） */
 .creator-theme {
-  --bg: #f5f0e8;
-  --card: #fffffe;
-  --primary: #2e2010;
-  --accent: #c96420;
-  --text: #1e1508;
-  --muted: #7a6b5c;
-  --border: #e0d8cc;
-}
-:root.dark .creator-theme {
   --bg: #18130c;
   --card: #241c12;
   --primary: #e8a068;
   --accent: #f0a030;
-  --text: #f0e8d8;
-  --muted: #a8967e;
-  --border: #3a2e1e;
+  --text: #f5ecda;
+  --muted: #b8a488;
+  --border: #46381f;
 }
 
 /* スタジオゾーン：暗いアトリエ・クリエイティブツール調 */
@@ -309,17 +271,8 @@ input:focus, textarea:focus, select:focus {
   --primary: #a888e8;
   --accent: #f0c050;
   --text: #eae6f5;
-  --muted: #8880a8;
-  --border: #2a2438;
-}
-:root.dark .studio-theme {
-  --bg: #0d0b15;
-  --card: #16131e;
-  --primary: #a888e8;
-  --accent: #f0c050;
-  --text: #eae6f5;
-  --muted: #8880a8;
-  --border: #2a2438;
+  --muted: #9c92ba;
+  --border: #342c48;
 }
 
 /* ===== 印刷スタイル ===== */

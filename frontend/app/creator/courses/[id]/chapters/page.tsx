@@ -119,7 +119,7 @@ export default function ChapterSkeletonPage() {
             AIとの壁打ちで決めた章立てを入力してください。後から変更できます。
           </p>
           {existingCount > 0 && (
-            <p className="text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#fef3c7", color: "#92400e" }}>
+            <p className="text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
               既存の {existingCount} 章があります。保存すると上書きされます。
             </p>
           )}
@@ -155,7 +155,7 @@ export default function ChapterSkeletonPage() {
                     type="button"
                     onClick={() => removeChapter(i)}
                     className="text-xs px-2 py-1 rounded"
-                    style={{ background: "#fee2e2", color: "#dc2626" }}
+                    style={{ background: "rgba(239,68,68,0.16)", color: "#f87171" }}
                   >削除</button>
                 </div>
               </div>

@@ -693,7 +693,7 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
                       )}
                     </div>
                     {unavailable ? (
-                      <span className="pill flex-shrink-0" style={{ background: "#fee2e2", color: "#dc2626" }}>非公開</span>
+                      <span className="pill flex-shrink-0" style={{ background: "rgba(239,68,68,0.16)", color: "#f87171" }}>非公開</span>
                     ) : (
                       <span className="flex-shrink-0" style={{ color: "var(--muted)", fontSize: 18 }}>›</span>
                     )}

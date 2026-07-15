@@ -187,7 +187,7 @@ export default function CoursePreviewPage() {
                           )}
                         </div>
                         {card.is_preview && (
-                          <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#dbeafe", color: "#1d4ed8" }}>無料</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "rgba(59,130,246,0.16)", color: "#60a5fa" }}>無料</span>
                         )}
                       </div>
                     ))

@@ -145,7 +145,7 @@ export default function CreatorApplyPage() {
           {applicationFieldsForm}
 
           {error && (
-            <p role="alert" className="text-sm text-red-500 bg-red-50 rounded-lg p-2 text-center">{error}</p>
+            <p role="alert" className="text-sm rounded-lg p-2 text-center" style={{ background: "rgba(239,68,68,0.14)", color: "#f87171" }}>{error}</p>
           )}
 
           <button type="submit" className="btn-primary text-center w-full mt-1" disabled={submitting} aria-busy={submitting}>
