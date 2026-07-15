@@ -153,7 +153,7 @@ function SortableCard({
                 onClick={() => setLocalCard(c => ({ ...c, card_type: t.value }))}
                 className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
                 style={{
-                  background: localCard.card_type === t.value ? "var(--primary)" : "var(--bg)",
+                  background: localCard.card_type === t.value ? "var(--ink)" : "var(--bg)",
                   color: localCard.card_type === t.value ? "#fff" : "var(--muted)",
                   border: "1px solid var(--border, #e5e7eb)",
                 }}
@@ -197,7 +197,7 @@ function SortableCard({
                     onClick={() => setLocalCard(c => ({ ...c, submission_format: f.value }))}
                     className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
                     style={{
-                      background: (localCard.submission_format || "text") === f.value ? "var(--primary)" : "var(--bg)",
+                      background: (localCard.submission_format || "text") === f.value ? "var(--ink)" : "var(--bg)",
                       color: (localCard.submission_format || "text") === f.value ? "#fff" : "var(--muted)",
                       border: "1px solid var(--border, #e5e7eb)",
                     }}
@@ -389,7 +389,7 @@ export default function ChapterDetailPage() {
               disabled={addingType !== null}
               className="text-sm px-4 py-2 rounded-xl font-medium transition"
               style={{
-                background: addingType === t.value ? "var(--primary)" : "var(--card, #fff)",
+                background: addingType === t.value ? "var(--ink)" : "var(--card, #fff)",
                 color: addingType === t.value ? "#fff" : "var(--text)",
                 border: "1px solid var(--border, #e5e7eb)",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",

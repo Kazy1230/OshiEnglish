@@ -597,7 +597,7 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       {/* 進捗バー */}
       {progress && (
         <div className="card overflow-hidden p-0">
-          <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+          <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>学習進捗</p>

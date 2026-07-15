@@ -67,10 +67,10 @@ export default function PricingPage() {
           </p>
         </section>
 
-        <section className="rounded-xl p-6 text-center" style={{ background: "var(--primary)" }}>
+        <section className="rounded-xl p-6 text-center" style={{ background: "var(--ink)" }}>
           <p className="text-white font-black text-lg mb-1">気になるクリエイターを見つけましょう</p>
           <p className="text-white/80 text-sm mb-4">30日間の伴走コースから、自分に合ったクリエイターを選べます。</p>
-          <button onClick={() => router.push(loggedIn ? "/creators" : "/login")} className="btn-cta" style={{ background: "white", color: "var(--primary)" }}>
+          <button onClick={() => router.push(loggedIn ? "/creators" : "/login")} className="btn-cta" style={{ background: "white", color: "var(--ink)" }}>
             クリエイターを探す →
           </button>
         </section>

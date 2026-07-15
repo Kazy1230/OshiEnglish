@@ -252,7 +252,7 @@ export default function CourseDetailPage() {
         {course.thumbnail_url ? (
           <img src={course.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }} />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, var(--ink) 0%, var(--accent) 100%)" }} />
         )}
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.72) 100%)" }} />
 
@@ -285,7 +285,7 @@ export default function CourseDetailPage() {
                   {course.tier_a_price && (
                     <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--primary) 12%, transparent)", color: "var(--primary)" }}>Tier A</span>
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--ink) 12%, transparent)", color: "var(--ink)" }}>Tier A</span>
                         <span className="text-[11px]" style={{ color: "#6b7280" }}>メンター相談つき</span>
                       </div>
                       <p className="text-xl font-black" style={{ color: "#1a1a2e" }}>¥{course.tier_a_price.toLocaleString()}<span className="text-xs font-bold" style={{ color: "#6b7280" }}>/月</span></p>
@@ -293,7 +293,7 @@ export default function CourseDetailPage() {
                         <li>✓ 30日パーソナライズコース</li>
                         <li>✓ メンターとのチャット（無制限）</li>
                       </ul>
-                      <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="text-sm font-bold py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--primary)", color: "white" }}>
+                      <button onClick={() => handleSubscribe("A")} disabled={purchasing} className="text-sm font-bold py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--ink)", color: "white" }}>
                         {purchasing ? "準備中…" : "Tier Aで始める"}
                       </button>
                     </div>
@@ -324,7 +324,7 @@ export default function CourseDetailPage() {
                   {course.is_free ? (
                     <span className="text-sm" style={{ color: "#6b7280" }}>無料で受講できます</span>
                   ) : (
-                    <button onClick={handlePurchase} disabled={purchasing} className="text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--primary)", color: "white" }}>
+                    <button onClick={handlePurchase} disabled={purchasing} className="text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--ink)", color: "white" }}>
                       {purchasing ? "準備中…" : "購入して始める"}
                     </button>
                   )}
@@ -397,7 +397,7 @@ export default function CourseDetailPage() {
             {course.chapters && course.chapters.length > 0 && (
               <div className="flex flex-col gap-4">
                 <div className="card overflow-hidden p-0">
-                  <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+                  <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
                     <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>Curriculum</p>
                     <p className="text-2xl font-black mt-1" style={{ color: "white", fontFamily: "var(--font-display)" }}>
                       {course.chapters.length}章・{course.chapters.reduce((s, ch) => s + ch.cards.length, 0)}カード
@@ -410,7 +410,7 @@ export default function CourseDetailPage() {
                       <div className="flex items-start gap-3">
                         <span
                           className="flex items-center justify-center flex-shrink-0 font-black"
-                          style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--primary)", color: "white", fontSize: 14 }}
+                          style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--ink)", color: "white", fontSize: 14 }}
                         >
                           {ch.order}
                         </span>
@@ -457,7 +457,7 @@ export default function CourseDetailPage() {
 
             {course.has_days && (
               <div className="card flex flex-col gap-5 overflow-hidden p-0">
-                <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+                <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
                   <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>Program</p>
                   <p className="text-2xl font-black mt-1" style={{ color: "white", fontFamily: "var(--font-display)" }}>30日間の伴走プログラム</p>
                   <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.85)" }}>毎日のタスクとメンターへのチャットで、無理なく続けられます</p>
@@ -518,7 +518,7 @@ export default function CourseDetailPage() {
         {/* ===== 30日コース：Day1診断 ===== */}
         {unlocked && course.has_days && !course.has_diagnosis && (
           <div className="card flex flex-col gap-4 overflow-hidden p-0">
-            <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+            <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
               <p className="text-lg font-black text-white">まずは診断から始めよう</p>
               <p className="text-sm text-white/80 mt-1">あなた専用の30日プランが作られます</p>
             </div>
@@ -538,7 +538,7 @@ export default function CourseDetailPage() {
                 <span className="text-sm font-black" style={{ color: "var(--accent)" }}>{completedCount} / 30 日</span>
               </div>
               <div className="relative h-3 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{ width: `${progressPct}%`, background: "linear-gradient(to right, var(--primary), var(--accent))" }} />
+                <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{ width: `${progressPct}%`, background: "linear-gradient(to right, var(--ink), var(--accent))" }} />
               </div>
               <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
                 <span>スタート</span>
@@ -550,7 +550,7 @@ export default function CourseDetailPage() {
             {/* 今日のタスクカード */}
             <div className="card overflow-hidden p-0 shadow-lg">
               {/* カードヘッダー */}
-              <div className="relative px-5 py-4" style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
+              <div className="relative px-5 py-4" style={{ background: "linear-gradient(135deg, var(--ink) 0%, var(--accent) 100%)" }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-white/70 uppercase tracking-wider">Today</p>
@@ -680,9 +680,9 @@ export default function CourseDetailPage() {
                             style={{
                               borderRadius: 12,
                               background: isCompleted
-                                ? "linear-gradient(135deg, var(--primary), var(--accent))"
+                                ? "linear-gradient(135deg, var(--ink), var(--accent))"
                                 : isToday
-                                  ? "var(--primary)"
+                                  ? "var(--ink)"
                                   : d.is_rest_day
                                     ? "var(--border)"
                                     : "var(--card)",
@@ -700,10 +700,10 @@ export default function CourseDetailPage() {
                 ))}
                 <div className="flex items-center gap-4 pt-2 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))", display: "inline-block" }} /> 完了
+                    <span className="w-3 h-3 rounded" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))", display: "inline-block" }} /> 完了
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded" style={{ background: "var(--primary)", display: "inline-block" }} /> 今日
+                    <span className="w-3 h-3 rounded" style={{ background: "var(--ink)", display: "inline-block" }} /> 今日
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded" style={{ background: "var(--border)", display: "inline-block" }} /> 休息日
@@ -729,7 +729,7 @@ export default function CourseDetailPage() {
                 <span className="font-black" style={{ color: "var(--accent)" }}>{completedLessonCount}/{course.lessons.length}</span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                <div className="h-2 rounded-full" style={{ width: `${Math.round((completedLessonCount / course.lessons.length) * 100)}%`, background: "linear-gradient(to right, var(--primary), var(--accent))" }} />
+                <div className="h-2 rounded-full" style={{ width: `${Math.round((completedLessonCount / course.lessons.length) * 100)}%`, background: "linear-gradient(to right, var(--ink), var(--accent))" }} />
               </div>
             </div>
 
@@ -743,7 +743,7 @@ export default function CourseDetailPage() {
                     <button key={l.id} onClick={() => setActiveLessonId(l.id)}
                       className="text-left text-sm px-3 py-2.5 rounded-xl flex items-center gap-2 transition-all"
                       style={{
-                        background: isActive ? "var(--primary)" : isDone ? "color-mix(in srgb, var(--accent) 8%, var(--card))" : "var(--card)",
+                        background: isActive ? "var(--ink)" : isDone ? "color-mix(in srgb, var(--accent) 8%, var(--card))" : "var(--card)",
                         color: isActive ? "white" : isLocked ? "var(--muted)" : "var(--text)",
                         border: `1px solid ${isActive ? "transparent" : isDone ? "color-mix(in srgb, var(--accent) 25%, transparent)" : "var(--border)"}`,
                         opacity: isLocked ? 0.55 : 1,
@@ -825,7 +825,7 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div className="w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl flex flex-col gap-0 overflow-hidden"
         style={{ background: "var(--card)" }} onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-5 flex flex-col gap-1" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+        <div className="px-5 py-5 flex flex-col gap-1" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-white/70">Week {day.week_number}</p>

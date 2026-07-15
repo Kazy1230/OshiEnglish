@@ -53,7 +53,7 @@ function CharacterMessageBanner({ notif, onDismiss }: { notif: ReengagementNotif
         {character_image ? (
           <img src={character_image} alt="" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--primary)" }} />
         ) : (
-          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, var(--primary), var(--accent))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, var(--ink), var(--accent))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
             🎭
           </div>
         )}
@@ -74,7 +74,7 @@ function CharacterMessageBanner({ notif, onDismiss }: { notif: ReengagementNotif
             style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               fontSize: 13, fontWeight: 700, color: "white",
-              background: "var(--primary)", padding: "6px 16px",
+              background: "var(--ink)", padding: "6px 16px",
               borderRadius: 999, textDecoration: "none",
             }}
           >

@@ -196,7 +196,7 @@ export default function CourseChatPage() {
   const avatarEl = character?.avatar_url ? (
     <img src={character.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
   ) : (
-    <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: "var(--primary)", color: "white" }}>
+    <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: "var(--ink)", color: "white" }}>
       🎭
     </div>
   );
@@ -204,7 +204,7 @@ export default function CourseChatPage() {
   return (
     <div className="h-full flex flex-col">
       {/* ヘッダー */}
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
         {character?.avatar_url ? (
           <img src={character.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40" />
         ) : (
@@ -249,7 +249,7 @@ export default function CourseChatPage() {
               }`}
               style={
                 msg.role === "user"
-                  ? { background: "var(--primary)", color: "white" }
+                  ? { background: "var(--ink)", color: "white" }
                   : { background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }
               }
             >

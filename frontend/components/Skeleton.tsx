@@ -10,7 +10,7 @@ export function Skeleton({ className = "", style = {} }: { className?: string; s
 export function AdminSkeleton() {
   return (
     <div className="admin-theme min-h-screen flex" style={{ background: "var(--bg)" }}>
-      <div className="w-56 flex-shrink-0" style={{ background: "var(--primary)" }} />
+      <div className="w-56 flex-shrink-0" style={{ background: "var(--ink)" }} />
       <div className="flex-1 p-8 flex flex-col gap-4">
         <Skeleton className="h-8 w-48 mb-4" />
         <div className="grid grid-cols-4 gap-4">

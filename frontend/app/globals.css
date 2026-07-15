@@ -11,6 +11,8 @@
   --muted: #ab9b83;
   --border: #3a3225;
   --surface: #201d14;
+  /* --ink: 「濃色パネル＋白文字」用の常に暗いトーン（--primaryは見出し文字用の明色のため、背景用途には使わない） */
+  --ink: #050403;
   --font-display: 'Cormorant Garamond', 'Georgia', serif;
   --font-body: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
 }
@@ -25,6 +27,7 @@
   --muted: #8b96ac;
   --border: #2c3648;
   --surface: #141820;
+  --ink: #0c0e18;
   --danger: #f87171;
   --warning: #fbbf24;
   --sidebar-bg: #0c0e18;
@@ -129,7 +132,7 @@ a.card:hover, button.card:hover, .card.hover-lift:hover {
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--ink);
   color: white;
   padding: 0.65rem 1.6rem;
   border-radius: 999px;
@@ -144,7 +147,7 @@ a.card:hover, button.card:hover, .card.hover-lift:hover {
 
 .btn-accent {
   background: var(--accent);
-  color: white;
+  color: var(--ink);
   padding: 0.65rem 1.6rem;
   border-radius: 999px;
   font-weight: 700;
@@ -178,7 +181,7 @@ header {
 
 /* ===== 装飾ユーティリティ（ヒーロー・カード演出など） ===== */
 .gradient-hero {
-  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 55%, var(--accent)) 100%);
+  background: linear-gradient(135deg, var(--ink) 0%, color-mix(in srgb, var(--ink) 55%, var(--accent)) 100%);
 }
 
 .shadow-soft {
@@ -195,7 +198,7 @@ header {
 
 .btn-cta {
   background: var(--accent);
-  color: white;
+  color: var(--ink);
   padding: 0.85rem 2rem;
   border-radius: 999px;
   font-weight: 700;

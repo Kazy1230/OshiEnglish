@@ -199,7 +199,7 @@ export default function CreatorInterviewPage() {
     <div className="creator-theme h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
 
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
         <span className="text-xl">🎭</span>
         <div className="flex-1">
           <p className="text-xs font-bold text-white">学習者になりきったAIとの会話シミュレーション</p>
@@ -232,7 +232,7 @@ export default function CreatorInterviewPage() {
               </div>
             </div>
           ) : (
-            <div key={i} className="self-end max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm whitespace-pre-wrap" style={{ background: "var(--primary)", color: "white" }}>
+            <div key={i} className="self-end max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm whitespace-pre-wrap" style={{ background: "var(--ink)", color: "white" }}>
               {item.text}
             </div>
           )

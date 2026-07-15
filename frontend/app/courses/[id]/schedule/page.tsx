@@ -149,7 +149,7 @@ export default function CourseSchedulePage() {
                             background: isCompleted
                               ? "var(--accent)"
                               : isToday
-                              ? "var(--primary)"
+                              ? "var(--ink)"
                               : d.is_rest_day
                               ? "var(--example-bg, #eee)"
                               : "var(--card)",
@@ -224,7 +224,7 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { cours
             <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: "var(--accent)", color: "white" }}>完了済み</span>
           )}
           {isToday && !log?.is_completed && (
-            <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: "var(--primary)", color: "white" }}>本日</span>
+            <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: "var(--ink)", color: "white" }}>本日</span>
           )}
         </div>
         {day.is_rest_day ? (

@@ -282,9 +282,9 @@ export default function CourseTextbooksPage() {
                 onClick={() => { if (tab === "content") handleContentTabClick(); else setAddTab("textbook"); }}
                 className="text-sm px-3 py-1.5 rounded-full font-bold transition-all"
                 style={{
-                  background: addTab === tab ? "var(--primary)" : "var(--bg)",
+                  background: addTab === tab ? "var(--ink)" : "var(--bg)",
                   color: addTab === tab ? "white" : "var(--muted)",
-                  border: `1.5px solid ${addTab === tab ? "var(--primary)" : "var(--border)"}`,
+                  border: `1.5px solid ${addTab === tab ? "var(--ink)" : "var(--border)"}`,
                 }}
               >
                 {tab === "textbook" ? "📚 テキスト教材" : "🗂️ コンテンツプール"}
@@ -362,7 +362,7 @@ export default function CourseTextbooksPage() {
                 <div className="flex flex-col gap-2 max-h-64 overflow-y-auto p-3 rounded-xl" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
                   {tocChatHistory.map((m, i) => (
                     <div key={i} className={`text-xs p-2.5 rounded-xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "self-end" : "self-start"}`}
-                      style={{ background: m.role === "user" ? "var(--primary)" : "var(--card)", color: m.role === "user" ? "white" : "var(--text)", border: "1px solid var(--border)" }}>
+                      style={{ background: m.role === "user" ? "var(--ink)" : "var(--card)", color: m.role === "user" ? "white" : "var(--text)", border: "1px solid var(--border)" }}>
                       {m.content}
                     </div>
                   ))}

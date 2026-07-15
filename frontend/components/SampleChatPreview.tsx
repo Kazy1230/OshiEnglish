@@ -15,7 +15,7 @@ export function SampleChatPreview({
     <div className={compact ? "flex flex-col gap-3" : "card shadow-soft flex flex-col gap-3"}>
       {!compact && <p className="text-xs font-bold" style={{ color: "var(--primary)" }}>💬 チャットのサンプル</p>}
       <div className="flex flex-col gap-3 p-4 rounded-xl" style={{ background: "var(--bg)" }}>
-        <div className="self-end max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed" style={{ background: "var(--primary)", color: "white" }}>
+        <div className="self-end max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed" style={{ background: "var(--ink)", color: "white" }}>
           最近やる気が出なくて、続けられるか不安です…
         </div>
         <div className="flex items-start gap-2 max-w-[85%] self-start">

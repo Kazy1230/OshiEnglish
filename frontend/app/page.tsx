@@ -136,7 +136,7 @@ export default function Home() {
 
       <main>
         {/* ===== ヒーロー：エディトリアル ===== */}
-        <section className="relative overflow-hidden" style={{ background: "var(--primary)" }}>
+        <section className="relative overflow-hidden" style={{ background: "var(--ink)" }}>
           {/* ノイズテクスチャ風オーバーレイ */}
           <div className="pointer-events-none absolute inset-0" style={{
             backgroundImage: "radial-gradient(circle at 70% 30%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 55%), radial-gradient(circle at 15% 80%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 45%)",
@@ -315,7 +315,7 @@ export default function Home() {
         {/* ===== クリエイター向けCTA ===== */}
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
           <div className="relative overflow-hidden p-10 sm:p-16 flex flex-col md:flex-row md:items-center md:justify-between gap-8"
-            style={{ background: "var(--primary)", border: "1px solid var(--border)" }}>
+            style={{ background: "var(--ink)", border: "1px solid var(--border)" }}>
             {/* ゴールドアクセントライン */}
             <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "var(--accent)" }} />
             <div className="relative">
@@ -417,7 +417,7 @@ function CourseImage({ course, className }: { course: CourseCard; className: str
     return <img src={course.thumbnail_url} alt="" className={`w-full object-cover ${className}`} />;
   }
   return (
-    <div className={`w-full flex items-center justify-center ${className}`} style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--primary) 86%, white), color-mix(in srgb, var(--accent) 72%, white))" }}>
+    <div className={`w-full flex items-center justify-center ${className}`} style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--ink) 86%, white), color-mix(in srgb, var(--accent) 72%, white))" }}>
       <div className="text-center px-6">
         <p className="text-white text-sm font-black tracking-widest">MANA VILLAGE</p>
         <p className="text-white/80 text-xs mt-2">30日伴走コース</p>
@@ -453,9 +453,9 @@ function CategoryButton({ active, onClick, children }: { active: boolean; onClic
       onClick={onClick}
       className="whitespace-nowrap flex-shrink-0 px-3 py-2 rounded-full text-sm font-bold border transition-colors"
       style={{
-        background: active ? "var(--primary)" : "var(--card)",
+        background: active ? "var(--ink)" : "var(--card)",
         color: active ? "white" : "var(--muted)",
-        borderColor: active ? "var(--primary)" : "var(--border)",
+        borderColor: active ? "var(--ink)" : "var(--border)",
       }}
     >
       {children}

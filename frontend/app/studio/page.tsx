@@ -199,7 +199,7 @@ function CreatePanel({ character, onSave, pendingRequest, onPendingRequestHandle
             <div key={s.key} className="flex items-center flex-1 min-w-0">
               <div className="flex flex-col items-center gap-1 flex-shrink-0">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-colors"
-                  style={{ background: done ? "var(--accent)" : current ? "var(--primary)" : "var(--border)", color: (done || current) ? "white" : "var(--muted)" }}>
+                  style={{ background: done ? "var(--accent)" : current ? "var(--ink)" : "var(--border)", color: (done || current) ? "white" : "var(--muted)" }}>
                   {done ? "✓" : i + 1}
                 </div>
                 <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: current ? "var(--primary)" : "var(--muted)" }}>{s.label}</span>
@@ -297,7 +297,7 @@ function CreatePanel({ character, onSave, pendingRequest, onPendingRequestHandle
           {angles.map((angle, i) => (
             <button key={i} onClick={() => generate(angle)} className="card p-4 text-left flex flex-col gap-2 hover-lift" style={{ background: "var(--card)" }}>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: "var(--primary)", color: "white" }}>{angle.label}</span>
+                <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: "var(--ink)", color: "white" }}>{angle.label}</span>
                 <span className="text-xs" style={{ color: "var(--accent)" }}>{angle.why}</span>
               </div>
               <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>「{angle.hook}」</p>
@@ -325,7 +325,7 @@ function CreatePanel({ character, onSave, pendingRequest, onPendingRequestHandle
       {step === "result" && result && (
         <div ref={resultRef} className="flex flex-col gap-4">
           <div className="card overflow-hidden p-0">
-            <div className="px-5 py-3 flex items-center justify-between" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
               <div>
                 <p className="text-xs text-white/70">{format?.label} · {selectedIdea?.title}</p>
                 <p className="text-sm font-bold text-white">{selectedAngle?.label}</p>
@@ -519,7 +519,7 @@ function MarketingPanel() {
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div style={{
                 maxWidth: "85%", padding: "10px 14px", borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                background: m.role === "user" ? "var(--primary)" : "var(--card)",
+                background: m.role === "user" ? "var(--ink)" : "var(--card)",
                 color: m.role === "user" ? "white" : "var(--text)",
                 border: m.role === "ai" ? "1px solid var(--border)" : "none",
                 fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap",
@@ -591,7 +591,7 @@ export default function StudioPage() {
               style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10,
                 textAlign: "left", fontSize: 14, fontWeight: panel === item.key ? 800 : 500, cursor: "pointer",
-                background: panel === item.key ? "var(--primary)" : "transparent",
+                background: panel === item.key ? "var(--ink)" : "transparent",
                 color: panel === item.key ? "white" : "var(--text)",
                 border: "none", transition: "all 0.15s",
               }}>
@@ -608,9 +608,9 @@ export default function StudioPage() {
               <button key={item.key} onClick={() => setPanel(item.key)}
                 className="whitespace-nowrap flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold"
                 style={{
-                  background: panel === item.key ? "var(--primary)" : "var(--card)",
+                  background: panel === item.key ? "var(--ink)" : "var(--card)",
                   color: panel === item.key ? "white" : "var(--muted)",
-                  border: `1.5px solid ${panel === item.key ? "var(--primary)" : "var(--border)"}`,
+                  border: `1.5px solid ${panel === item.key ? "var(--ink)" : "var(--border)"}`,
                 }}>
                 {item.icon} {item.label}
               </button>

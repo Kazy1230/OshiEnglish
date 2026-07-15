@@ -153,7 +153,7 @@ export default function CoursePreviewPage() {
               >
                 <span
                   className="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0"
-                  style={{ background: "var(--primary)", color: "#fff" }}
+                  style={{ background: "var(--ink)", color: "#fff" }}
                 >
                   第{i + 1}章
                 </span>

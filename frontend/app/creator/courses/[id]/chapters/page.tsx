@@ -133,7 +133,7 @@ export default function ChapterSkeletonPage() {
               style={{ padding: "1rem" }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--primary)", color: "#fff" }}>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--ink)", color: "#fff" }}>
                   第{i + 1}章
                 </span>
                 <div className="flex items-center gap-1">

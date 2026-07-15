@@ -360,7 +360,7 @@ function CustomQuestionCard({
           {(question.options || []).map(opt => (
             <button key={opt} onClick={() => setValue(opt)}
               className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
-              style={{ borderColor: "var(--border)", background: value === opt ? "var(--primary)" : "var(--card)", color: value === opt ? "white" : "var(--text)" }}>
+              style={{ borderColor: "var(--border)", background: value === opt ? "var(--ink)" : "var(--card)", color: value === opt ? "white" : "var(--text)" }}>
               {opt}
             </button>
           ))}
@@ -374,7 +374,7 @@ function CustomQuestionCard({
             return (
               <button key={opt} onClick={() => toggleMultiValue(opt)}
                 className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
-                style={{ borderColor: "var(--border)", background: selected ? "var(--primary)" : "var(--card)", color: selected ? "white" : "var(--text)" }}>
+                style={{ borderColor: "var(--border)", background: selected ? "var(--ink)" : "var(--card)", color: selected ? "white" : "var(--text)" }}>
                 {opt}
               </button>
             );
@@ -432,7 +432,7 @@ function TextbookProgressCard({
           <button key={opt.key}
             onClick={() => setAnswer({ status: opt.key, lap_number: lapNumber, percent })}
             className="px-3 py-2 rounded-full text-sm font-bold border transition-colors"
-            style={{ borderColor: "var(--border)", background: status === opt.key ? "var(--primary)" : "var(--card)", color: status === opt.key ? "white" : "var(--text)" }}>
+            style={{ borderColor: "var(--border)", background: status === opt.key ? "var(--ink)" : "var(--card)", color: status === opt.key ? "white" : "var(--text)" }}>
             {opt.label}
           </button>
         ))}

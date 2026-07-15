@@ -311,7 +311,7 @@ function ChapterSection({
           onClick={() => setOpen(o => !o)}
           className="flex-1 flex items-start gap-3 text-left"
         >
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: "var(--primary)", color: "#fff" }}>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: "var(--ink)", color: "#fff" }}>
             第{chapter.order}章
           </span>
           <div className="flex-1 min-w-0">
@@ -359,7 +359,7 @@ function ChapterSection({
                   disabled={addingType !== null}
                   className="text-xs px-3 py-1.5 rounded-xl font-medium transition"
                   style={{
-                    background: addingType === t.value ? "var(--primary)" : "var(--card, #fff)",
+                    background: addingType === t.value ? "var(--ink)" : "var(--card, #fff)",
                     color: addingType === t.value ? "#fff" : "var(--text)",
                     border: "1px solid var(--border, #e5e7eb)",
                   }}
@@ -520,7 +520,7 @@ export default function CurriculumHubPage() {
                 </pre>
                 <button onClick={handleCopy}
                   className="absolute top-3 right-3 text-xs px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: copied ? "var(--accent)" : "var(--primary)", color: "#fff" }}>
+                  style={{ background: copied ? "var(--accent)" : "var(--ink)", color: "#fff" }}>
                   {copied ? "コピーしました！" : "コピー"}
                 </button>
               </div>

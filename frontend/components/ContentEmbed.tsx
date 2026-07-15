@@ -181,7 +181,7 @@ function Avatar({ name, avatarUrl, size = 36 }: { name?: string | null; avatarUr
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: "linear-gradient(135deg, var(--primary), var(--accent))",
+      background: "linear-gradient(135deg, var(--ink), var(--accent))",
       display: "flex", alignItems: "center", justifyContent: "center",
       color: "white", fontSize: size * 0.4, fontWeight: 700,
     }}>

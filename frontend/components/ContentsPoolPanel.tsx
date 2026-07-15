@@ -210,7 +210,7 @@ export function ContentsPoolPanel() {
               style={{
                 textAlign: "left", padding: "8px 12px", borderRadius: 8,
                 fontSize: 13, fontWeight: filterSubject === key ? 700 : 500,
-                background: filterSubject === key ? "var(--primary)" : "transparent",
+                background: filterSubject === key ? "var(--ink)" : "transparent",
                 color: filterSubject === key ? "white" : "var(--muted)",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -240,9 +240,9 @@ export function ContentsPoolPanel() {
                 onClick={() => setFilterSubject(key)}
                 className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0"
                 style={{
-                  background: filterSubject === key ? "var(--primary)" : "var(--card)",
+                  background: filterSubject === key ? "var(--ink)" : "var(--card)",
                   color: filterSubject === key ? "white" : "var(--muted)",
-                  border: `1px solid ${filterSubject === key ? "var(--primary)" : "var(--border)"}`,
+                  border: `1px solid ${filterSubject === key ? "var(--ink)" : "var(--border)"}`,
                 }}
               >
                 {key || "すべて"}

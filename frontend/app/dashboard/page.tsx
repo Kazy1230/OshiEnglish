@@ -61,7 +61,7 @@ export default function DashboardPage() {
       <AppHeader role="creator" title="ダッシュボード" overdueCount={overdueCount} />
 
       {/* ヒーローバナー */}
-      <section style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", padding: "28px 16px" }}>
+      <section style={{ background: "linear-gradient(135deg, var(--ink) 0%, var(--accent) 100%)", padding: "28px 16px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           {/* アバター */}
           {loadingChars ? (
@@ -92,7 +92,7 @@ export default function DashboardPage() {
               </div>
             )}
             {!character && !loadingChars && (
-              <Link href="/creator/interview" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, background: "white", color: "var(--primary)", padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+              <Link href="/creator/interview" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, background: "white", color: "var(--ink)", padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
                 🧠 AIインタビューを始める
               </Link>
             )}
@@ -200,7 +200,7 @@ export default function DashboardPage() {
                 onClick={() => setSupportTab("inbox")}
                 className="text-xs font-bold px-3 py-1.5 rounded-full"
                 style={{
-                  background: supportTab === "inbox" ? "var(--primary)" : "var(--card)",
+                  background: supportTab === "inbox" ? "var(--ink)" : "var(--card)",
                   color: supportTab === "inbox" ? "#fff" : "var(--muted)",
                   border: "1px solid var(--border)",
                 }}
@@ -211,7 +211,7 @@ export default function DashboardPage() {
                 onClick={() => setSupportTab("analytics")}
                 className="text-xs font-bold px-3 py-1.5 rounded-full"
                 style={{
-                  background: supportTab === "analytics" ? "var(--primary)" : "var(--card)",
+                  background: supportTab === "analytics" ? "var(--ink)" : "var(--card)",
                   color: supportTab === "analytics" ? "#fff" : "var(--muted)",
                   border: "1px solid var(--border)",
                 }}

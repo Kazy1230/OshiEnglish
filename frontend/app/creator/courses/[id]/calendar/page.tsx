@@ -316,7 +316,7 @@ export default function CourseCalendarPage() {
             {/* Legend + progress */}
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: "var(--muted)" }}>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--primary)" }} />AI生成</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--ink)" }} />AI生成</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--accent)" }} />編集済み</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--border)" }} />休息日</span>
                 {unsetDays > 0 && <span className="font-bold" style={{ color: "#e53e3e" }}>⚠ {unsetDays}日 タスク未設定</span>}
@@ -347,7 +347,7 @@ export default function CourseCalendarPage() {
                         ? "var(--border)"
                         : d.is_edited_by_creator
                           ? "var(--accent)"
-                          : "var(--primary)";
+                          : "var(--ink)";
                       const textColor = d.is_rest_day ? "var(--muted)" : "white";
                       return (
                         <button
