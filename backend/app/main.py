@@ -247,6 +247,21 @@ _ensure_column("courses", "curriculum_existing_videos", "TEXT NULL")
 # --- チャプターカード: quiz 種別の選択肢 ---
 _ensure_column("chapter_cards", "quiz_options", "JSON NULL")
 
+# --- 修正.md 2節: build_task提出形式・完了メッセージ・YouTube可用性チェック ---
+_ensure_column("chapter_cards", "submission_format", "VARCHAR(20) NULL")
+_ensure_column("chapter_cards", "completion_message", "TEXT NULL")
+_ensure_column("chapter_cards", "youtube_available", "BOOLEAN NULL")
+_ensure_column("chapter_cards", "youtube_checked_at", "DATETIME NULL")
+
+# --- 修正.md 2節: build_task提出内容・AI一次判定・クリエイターコメント・quiz正誤 ---
+_ensure_column("card_progress", "submission_text", "TEXT NULL")
+_ensure_column("card_progress", "submission_url", "VARCHAR(500) NULL")
+_ensure_column("card_progress", "submitted_at", "DATETIME NULL")
+_ensure_column("card_progress", "ai_feedback", "TEXT NULL")
+_ensure_column("card_progress", "creator_comment", "TEXT NULL")
+_ensure_column("card_progress", "creator_commented_at", "DATETIME NULL")
+_ensure_column("card_progress", "quiz_is_correct", "BOOLEAN NULL")
+
 # --- 修正.md: コース型選択（自由進行型/ペース管理型）・沈黙ベース再エンゲージメント ---
 _ensure_column("courses", "course_type", "VARCHAR(20) NOT NULL DEFAULT 'self_paced'")
 _ensure_column("courses", "pace_unit_description", "VARCHAR(255) NULL")
