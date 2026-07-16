@@ -27,6 +27,7 @@ from app.models.daily_summary import DailySummary
 from app.models.day_log import DayLog
 from app.models.card_progress import CardProgress
 from app.models.chat_greeting import ChatGreeting
+from app.models.notification import Notification
 from app.routers.courses import _is_accessible
 
 # チャット入力は1メッセージ単位の文字数制限を撤廃し、1日の合計入力文字数で制限する（DAILY_CHARACTER_LIMIT文字/日）
@@ -502,12 +503,34 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
 
 @router.get("/{course_id}/history")
 def get_chat_history(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """自分の質問・回答履歴を取得する。要(購入済み学習者)"""
+    """自分の質問・回答履歴を取得する。サボり通知などキャラクターからの声かけ通知もLINE風にチャット内へ差し込んで返す。要(購入済み学習者)"""
     _get_accessible_course(db, course_id, current_user)
     questions = db.query(Question).filter(
         Question.user_id == current_user.id, Question.course_id == course_id
     ).order_by(Question.created_at).all()
-    return [_serialize_question(q) for q in questions]
+
+    notifications = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.type == "inactivity_reminder",
+    ).all()
+    course_notifications = [n for n in notifications if n.payload and n.payload.get("course_id") == course_id]
+
+    items = [(q.created_at, "question", q) for q in questions]
+    items += [(n.created_at, "notification", n) for n in course_notifications]
+    items.sort(key=lambda item: item[0])
+
+    result = []
+    for created_at, kind, obj in items:
+        if kind == "question":
+            result.append({"kind": "question", **_serialize_question(obj)})
+        else:
+            result.append({
+                "kind": "notification",
+                "id": obj.id,
+                "message": (obj.payload or {}).get("message", ""),
+                "created_at": obj.created_at,
+            })
+    return result
 
 
 @router.get("/{course_id}/today-message")

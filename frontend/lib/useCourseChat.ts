@@ -10,11 +10,9 @@ export type ChatMessage = {
   linked_content_url?: string | null;
 };
 
-type HistoryItem = {
-  id: number;
-  body: string;
-  answer?: { body: string; is_draft?: boolean; linked_content_url?: string | null } | null;
-};
+type HistoryItem =
+  | { kind: "question"; id: number; body: string; answer?: { body: string; is_draft?: boolean; linked_content_url?: string | null } | null }
+  | { kind: "notification"; id: number; message: string };
 
 /** コースチャット（履歴取得・挨拶・ストリーミング送信）の共通ロジック。フル画面版とコンパクト版の両方から使う。 */
 export function useCourseChat(courseId: number, options?: { enabled?: boolean }) {
@@ -34,13 +32,17 @@ export function useCourseChat(courseId: number, options?: { enabled?: boolean })
       try {
         const history: HistoryItem[] = await api.getChatHistory(courseId);
         const converted: ChatMessage[] = [];
-        for (const q of history) {
-          converted.push({ id: `q-${q.id}`, role: "user", body: q.body });
-          if (q.answer) {
+        for (const item of history) {
+          if (item.kind === "notification") {
+            converted.push({ id: `n-${item.id}`, role: "assistant", body: item.message });
+            continue;
+          }
+          converted.push({ id: `q-${item.id}`, role: "user", body: item.body });
+          if (item.answer) {
             converted.push({
-              id: `a-${q.id}`, role: "assistant", body: q.answer.body,
-              is_draft: q.answer.is_draft,
-              linked_content_url: q.answer.linked_content_url,
+              id: `a-${item.id}`, role: "assistant", body: item.answer.body,
+              is_draft: item.answer.is_draft,
+              linked_content_url: item.answer.linked_content_url,
             });
           }
         }
