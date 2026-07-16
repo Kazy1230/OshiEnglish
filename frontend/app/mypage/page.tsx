@@ -178,7 +178,11 @@ export default function MyPage() {
                 const percent = progressPercent(c);
                 const unit = c.is_day_based ? "日" : "レッスン";
                 return (
-                  <div key={c.course_id} className={`card hover-lift shadow-soft flex flex-col gap-3 overflow-hidden ${percent >= 100 ? "achievement-card" : ""}`}>
+                  <Link
+                    key={c.course_id}
+                    href={`/courses/${c.course_id}`}
+                    className={`card hover-lift shadow-soft flex flex-col gap-3 overflow-hidden ${percent >= 100 ? "achievement-card" : ""}`}
+                  >
                     <div className="relative -m-5 mb-0">
                       {c.thumbnail_url ? (
                         <img src={c.thumbnail_url} alt="" className="w-full h-28 object-cover" />
@@ -222,12 +226,7 @@ export default function MyPage() {
                         ? "全て達成おめでとうございます！"
                         : `あと${Math.max(0, c.total_lessons - c.completed_count)}${unit}で達成！`}
                     </p>
-
-                    <div className="grid grid-cols-2 gap-2 mt-1">
-                      <Link href={`/courses/${c.course_id}`} className="btn-ghost text-xs py-2 text-center">コース詳細</Link>
-                      <Link href={`/courses/${c.course_id}/chat`} className="btn-primary text-xs py-2 text-center">伴走チャット</Link>
-                    </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
