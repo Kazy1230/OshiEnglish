@@ -28,8 +28,8 @@ const STEPS = [
   },
   {
     icon: "🧭",
-    title: "Day1診断を受ける",
-    desc: "現在地、目標、学習時間、苦手分野を答えると30日プランが作られます。",
+    title: "コースを始める",
+    desc: "購入するとすぐに学習が始められます。目標や進め方はコースごとに設計されています。",
   },
   {
     icon: "🔥",
@@ -156,12 +156,12 @@ export default function Home() {
                 fontWeight: 600,
                 lineHeight: 1.05,
                 letterSpacing: "-0.02em",
-                color: "var(--bg)",
+                color: "var(--text)",
               }}>
                 学ぶ人に、<br />
                 <em style={{ fontStyle: "italic", color: "var(--accent)" }}>メンター</em>を。
               </h1>
-              <p style={{ fontSize: "1.05rem", lineHeight: 1.85, color: "color-mix(in srgb, var(--bg) 70%, transparent)", maxWidth: "34rem" }}>
+              <p style={{ fontSize: "1.05rem", lineHeight: 1.85, color: "color-mix(in srgb, var(--text) 75%, transparent)", maxWidth: "34rem" }}>
                 誰と挑戦するかで、未来は変わる。<br />
                 その一歩を、最後まで支えるために。
               </p>
@@ -178,8 +178,8 @@ export default function Home() {
                 <Link href="/creator/apply" style={{
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                   padding: "0.85rem 2.2rem", borderRadius: 4, fontWeight: 600,
-                  border: "1px solid color-mix(in srgb, var(--bg) 25%, transparent)",
-                  color: "color-mix(in srgb, var(--bg) 80%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--text) 25%, transparent)",
+                  color: "color-mix(in srgb, var(--text) 85%, transparent)",
                   fontSize: "0.95rem", letterSpacing: "0.04em", transition: "border-color 0.2s, color 0.2s",
                 }}>
                   クリエイターとして参加
@@ -192,16 +192,16 @@ export default function Home() {
                 <FeaturedCourse course={featured} />
               ) : (
                 <div className="p-8 min-h-[320px] flex flex-col justify-between" style={{
-                  background: "color-mix(in srgb, var(--bg) 5%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--bg) 12%, transparent)",
+                  background: "color-mix(in srgb, white 6%, transparent)",
+                  border: "1px solid color-mix(in srgb, white 14%, transparent)",
                   borderRadius: 8,
                 }}>
                   <div>
                     <p className="text-xs font-bold tracking-widest uppercase mb-4" style={{ color: "var(--accent)" }}>Coming Soon</p>
-                    <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", fontWeight: 600, color: "var(--bg)", lineHeight: 1.3 }}>
+                    <h2 style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>
                       公開コースがここに<br />表示されます
                     </h2>
-                    <p className="text-sm mt-4 leading-relaxed" style={{ color: "color-mix(in srgb, var(--bg) 55%, transparent)" }}>
+                    <p className="text-sm mt-4 leading-relaxed" style={{ color: "color-mix(in srgb, var(--text) 60%, transparent)" }}>
                       クリエイターのコースが公開されると、サムネイル・価格・伴走タイプが確認できます。
                     </p>
                   </div>
@@ -323,10 +323,10 @@ export default function Home() {
                 <div className="h-px w-6 flex-shrink-0" style={{ background: "var(--accent)" }} />
                 <p className="text-xs font-bold tracking-[0.18em] uppercase" style={{ color: "var(--accent)" }}>For Creators</p>
               </div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", fontWeight: 600, lineHeight: 1.2, color: "var(--bg)" }}>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", fontWeight: 600, lineHeight: 1.2, color: "var(--text)" }}>
                 あなたのメソッドを、<br />30日伴走コースに。
               </h2>
-              <p className="text-sm leading-relaxed mt-4 max-w-xl" style={{ color: "color-mix(in srgb, var(--bg) 60%, transparent)" }}>
+              <p className="text-sm leading-relaxed mt-4 max-w-xl" style={{ color: "color-mix(in srgb, var(--text) 65%, transparent)" }}>
                 インタビューで指導スタイルを整理し、教材と30日プランを組み合わせてコースを公開できます。
               </p>
             </div>
@@ -364,7 +364,7 @@ function FeaturedCourse({ course }: { course: CourseCard }) {
       <div className="relative">
         <CourseImage course={course} className="h-56 sm:h-64" />
         <div className="absolute inset-x-0 bottom-0 h-24 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55), transparent)" }} />
-        <span className="absolute top-3 left-3 pill" style={{ background: "rgba(245,239,224,0.92)", color: "var(--accent)" }}>
+        <span className="absolute top-3 left-3 pill" style={{ background: "rgba(245,239,224,0.92)", color: "var(--ink)" }}>
           注目コース
         </span>
         <span className="absolute bottom-3 right-3 text-sm font-black text-white drop-shadow">{priceLabel(course)}</span>
@@ -389,7 +389,7 @@ function CourseTile({ course }: { course: CourseCard }) {
     >
       <div className="relative">
         <CourseImage course={course} className="h-40" />
-        <span className="absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm" style={{ background: "rgba(245,239,224,0.85)", color: "var(--primary)" }}>
+        <span className="absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm" style={{ background: "rgba(245,239,224,0.9)", color: "var(--ink)" }}>
           {tierLabel(course)}
         </span>
         <span className="absolute top-3 right-3 text-xs font-black px-2 py-1 rounded-full text-white" style={{ background: "color-mix(in srgb, var(--accent) 90%, black)" }}>
