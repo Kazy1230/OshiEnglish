@@ -511,7 +511,7 @@ def get_chat_history(course_id: int, current_user=Depends(get_current_user), db:
 
     notifications = db.query(Notification).filter(
         Notification.user_id == current_user.id,
-        Notification.type == "inactivity_reminder",
+        Notification.type.in_(["inactivity_reminder", "card_completion_followup"]),
     ).all()
     course_notifications = [n for n in notifications if n.payload and n.payload.get("course_id") == course_id]
 

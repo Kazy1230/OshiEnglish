@@ -100,6 +100,22 @@ def enforce_daily_message_limit(user_id: int, course_id: int, limit: int = 30) -
         return 0
 
 
+def try_consume_card_followup_limit(user_id: int, course_id: int, limit: int = 8) -> bool:
+    """カード完了時のLINE風フォローアップメッセージ生成を、学習者1人・1コースあたり1日limit回までに制限する。
+    カード完了そのものは失敗させたくないため、上限超過時はFalseを返すのみで例外は投げない。
+    Redis接続に失敗した場合は安全側に倒し、生成を許可する。"""
+    key = f"cardfollowup:{user_id}:{course_id}:{_today_str()}"
+    try:
+        client = _get_redis()
+        count = client.incr(key)
+        if count == 1:
+            client.expire(key, 60 * 60 * 24)
+        return count <= limit
+    except redis.RedisError:
+        logger.exception("[RateLimit] Redis接続に失敗したため、カード完了フォローアップの制限をスキップしました")
+        return True
+
+
 def _today_str() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")

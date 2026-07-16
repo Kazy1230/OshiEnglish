@@ -729,11 +729,60 @@ def set_pace(
     return {"ok": True}
 
 
+def _generate_card_followup_message(user_id: int, card_id: int):
+    """カード完了直後のLINE風フォローアップメッセージ（「どうだった？」等）をバックグラウンドで生成し、
+    通知としてチャット履歴に差し込む。requestのDBセッションが閉じた後も動くよう自前でSessionLocal()を開く。"""
+    from app.core.database import SessionLocal
+    from app.core.rate_limit import try_consume_card_followup_limit
+
+    db = SessionLocal()
+    try:
+        card = db.query(ChapterCard).filter(ChapterCard.id == card_id).first()
+        if not card:
+            return
+        course_id = card.chapter.course_id
+        if not try_consume_card_followup_limit(user_id, course_id):
+            return
+
+        course = db.query(Course).filter(Course.id == course_id).first()
+        if not course:
+            return
+        personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
+        personality_profile = personality.profile if personality and personality.profile else {}
+        tone_profile = (course.character.tone_profile if course.character else None) or {}
+        course_overview = _build_course_overview(course)
+
+        try:
+            message = generate_text(
+                prompts.build_card_followup_message_system(personality_profile, tone_profile, course_overview),
+                prompts.build_card_followup_message_user(card.card_type, card.title),
+                max_tokens=100,
+                model=settings.DEEPSEEK_MODEL_LITE,
+            )
+        except LLMError:
+            return
+
+        db.add(Notification(
+            user_id=user_id,
+            type="card_completion_followup",
+            payload={
+                "course_id": course_id,
+                "message": message,
+                "character_name": course.character.name if course.character else None,
+                "character_image": course.character.image_url if course.character else None,
+            },
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+
 # ── 学習者: カード完了 ────────────────────────────────────────────
 
 @router.post("/cards/{card_id}/complete")
 def complete_card(
     card_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -760,6 +809,8 @@ def complete_card(
         )
         db.add(prog)
     db.commit()
+
+    background_tasks.add_task(_generate_card_followup_message, current_user.id, card_id)
 
     total = _card_count(db, course_id)
     completed = _completed_card_count(db, current_user.id, course_id)
@@ -881,6 +932,19 @@ def submit_assignment(
     db.commit()
 
     _notify_creator_of_submission(db, course, card, current_user)
+
+    # 課題提出は既にAIフィードバックを生成済みなので、それをそのままLINE風にチャットへも差し込む（二重生成しない）
+    db.add(Notification(
+        user_id=current_user.id,
+        type="card_completion_followup",
+        payload={
+            "course_id": course_id,
+            "message": ai_feedback,
+            "character_name": course.character.name if course.character else None,
+            "character_image": course.character.image_url if course.character else None,
+        },
+    ))
+    db.commit()
 
     total = _card_count(db, course_id)
     completed = _completed_card_count(db, current_user.id, course_id)

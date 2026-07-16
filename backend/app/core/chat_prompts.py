@@ -195,6 +195,35 @@ def build_greeting_message_user() -> list[dict]:
     return [{"role": "user", "content": "学習者を迎える最初のメッセージを生成してください。"}]
 
 
+_CARD_TYPE_LABEL = {"video": "動画", "build_task": "課題", "quiz": "クイズ", "message": "メッセージ"}
+
+
+def build_card_followup_message_system(
+    personality_profile: dict,
+    tone_profile: dict | None = None,
+    course_overview: str | None = None,
+) -> str:
+    """カード（動画/課題/クイズ/メッセージ）完了直後に、LINE風の一言フォローアップとしてチャットへ
+    差し込むメッセージ用システムプロンプト。「どうだった？」のような軽い声かけを想定する。"""
+    personality_block = _build_personality_block(personality_profile, tone_profile)
+    course_block = f"\n\n【このコースについて】\n{course_overview}" if course_overview else ""
+    return f"""あなたは学習コーチとして、以下の人格で学習者に一言メッセージを送ってください。
+学習者はたった今、コース内のカード（教材の一部）を完了しました。
+
+【人格設定】
+{personality_block}{course_block}
+
+「どうだった？」「お疲れさま！」のような、LINEで送るような軽くて短い一言を生成してください。
+説教くさくならず、自然に次への興味を引き出すニュアンスも歓迎です。
+50文字以内。上記の人格の口調を必ず守ること。説明文や前置きは不要です。"""
+
+
+def build_card_followup_message_user(card_type: str, card_title: str | None) -> list[dict]:
+    type_label = _CARD_TYPE_LABEL.get(card_type, card_type)
+    title_part = f"「{card_title}」" if card_title else ""
+    return [{"role": "user", "content": f"学習者が{type_label}{title_part}を完了しました。一言メッセージを生成してください。"}]
+
+
 def build_assignment_feedback_system(
     personality_profile: dict,
     tone_profile: dict | None = None,
