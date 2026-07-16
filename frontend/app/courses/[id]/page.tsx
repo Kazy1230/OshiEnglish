@@ -68,6 +68,7 @@ export default function CourseDetailPage() {
   const [reportedDay, setReportedDay] = useState<number | null>(null);
   const [memo, setMemo] = useState("");
   const [previewCard, setPreviewCard] = useState<PreviewCard | null>(null);
+  const [progress, setProgress] = useState<{ total_cards: number; completed_cards: number } | null>(null);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
@@ -89,6 +90,11 @@ export default function CourseDetailPage() {
         const byDay: Record<number, DayLog> = {};
         for (const log of l) byDay[log.day_number] = log;
         setLogs(byDay);
+      }
+      if (unlocked && c.course_type === "self_paced" && (c.chapter_count ?? 0) > 0) {
+        api.getLearnerProgress(courseId).then(p => {
+          setProgress({ total_cards: p.total_cards, completed_cards: p.completed_cards });
+        }).catch(() => {});
       }
     });
   }
@@ -327,12 +333,49 @@ export default function CourseDetailPage() {
                   ✅ 受講中
                 </span>
               )}
-              <Link href={`/courses/${courseId}/chat`} className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.18)", color: "white", backdropFilter: "blur(8px)" }}>
-                💬 メンターにチャット
-              </Link>
-              <Link href={`/courses/${courseId}/reviews`} className="text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.18)", color: "white", backdropFilter: "blur(8px)" }}>
-                📊 レビュー
-              </Link>
+            </div>
+          )}
+
+          {/* 契約管理 + 学習進捗（横並び） */}
+          {unlocked && (course.my_subscription || progress) && (
+            <div className="flex items-stretch gap-3 mt-1">
+              {course.my_subscription && (
+                <div className="relative flex-1 rounded-xl px-4 py-3 flex flex-col gap-1 justify-center" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-white">Tier {course.my_subscription.tier} 受講中</span>
+                    <button onClick={() => setShowContractDetail(v => !v)} className="text-[11px] underline text-white/70 flex-shrink-0">
+                      {showContractDetail ? "閉じる" : "契約管理"}
+                    </button>
+                  </div>
+                  {showContractDetail && (
+                    <div className="absolute top-full left-0 right-0 mt-1 card flex flex-col gap-2 z-10">
+                      {(() => {
+                        const otherTier = course.my_subscription!.tier === "A" ? "B" : "A";
+                        const otherPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
+                        return otherPrice ? (
+                          <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
+                            className="text-xs underline text-left disabled:opacity-50" style={{ color: "var(--accent)" }}>
+                            Tier {otherTier}（¥{otherPrice.toLocaleString()}/月）に変更
+                          </button>
+                        ) : null;
+                      })()}
+                      <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
+                        className="text-xs underline text-left disabled:opacity-50" style={{ color: "var(--muted)" }}>
+                        {canceling ? "処理中…" : "解約する"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {progress && (
+                <div className="flex-1 rounded-xl px-4 py-3 flex flex-col gap-1 justify-center" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }}>
+                  <div className="flex items-end justify-between gap-2">
+                    <span className="text-xs font-bold text-white/80">学習進捗</span>
+                    <span className="text-lg font-black text-white">{progress.total_cards > 0 ? Math.round((progress.completed_cards / progress.total_cards) * 100) : 0}%</span>
+                  </div>
+                  <span className="text-[11px] text-white/70 text-right">{progress.completed_cards} / {progress.total_cards} カード</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -474,34 +517,6 @@ export default function CourseDetailPage() {
               </div>
             )}
           </>
-        )}
-
-        {/* ===== 購入済み：契約管理 ===== */}
-        {unlocked && course.my_subscription && (
-          <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-2" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-            <span className="text-sm" style={{ color: "var(--muted)" }}>Tier {course.my_subscription.tier} 受講中</span>
-            <button onClick={() => setShowContractDetail(v => !v)} className="text-xs underline" style={{ color: "var(--muted)" }}>
-              {showContractDetail ? "閉じる" : "契約管理"}
-            </button>
-            {showContractDetail && (
-              <div className="absolute top-full left-0 right-0 mt-1 card flex flex-col gap-2 z-10">
-                {(() => {
-                  const otherTier = course.my_subscription!.tier === "A" ? "B" : "A";
-                  const otherPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
-                  return otherPrice ? (
-                    <button onClick={() => handleChangeTier(course.my_subscription!.id, otherTier)} disabled={changingTier}
-                      className="text-xs underline text-left disabled:opacity-50" style={{ color: "var(--accent)" }}>
-                      Tier {otherTier}（¥{otherPrice.toLocaleString()}/月）に変更
-                    </button>
-                  ) : null;
-                })()}
-                <button onClick={() => handleCancelSubscription(course.my_subscription!.id)} disabled={canceling}
-                  className="text-xs underline text-left disabled:opacity-50" style={{ color: "var(--muted)" }}>
-                  {canceling ? "処理中…" : "解約する"}
-                </button>
-              </div>
-            )}
-          </div>
         )}
 
         {/* ===== 30日コース：学習UI ===== */}

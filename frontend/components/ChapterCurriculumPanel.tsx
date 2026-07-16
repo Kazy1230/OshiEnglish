@@ -60,13 +60,6 @@ type Review = {
   body: string | null;
 };
 
-const PACE_OPTIONS = [
-  { value: "2weeks", label: "2週間で完走" },
-  { value: "1month", label: "1ヶ月で完走" },
-  { value: "3months", label: "3ヶ月で完走" },
-  { value: "no_deadline", label: "マイペースで" },
-];
-
 const CARD_TYPE_ICON: Record<string, string> = {
   video: "▶",
   build_task: "✏",
@@ -554,33 +547,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* 進捗バー */}
-      {progress && (
-        <div className="card overflow-hidden p-0">
-          <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>学習進捗</p>
-                <p className="text-3xl font-black mt-1" style={{ color: "white", fontFamily: "var(--font-display)" }}>{completionPct}%</p>
-              </div>
-              <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
-                {progress.completed_cards} / {progress.total_cards} カード
-              </p>
-            </div>
-            <div className="mt-3" style={{ background: "rgba(255,255,255,0.25)", borderRadius: 9999, height: 10 }}>
-              <div style={{ background: "white", width: `${completionPct}%`, height: "100%", borderRadius: 9999, transition: "width 0.4s" }} />
-            </div>
-          </div>
-          {progress.target_pace && (
-            <div className="px-5 sm:px-6 py-2.5 flex items-center gap-2">
-              <span className="pill" style={{ background: "var(--surface)", color: "var(--text)" }}>
-                ⏱ {PACE_OPTIONS.find(p => p.value === progress.target_pace)?.label ?? progress.target_pace}
-              </span>
-            </div>
-          )}
         </div>
       )}
 
