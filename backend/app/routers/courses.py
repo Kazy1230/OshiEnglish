@@ -1142,8 +1142,9 @@ def list_my_purchased_courses(current_user=Depends(get_current_user), db: Sessio
         results.append({
             "course_id": course.id,
             "title": course.title,
-            "total_cards": total,
+            "total_lessons": total,
             "completed_count": completed_count,
+            "is_day_based": course.course_type == "pace_based",
             "subject": course.subject,
             "thumbnail_url": course.thumbnail_url,
             "character": (
