@@ -2,17 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, API_BASE } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
-
-type ChatMessage = {
-  id: number | string;
-  role: "user" | "assistant";
-  body: string;
-  is_draft?: boolean;
-  linked_content_url?: string | null;
-};
+import { useCourseChat } from "@/lib/useCourseChat";
 
 type Character = { id: number; name: string; avatar_url?: string | null };
 
@@ -26,20 +19,18 @@ export default function CourseChatPage() {
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.id);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [streamingText, setStreamingText] = useState<string | null>(null);
-  const [upgradeCta, setUpgradeCta] = useState<{ topic: string } | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [tier, setTier] = useState<"A" | "B" | null>(null);
   const [progress, setProgress] = useState<{ completed: number; total: number; currentChapterTitle: string | null }>({
     completed: 0, total: 0, currentChapterTitle: null,
   });
+  const [access, setAccess] = useState<"checking" | "granted" | "denied">("checking");
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
   const textInputRef = useRef<HTMLInputElement>(null);
+
+  const { messages, loading, sending, streamingText, upgradeCta, setUpgradeCta, sendMessage } = useCourseChat(courseId, { enabled: access === "granted" });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto" });
@@ -53,6 +44,7 @@ export default function CourseChatPage() {
         if (!(detail.is_purchased || detail.is_free)) {
           toast("このコースを購入してからチャットを利用してください", "error");
           router.replace(`/courses/${courseId}`);
+          setAccess("denied");
           return;
         }
         setCharacter(detail.character ?? null);
@@ -60,10 +52,7 @@ export default function CourseChatPage() {
 
         type CurriculumChapter = { title: string; is_completed: boolean };
         type Curriculum = { total_cards: number; completed_cards: number; chapters: CurriculumChapter[] };
-        const [history, curriculum] = await Promise.all([
-          api.getChatHistory(courseId),
-          api.getLearnerCurriculum(courseId).catch(() => null) as Promise<Curriculum | null>,
-        ]);
+        const curriculum = await api.getLearnerCurriculum(courseId).catch(() => null) as Curriculum | null;
         if (curriculum) {
           const currentChapter = curriculum.chapters.find(ch => !ch.is_completed);
           setProgress({
@@ -72,113 +61,14 @@ export default function CourseChatPage() {
             currentChapterTitle: currentChapter?.title ?? null,
           });
         }
-
-        const converted: ChatMessage[] = [];
-        for (const q of history) {
-          converted.push({ id: `q-${q.id}`, role: "user", body: q.body });
-          if (q.answer) {
-            converted.push({
-              id: `a-${q.id}`, role: "assistant", body: q.answer.body,
-              is_draft: q.answer.is_draft,
-              linked_content_url: q.answer.linked_content_url,
-            });
-          }
-        }
-
-        if (converted.length === 0) {
-          // 最初の挨拶を取得して表示する。一度生成された挨拶はサーバー側で永続化されるため、
-          // 何も送らずに再度開いても同じ文面が表示される（開くたびに別の文面が生成される問題への対応）
-          try {
-            const greet = await api.getGreeting(courseId);
-            if (greet?.message) {
-              converted.push({ id: "greeting", role: "assistant", body: greet.message });
-            }
-          } catch {
-            // 挨拶取得失敗はサイレントスキップ
-          }
-        }
-
-        setMessages(converted);
+        setAccess("granted");
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
-      } finally {
-        setLoading(false);
+        setAccess("denied");
       }
     }
     init();
   }, [courseId, router]);
-
-  async function sendMessage(body: string) {
-    if (!body.trim() || sending) return;
-    setSending(true);
-    setStreamingText("");
-
-    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", body };
-    setMessages(prev => [...prev, userMsg]);
-
-    const token = typeof window !== "undefined" ? localStorage.getItem("yt_token") : null;
-    try {
-      const res = await fetch(`${API_BASE}/chat/${courseId}/ask-stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ body }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "エラーが発生しました" }));
-        throw new Error(err.detail || `エラー (${res.status})`);
-      }
-
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6).trim();
-          if (!payload) continue;
-          try {
-            const evt = JSON.parse(payload);
-            if (evt.error) throw new Error(evt.error);
-            if (evt.delta) {
-              accumulated += evt.delta;
-              setStreamingText(accumulated);
-            }
-            if (evt.done) {
-              setStreamingText(null);
-              const assistantMsg: ChatMessage = {
-                id: `a-${evt.question_id}`,
-                role: "assistant",
-                body: evt.answer || accumulated,
-                is_draft: !!evt.pending_instructor,
-              };
-              setMessages(prev => [...prev, assistantMsg]);
-              if (evt.frustration_signal) setUpgradeCta({ topic: evt.frustration_signal.topic });
-            }
-          } catch (parseErr: unknown) {
-            if (parseErr instanceof Error && parseErr.message !== "Unexpected token") {
-              throw parseErr;
-            }
-          }
-        }
-      }
-    } catch (err: unknown) {
-      setStreamingText(null);
-      toast(err instanceof Error ? err.message : "送信に失敗しました", "error");
-    } finally {
-      setSending(false);
-    }
-  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -192,7 +82,7 @@ export default function CourseChatPage() {
     sendMessage(label);
   }
 
-  if (loading) return <Skeleton className="h-screen w-full" style={{ borderRadius: 0 }} />;
+  if (access !== "granted" || loading) return <Skeleton className="h-screen w-full" style={{ borderRadius: 0 }} />;
 
   const avatarEl = character?.avatar_url ? (
     <img src={character.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />

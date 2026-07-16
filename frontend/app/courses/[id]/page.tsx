@@ -8,6 +8,7 @@ import { CourseCheckoutModal } from "@/components/CourseCheckoutModal";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 import { ChapterCurriculumPanel } from "@/components/ChapterCurriculumPanel";
+import { CompactChatCard } from "@/components/CompactChatCard";
 
 type Lesson = {
   id: number; order: number; title: string; content_type: "text" | "video";
@@ -701,7 +702,10 @@ export default function CourseDetailPage() {
 
         {/* ===== v2.0コース：学習UI（コース詳細に統合） ===== */}
         {unlocked && course.course_type === "self_paced" && (course.chapter_count ?? 0) > 0 && (
-          <ChapterCurriculumPanel courseId={courseId} />
+          <>
+            <CompactChatCard courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
+            <ChapterCurriculumPanel courseId={courseId} />
+          </>
         )}
 
         {/* ===== 非30日コース：レッスン閲覧 ===== */}
