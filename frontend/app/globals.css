@@ -3,16 +3,17 @@
 
 /* ManaVillageはダークモードのみをサポートする（ライトモードは廃止） */
 :root {
-  --bg: #0c0b08;
-  --card: #18160f;
+  --bg: #14110a;
+  --card: #201c14;
   --primary: #f0e8d8;
   --accent: #d9a75c;
   --text: #f5efe0;
   --muted: #ab9b83;
   --border: #524632;
-  --surface: #201d14;
-  /* --ink: 「濃色パネル＋白文字」用の常に暗いトーン（--primaryは見出し文字用の明色のため、背景用途には使わない） */
-  --ink: #050403;
+  --surface: #282316;
+  /* --ink: 「濃色パネル＋白文字」用の暗いトーン（--primaryは見出し文字用の明色のため、背景用途には使わない）。
+     --bgより一段暗いだけにとどめ、純黒にはしない（白背景の要素との落差が極端にならないように）。 */
+  --ink: #110d07;
   --font-display: 'Cormorant Garamond', 'Georgia', serif;
   --font-body: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
 }
@@ -258,24 +259,26 @@ input:focus, textarea:focus, select:focus {
 
 /* クリエイターゾーン：温かみのあるエディトリアル・ワークショップ調（ダーク） */
 .creator-theme {
-  --bg: #18130c;
-  --card: #241c12;
+  --bg: #1e180f;
+  --card: #2a2116;
   --primary: #e8a068;
   --accent: #f0a030;
   --text: #f5ecda;
   --muted: #b8a488;
   --border: #5f4c2a;
+  --ink: #16110a;
 }
 
 /* スタジオゾーン：暗いアトリエ・クリエイティブツール調 */
 .studio-theme {
-  --bg: #0d0b15;
-  --card: #16131e;
+  --bg: #14111e;
+  --card: #1c1828;
   --primary: #a888e8;
   --accent: #f0c050;
   --text: #eae6f5;
   --muted: #9c92ba;
   --border: #453a63;
+  --ink: #100d18;
 }
 
 /* ===== 印刷スタイル ===== */

@@ -265,7 +265,7 @@ export default function CourseDetailPage() {
               {(course.tier_a_price || course.tier_b_price) ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {course.tier_a_price && (
-                    <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}>
+                    <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(245,239,224,0.95)", backdropFilter: "blur(8px)" }}>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--ink) 12%, transparent)", color: "var(--ink)" }}>Tier A</span>
                         <span className="text-[11px]" style={{ color: "#6b7280" }}>メンター相談つき</span>
@@ -281,7 +281,7 @@ export default function CourseDetailPage() {
                     </div>
                   )}
                   {course.tier_b_price && (
-                    <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", border: "2px solid var(--accent)" }}>
+                    <div className="flex flex-col gap-2 p-4 rounded-2xl" style={{ background: "rgba(245,239,224,0.95)", backdropFilter: "blur(8px)", border: "2px solid var(--accent)" }}>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>Tier B</span>
                         <span className="text-[11px] font-bold" style={{ color: "var(--accent)" }}>おすすめ</span>
@@ -299,7 +299,7 @@ export default function CourseDetailPage() {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-between gap-4 p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)" }}>
+                <div className="flex items-center justify-between gap-4 p-4 rounded-2xl" style={{ background: "rgba(245,239,224,0.95)", backdropFilter: "blur(8px)" }}>
                   <p className="text-xl font-black" style={{ color: "#1a1a2e" }}>
                     {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
                   </p>

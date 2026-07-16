@@ -364,7 +364,7 @@ function FeaturedCourse({ course }: { course: CourseCard }) {
       <div className="relative">
         <CourseImage course={course} className="h-56 sm:h-64" />
         <div className="absolute inset-x-0 bottom-0 h-24 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55), transparent)" }} />
-        <span className="absolute top-3 left-3 pill" style={{ background: "rgba(255,255,255,0.92)", color: "var(--accent)" }}>
+        <span className="absolute top-3 left-3 pill" style={{ background: "rgba(245,239,224,0.92)", color: "var(--accent)" }}>
           注目コース
         </span>
         <span className="absolute bottom-3 right-3 text-sm font-black text-white drop-shadow">{priceLabel(course)}</span>
@@ -389,7 +389,7 @@ function CourseTile({ course }: { course: CourseCard }) {
     >
       <div className="relative">
         <CourseImage course={course} className="h-40" />
-        <span className="absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.85)", color: "var(--primary)" }}>
+        <span className="absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm" style={{ background: "rgba(245,239,224,0.85)", color: "var(--primary)" }}>
           {tierLabel(course)}
         </span>
         <span className="absolute top-3 right-3 text-xs font-black px-2 py-1 rounded-full text-white" style={{ background: "color-mix(in srgb, var(--accent) 90%, black)" }}>
