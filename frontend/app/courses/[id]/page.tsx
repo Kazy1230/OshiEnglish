@@ -368,15 +368,34 @@ export default function CourseDetailPage() {
                   )}
                 </div>
               )}
-              {progress && (
-                <div className="flex-1 rounded-xl px-4 py-3 flex flex-col gap-1 justify-center" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }}>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-xs font-bold text-white/80">学習進捗</span>
-                    <span className="text-lg font-black text-white">{progress.total_cards > 0 ? Math.round((progress.completed_cards / progress.total_cards) * 100) : 0}%</span>
+              {progress && (() => {
+                const pct = progress.total_cards > 0 ? Math.round((progress.completed_cards / progress.total_cards) * 100) : 0;
+                const remaining = Math.max(0, progress.total_cards - progress.completed_cards);
+                const barColor = `color-mix(in srgb, #f59e0b ${100 - pct}%, #22c55e ${pct}%)`;
+                return (
+                  <div className="flex-1 rounded-xl px-4 py-3 flex flex-col gap-2 justify-center" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }}>
+                    <div className="flex items-end justify-between gap-2">
+                      <span className="text-xs font-bold text-white/70 uppercase tracking-wider">学習進捗</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-white leading-none">{pct}%</span>
+                        <span className="text-[11px] text-white/50">{progress.completed_cards} / {progress.total_cards} カード</span>
+                      </div>
+                    </div>
+                    <div className="relative rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.22)", height: 12 }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${pct}%`,
+                          background: `linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0) 60%), ${barColor}`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-[11px] font-bold text-right" style={{ color: pct >= 100 ? "#4ade80" : "rgba(255,255,255,0.8)" }}>
+                      {pct >= 100 ? "🎉 全て達成しました！" : `あと${remaining}枚で達成！`}
+                    </span>
                   </div>
-                  <span className="text-[11px] text-white/70 text-right">{progress.completed_cards} / {progress.total_cards} カード</span>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </div>

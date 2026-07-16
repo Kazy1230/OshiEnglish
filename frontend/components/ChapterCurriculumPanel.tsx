@@ -311,8 +311,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
     ? Math.round((progress.completed_cards / progress.total_cards) * 100)
     : 0;
 
-  const canReview = graduated || completionPct >= 50;
-
   // 卒業画面
   if (graduated) {
     return (
@@ -454,43 +452,57 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
             {/* build_task: 提出形式に応じた入力 + AI一次判定 */}
             {selectedCard.card_type === "build_task" && (
               <div className="flex flex-col gap-3">
-                {(selectedCard.submission_format ?? "text") === "text" && (
-                  <textarea
-                    className="w-full rounded border px-3 py-2 text-sm"
-                    style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)", minHeight: 100, resize: "vertical" }}
-                    placeholder="ここに提出内容を入力…"
-                    value={assignmentText}
-                    onChange={e => setAssignmentText(e.target.value)}
-                    disabled={submittingAssignment}
-                  />
-                )}
-                {selectedCard.submission_format === "video" && (
-                  <input
-                    className="w-full rounded border px-3 py-2 text-sm"
-                    style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
-                    placeholder="YouTubeのURLを貼り付け…"
-                    value={assignmentUrl}
-                    onChange={e => setAssignmentUrl(e.target.value)}
-                    disabled={submittingAssignment}
-                  />
-                )}
-                {selectedCard.submission_format === "photo" && (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      onChange={e => setAssignmentPhotoFile(e.target.files?.[0] ?? null)}
-                      disabled={submittingAssignment}
-                    />
-                    {selectedCard.submission_url && !assignmentPhotoFile && (
-                      <img src={selectedCard.submission_url} alt="提出済みの写真" style={{ maxHeight: 200, borderRadius: 8, objectFit: "contain" }} />
+                {selectedCard.is_completed ? (
+                  <>
+                    {(selectedCard.submission_format ?? "text") === "text" && selectedCard.submission_text && (
+                      <p className="text-sm whitespace-pre-wrap rounded-lg p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+                        {selectedCard.submission_text}
+                      </p>
                     )}
-                  </div>
-                )}
+                    {selectedCard.submission_format === "video" && selectedCard.submission_url && (
+                      <YouTubeEmbed url={selectedCard.submission_url} />
+                    )}
+                    {selectedCard.submission_format === "photo" && selectedCard.submission_url && (
+                      <img src={selectedCard.submission_url} alt="提出した写真" style={{ maxHeight: 240, borderRadius: 8, objectFit: "contain" }} />
+                    )}
+                    <p className="text-sm font-medium text-center" style={{ color: "var(--accent)" }}>✓ 提出済み</p>
+                  </>
+                ) : (
+                  <>
+                    {(selectedCard.submission_format ?? "text") === "text" && (
+                      <textarea
+                        className="w-full rounded border px-3 py-2 text-sm"
+                        style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)", minHeight: 100, resize: "vertical" }}
+                        placeholder="ここに提出内容を入力…"
+                        value={assignmentText}
+                        onChange={e => setAssignmentText(e.target.value)}
+                        disabled={submittingAssignment}
+                      />
+                    )}
+                    {selectedCard.submission_format === "video" && (
+                      <input
+                        className="w-full rounded border px-3 py-2 text-sm"
+                        style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
+                        placeholder="YouTubeのURLを貼り付け…"
+                        value={assignmentUrl}
+                        onChange={e => setAssignmentUrl(e.target.value)}
+                        disabled={submittingAssignment}
+                      />
+                    )}
+                    {selectedCard.submission_format === "photo" && (
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={e => setAssignmentPhotoFile(e.target.files?.[0] ?? null)}
+                        disabled={submittingAssignment}
+                      />
+                    )}
 
-                <button className="btn-primary" onClick={() => submitAssignment(selectedCard)} disabled={submittingAssignment}>
-                  {submittingAssignment ? "送信中..." : selectedCard.is_completed ? "再提出する" : "提出する"}
-                </button>
+                    <button className="btn-primary" onClick={() => submitAssignment(selectedCard)} disabled={submittingAssignment}>
+                      {submittingAssignment ? "送信中..." : "提出する"}
+                    </button>
+                  </>
+                )}
 
                 {selectedCard.ai_feedback && (
                   <div className="rounded-lg p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -633,53 +645,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
           </div>
         );
       })}
-
-      {/* 進捗50%以上でレビュー促進 */}
-      {canReview && !graduated && (
-        <div className="card flex flex-col gap-3">
-          <h2 className="font-bold text-sm" style={{ color: "var(--primary)" }}>
-            {myReview ? "あなたのレビュー" : "感想を書く（任意）"}
-          </h2>
-          {myReview && !showReviewForm ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-4 text-sm" style={{ color: "var(--muted)" }}>
-                <span>講座内容: {myReview.content_rating}★</span>
-                <span>AIコーチング: {myReview.coaching_rating}★</span>
-              </div>
-              {myReview.body && <p className="text-sm" style={{ color: "var(--text)" }}>{myReview.body}</p>}
-              <button className="text-xs self-start" style={{ color: "var(--accent)" }} onClick={() => setShowReviewForm(true)}>
-                編集する
-              </button>
-            </div>
-          ) : showReviewForm || !myReview ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>講座内容</label>
-                <StarRating value={contentRating} onChange={setContentRating} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium" style={{ color: "var(--muted)" }}>AIコーチング</label>
-                <StarRating value={coachingRating} onChange={setCoachingRating} />
-              </div>
-              <textarea
-                className="w-full rounded border px-3 py-2 text-sm"
-                style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)", minHeight: 80, resize: "vertical" }}
-                placeholder="感想・コメント（任意）"
-                value={reviewBody}
-                onChange={e => setReviewBody(e.target.value)}
-              />
-              <div className="flex gap-2 justify-end">
-                {myReview && (
-                  <button className="btn-ghost text-sm" onClick={() => setShowReviewForm(false)}>キャンセル</button>
-                )}
-                <button className="btn-primary text-sm" onClick={submitReview} disabled={submittingReview}>
-                  {submittingReview ? "送信中..." : "投稿する"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }
