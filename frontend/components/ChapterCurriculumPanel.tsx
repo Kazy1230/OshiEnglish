@@ -124,7 +124,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [fetching, setFetching] = useState(true);
-  const [showPaceModal, setShowPaceModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [completing, setCompleting] = useState(false);
   const [graduated, setGraduated] = useState(false);
@@ -163,7 +162,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       setChapters(chs.chapters ?? chs);
       if (chs.course_type) setCourseType(chs.course_type);
       setProgress(prog);
-      if (!prog.target_pace) setShowPaceModal(true);
       if (prog.is_graduated) {
         setGraduated(true);
         // 卒業済みなら卒業APIから次コース取得
@@ -271,17 +269,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
       toast(e instanceof Error ? e.message : "採点に失敗しました", "error");
     } finally {
       setSubmittingQuiz(false);
-    }
-  }
-
-  async function setPace(pace: string) {
-    try {
-      await api.setPace(courseId, pace);
-      setProgress(p => p ? { ...p, target_pace: pace } : p);
-      setShowPaceModal(false);
-      toast("ペースを設定しました");
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -434,30 +421,6 @@ export function ChapterCurriculumPanel({ courseId }: { courseId: number }) {
         <div className="card flex items-center justify-between gap-3" style={{ border: "1.5px solid var(--accent)" }}>
           <p className="text-sm" style={{ color: "var(--text)" }}>💬 {completionNote}</p>
           <button onClick={() => setCompletionNote(null)} style={{ color: "var(--muted)", fontSize: "1.2rem", lineHeight: 1, flexShrink: 0 }}>×</button>
-        </div>
-      )}
-
-      {/* ペース設定モーダル */}
-      {showPaceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.5)" }}>
-          <div className="card max-w-sm w-full flex flex-col gap-4">
-            <h2 className="font-bold text-lg" style={{ color: "var(--primary)" }}>学習ペースを設定しましょう</h2>
-            <p className="text-sm" style={{ color: "var(--muted)" }}>目標ペースを決めると、学習の継続に役立ちます。後から変更もできます。</p>
-            <div className="flex flex-col gap-2">
-              {PACE_OPTIONS.map(p => (
-                <button
-                  key={p.value}
-                  className="btn-ghost text-left"
-                  onClick={() => setPace(p.value)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            <button className="text-sm self-end" style={{ color: "var(--muted)" }} onClick={() => setShowPaceModal(false)}>
-              あとで設定する
-            </button>
-          </div>
         </div>
       )}
 
