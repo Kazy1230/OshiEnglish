@@ -5,7 +5,8 @@ import { toast } from "@/components/Toast";
 
 type AdminCourse = { id: number; title: string; status: string; is_suspended: boolean; suspension_reason: string | null; character_name: string | null };
 
-type CourseCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean; body?: string | null; youtube_url?: string | null };
+type QuizOption = { text: string; is_correct?: boolean };
+type CourseCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean; body?: string | null; youtube_url?: string | null; quiz_options?: QuizOption[] | null };
 type CourseChapter = { id: number; order: number; title: string; goal: string | null; cards: CourseCard[] };
 type CourseDetailForAdmin = {
   id: number; title: string; description: string | null; thumbnail_url: string | null;
@@ -16,6 +17,21 @@ type CourseDetailForAdmin = {
 };
 
 const CARD_TYPE_LABEL: Record<string, string> = { video: "動画", build_task: "課題", quiz: "クイズ", message: "メッセージ" };
+
+function AdminYouTubeEmbed({ url }: { url: string }) {
+  const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (!match) return <p style={{ fontSize: 12, color: "var(--danger, #ef4444)" }}>⚠ URLが無効です: {url}</p>;
+  return (
+    <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: 8 }}>
+      <iframe
+        src={`https://www.youtube.com/embed/${match[1]}`}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<string, string> = { draft: "下書き", review: "審査待ち", published: "公開中", unpublished: "非公開" };
 const STATUS_BADGE_CLASS: Record<string, string> = {
@@ -207,12 +223,30 @@ export function CourseModerationTab() {
                     <div key={ch.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
                       <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", margin: 0 }}>第{ch.order}章：{ch.title}</p>
                       {ch.goal && <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>🎯 {ch.goal}</p>}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                         {ch.cards.map(card => (
-                          <div key={card.id} style={{ fontSize: 12, color: "var(--text)", background: "var(--surface)", borderRadius: 8, padding: "6px 10px" }}>
-                            <span style={{ fontWeight: 700 }}>{CARD_TYPE_LABEL[card.card_type] ?? card.card_type}</span>
-                            {card.title && <span> — {card.title}</span>}
-                            {card.is_preview && <span className="admin-badge admin-badge-green" style={{ marginLeft: 6 }}>無料プレビュー</span>}
+                          <div key={card.id} style={{ fontSize: 12, color: "var(--text)", background: "var(--surface)", borderRadius: 8, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+                            <div>
+                              <span style={{ fontWeight: 700 }}>{CARD_TYPE_LABEL[card.card_type] ?? card.card_type}</span>
+                              {card.title && <span> — {card.title}</span>}
+                              {card.is_preview && <span className="admin-badge admin-badge-green" style={{ marginLeft: 6 }}>無料プレビュー</span>}
+                            </div>
+                            {card.youtube_url && <AdminYouTubeEmbed url={card.youtube_url} />}
+                            {card.body && (
+                              <p style={{ fontSize: 12, color: "var(--text)", whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.5 }}>{card.body}</p>
+                            )}
+                            {card.quiz_options && card.quiz_options.length > 0 && (
+                              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 2 }}>
+                                {card.quiz_options.map((opt, i) => (
+                                  <li key={i} style={{ fontSize: 12, color: opt.is_correct ? "var(--accent)" : "var(--text)", fontWeight: opt.is_correct ? 700 : 400 }}>
+                                    {opt.text}{opt.is_correct && " ✓正解"}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {!card.youtube_url && !card.body && !(card.quiz_options && card.quiz_options.length > 0) && (
+                              <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>本文・動画が未登録です</p>
+                            )}
                           </div>
                         ))}
                       </div>

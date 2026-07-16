@@ -119,7 +119,9 @@ def _serialize_course_card(course: Course) -> dict:
 
 def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
     user_id = current_user.id if current_user else None
-    unlocked = _is_accessible(db, course, user_id)
+    # 管理者は審査のため、購入状態によらずカードの本文・動画URLを閲覧できる必要がある
+    is_admin = bool(current_user and current_user.role == "admin")
+    unlocked = is_admin or _is_accessible(db, course, user_id)
     data = _serialize_course_card(course)
     data["is_purchased"] = unlocked
     data["chapter_count"] = len(course.chapters)
@@ -154,9 +156,10 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
                     "card_type": c.card_type,
                     "title": c.title,
                     "is_preview": c.is_preview,
-                    # 購入済み、またはis_preview=trueの無料プレビューカードのみ本文を返す
+                    # 購入済み、またはis_preview=trueの無料プレビューカードのみ本文を返す（管理者は審査のため常時閲覧可）
                     "body": c.body if (unlocked or c.is_preview) else None,
                     "youtube_url": c.youtube_url if (unlocked or c.is_preview) else None,
+                    "quiz_options": c.quiz_options if (unlocked or c.is_preview) else None,
                 }
                 for c in sorted(ch.cards, key=lambda c: c.order)
             ],
