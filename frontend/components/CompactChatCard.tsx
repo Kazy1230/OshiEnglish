@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useCourseChat } from "@/lib/useCourseChat";
 
 type Character = { name: string; avatar_url?: string | null } | null | undefined;
@@ -54,13 +53,10 @@ export function CompactChatCard({ courseId, character, tier }: { courseId: numbe
             </span>
           )}
         </div>
-        <Link href={`/courses/${courseId}/chat`} className="text-xs font-bold text-white/80 underline flex-shrink-0">
-          全画面で開く →
-        </Link>
       </div>
 
       {/* メッセージ一覧 */}
-      <div className="flex flex-col gap-2.5 px-4 py-3 overflow-y-auto" style={{ height: 260 }}>
+      <div className="flex flex-col gap-2.5 px-4 py-3 overflow-y-auto" style={{ height: "min(60vh, 520px)" }}>
         {loading ? (
           <p className="text-xs text-center py-8" style={{ color: "var(--muted)" }}>読み込み中…</p>
         ) : (

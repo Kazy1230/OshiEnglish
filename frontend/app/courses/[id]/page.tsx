@@ -412,7 +412,7 @@ export default function CourseDetailPage() {
         </div>
       )}
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
 
         {/* ===== 未購入：説明 + 購入CTA ===== */}
         {!unlocked && (
@@ -721,10 +721,12 @@ export default function CourseDetailPage() {
 
         {/* ===== v2.0コース：学習UI（コース詳細に統合） ===== */}
         {unlocked && course.course_type === "self_paced" && (course.chapter_count ?? 0) > 0 && (
-          <>
-            <CompactChatCard courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
             <ChapterCurriculumPanel courseId={courseId} />
-          </>
+            <div className="lg:sticky lg:top-6">
+              <CompactChatCard courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
+            </div>
+          </div>
         )}
 
         {/* ===== 非30日コース：レッスン閲覧 ===== */}
