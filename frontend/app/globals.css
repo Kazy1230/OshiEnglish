@@ -9,7 +9,7 @@
   --accent: #d9a75c;
   --text: #f5efe0;
   --muted: #ab9b83;
-  --border: #3a3225;
+  --border: #524632;
   --surface: #201d14;
   /* --ink: 「濃色パネル＋白文字」用の常に暗いトーン（--primaryは見出し文字用の明色のため、背景用途には使わない） */
   --ink: #050403;
@@ -25,7 +25,7 @@
   --accent: #34d399;
   --text: #f1f5f9;
   --muted: #8b96ac;
-  --border: #2c3648;
+  --border: #3d4a63;
   --surface: #141820;
   --ink: #0c0e18;
   --danger: #f87171;
@@ -176,7 +176,7 @@ header {
   position: sticky;
   top: 0;
   z-index: 20;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* ===== 装飾ユーティリティ（ヒーロー・カード演出など） ===== */
@@ -264,7 +264,7 @@ input:focus, textarea:focus, select:focus {
   --accent: #f0a030;
   --text: #f5ecda;
   --muted: #b8a488;
-  --border: #46381f;
+  --border: #5f4c2a;
 }
 
 /* スタジオゾーン：暗いアトリエ・クリエイティブツール調 */
@@ -275,7 +275,7 @@ input:focus, textarea:focus, select:focus {
   --accent: #f0c050;
   --text: #eae6f5;
   --muted: #9c92ba;
-  --border: #342c48;
+  --border: #453a63;
 }
 
 /* ===== 印刷スタイル ===== */

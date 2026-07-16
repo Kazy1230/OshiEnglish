@@ -5,6 +5,18 @@ import { toast } from "@/components/Toast";
 
 type AdminCourse = { id: number; title: string; status: string; is_suspended: boolean; suspension_reason: string | null; character_name: string | null };
 
+type CourseCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean; body?: string | null; youtube_url?: string | null };
+type CourseChapter = { id: number; order: number; title: string; goal: string | null; cards: CourseCard[] };
+type CourseDetailForAdmin = {
+  id: number; title: string; description: string | null; thumbnail_url: string | null;
+  category: string | null; price: number; is_free: boolean;
+  tier_a_price: number | null; tier_b_price: number | null;
+  chapters?: CourseChapter[]; chapter_count?: number;
+  character: { name: string } | null;
+};
+
+const CARD_TYPE_LABEL: Record<string, string> = { video: "動画", build_task: "課題", quiz: "クイズ", message: "メッセージ" };
+
 const STATUS_LABEL: Record<string, string> = { draft: "下書き", review: "審査待ち", published: "公開中", unpublished: "非公開" };
 const STATUS_BADGE_CLASS: Record<string, string> = {
   published: "admin-badge admin-badge-green",
@@ -19,6 +31,8 @@ export function CourseModerationTab() {
   const [query, setQuery] = useState("");
   const [suspendReasons, setSuspendReasons] = useState<Record<number, string>>({});
   const [rejectReasons, setRejectReasons] = useState<Record<number, string>>({});
+  const [detail, setDetail] = useState<CourseDetailForAdmin | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   function reload() { return api.adminListAllCourses().then(setCourses); }
 
@@ -50,6 +64,18 @@ export function CourseModerationTab() {
     if (!confirm(`「${c.title}」を完全に削除しますか？この操作は取り消せません。`)) return;
     try { await api.adminDeleteCourse(c.id); toast("削除しました", "success"); await reload(); }
     catch (err: unknown) { toast(err instanceof Error ? err.message : "失敗しました", "error"); }
+  }
+
+  async function handleShowDetail(courseId: number) {
+    setDetailLoading(true);
+    try {
+      const d = await api.getCourseDetail(courseId);
+      setDetail(d);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "詳細の取得に失敗しました", "error");
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   if (loading) return <p style={{ color: "var(--muted)", fontSize: 14 }}>読み込み中…</p>;
@@ -96,6 +122,7 @@ export function CourseModerationTab() {
             )}
 
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <button className="admin-action" onClick={() => handleShowDetail(c.id)}>詳細を見る</button>
               {c.status === "review" && (
                 <>
                   <input
@@ -133,6 +160,72 @@ export function CourseModerationTab() {
             </div>
           </div>
         ))
+      )}
+
+      {(detail || detailLoading) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setDetail(null)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl p-6"
+            style={{ background: "var(--card)", border: "1px solid var(--border)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {detailLoading && !detail ? (
+              <p style={{ color: "var(--muted)", fontSize: 14 }}>読み込み中…</p>
+            ) : detail && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", margin: 0 }}>{detail.title}</h2>
+                    <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                      {detail.character?.name ?? "不明"} ・ {detail.category ?? "カテゴリ未設定"}
+                    </p>
+                  </div>
+                  <button onClick={() => setDetail(null)} style={{ fontSize: 20, lineHeight: 1, color: "var(--muted)" }}>✕</button>
+                </div>
+
+                {detail.thumbnail_url && (
+                  <img src={detail.thumbnail_url} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} />
+                )}
+
+                {detail.description && (
+                  <p style={{ fontSize: 13, color: "var(--text)", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{detail.description}</p>
+                )}
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <span className="admin-badge admin-badge-gray">
+                    {detail.is_free ? "無料コース" : `Tier A: ${detail.tier_a_price ? `¥${detail.tier_a_price}/月` : "なし"} / Tier B: ${detail.tier_b_price ? `¥${detail.tier_b_price}/月` : "なし"}`}
+                  </span>
+                  <span className="admin-badge admin-badge-gray">{detail.chapter_count ?? 0}章</span>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {(detail.chapters ?? []).map(ch => (
+                    <div key={ch.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", margin: 0 }}>第{ch.order}章：{ch.title}</p>
+                      {ch.goal && <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>🎯 {ch.goal}</p>}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                        {ch.cards.map(card => (
+                          <div key={card.id} style={{ fontSize: 12, color: "var(--text)", background: "var(--surface)", borderRadius: 8, padding: "6px 10px" }}>
+                            <span style={{ fontWeight: 700 }}>{CARD_TYPE_LABEL[card.card_type] ?? card.card_type}</span>
+                            {card.title && <span> — {card.title}</span>}
+                            {card.is_preview && <span className="admin-badge admin-badge-green" style={{ marginLeft: 6 }}>無料プレビュー</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {(detail.chapters ?? []).length === 0 && (
+                    <p style={{ fontSize: 13, color: "var(--muted)" }}>章がまだ登録されていません。</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -73,7 +73,12 @@ export default function CreatorPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <AppHeader role="learner" backHref="/creators" backLabel="クリエイター一覧" />
+      <AppHeader
+        role="learner"
+        backHref="/creators"
+        backLabel="クリエイター一覧"
+        breadcrumb={[{ label: "トップ", href: "/" }, { label: "クリエイター一覧", href: "/creators" }, { label: data.display_name }]}
+      />
 
       {/* ヒーロー：信頼感のあるカバー領域 */}
       <section className="relative gradient-hero overflow-hidden">

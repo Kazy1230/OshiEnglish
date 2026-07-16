@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.database import Base, engine, SessionLocal
 from app.core.config import settings
-from app.routers import auth, customers, characters, payments, courses, creators, favorites, studio, notifications, interview, diagnosis, chat, admin, contents, curriculum
+from app.routers import auth, customers, characters, payments, courses, creators, favorites, studio, notifications, interview, chat, admin, contents, curriculum
 
 logger = logging.getLogger(__name__)
 
@@ -266,6 +266,24 @@ _ensure_column("card_progress", "quiz_is_correct", "BOOLEAN NULL")
 _ensure_column("courses", "course_type", "VARCHAR(20) NOT NULL DEFAULT 'self_paced'")
 _ensure_column("courses", "pace_unit_description", "VARCHAR(255) NULL")
 
+# --- ペース管理型コース：30日カレンダー(Layer1)自動生成の進行状況 ---
+_ensure_column("courses", "days_generation_status", "VARCHAR(20) NULL")
+_ensure_column("courses", "days_generation_error", "TEXT NULL")
+
+# --- Day1診断機能の完全廃止（LearnerProfileベースの個人化レイヤー・週次/月次レビューを含む） ---
+with engine.connect() as _conn:
+    _conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+    _conn.commit()
+for _diagnosis_table in (
+    "learner_diagnosis_answers", "course_diagnosis_questions",
+    "learner_roadmaps", "learner_course_days", "learner_textbook_progress",
+    "learner_reviews", "learner_profiles", "notification_settings",
+):
+    _drop_table(_diagnosis_table)
+with engine.connect() as _conn:
+    _conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+    _conn.commit()
+
 
 def _migrate_legacy_characters_to_creator():
     from app.core.creator_migration import migrate_legacy_characters_to_creator
@@ -312,21 +330,6 @@ _ensure_unique_index("characters", "creator_id", "uq_characters_creator_id")
 _drop_unique_index("course_subscriptions", "uq_course_subscriptions_user_course")
 
 
-# --- Phase 8: リテンション・通知（デイリー伴走チャットの朝・夜の声かけ） ---
-# 専用のジョブキュー/cronコンテナを追加せず、アプリ内のasyncioループで1分間隔にチェックする
-# （Anthropic Batch APIでのメッセージ事前生成はPhase2の30日コース生成時に完了済みのため、
-#   ここでは生成済みメッセージを通知時刻に合わせて送信するのみ）
-async def _daily_notification_loop():
-    from app.core.daily_notifications import send_due_notifications
-
-    while True:
-        try:
-            await asyncio.to_thread(send_due_notifications)
-        except Exception:
-            logger.exception("[DailyNotification] 定期チェックに失敗しました")
-        await asyncio.sleep(60)
-
-
 # --- 改善提案書5節: 3段階リマインドメール（チャット未開封日数に応じたメール） ---
 # 1日1コースあたり1通までという粒度のため、1時間間隔のチェックで十分
 async def _inactivity_reminder_loop():
@@ -341,27 +344,10 @@ async def _inactivity_reminder_loop():
 
 
 
-# --- 週次・月次レビュー（要件定義書5.5）---
-# 日次通知よりチェック頻度が低くても十分なため、AI呼び出しコストを抑えて30分間隔でチェックする
-async def _review_generation_loop():
-    from app.core.review_generation import generate_due_reviews
-
-    while True:
-        try:
-            await asyncio.to_thread(generate_due_reviews)
-        except Exception:
-            logger.exception("[ReviewGeneration] 定期チェックに失敗しました")
-        await asyncio.sleep(1800)
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    notification_task = asyncio.create_task(_daily_notification_loop())
-    review_task = asyncio.create_task(_review_generation_loop())
     inactivity_task = asyncio.create_task(_inactivity_reminder_loop())
     yield
-    notification_task.cancel()
-    review_task.cancel()
     inactivity_task.cancel()
 
 
@@ -400,7 +386,6 @@ app.include_router(favorites.router)
 app.include_router(studio.router)
 app.include_router(notifications.router)
 app.include_router(interview.router)
-app.include_router(diagnosis.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(contents.router)

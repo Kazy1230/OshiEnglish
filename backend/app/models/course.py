@@ -24,6 +24,9 @@ class Course(Base):
     course_type = Column(String(20), nullable=False, default="self_paced")
     # ペース管理型の場合の1回あたりの分量の目安（例: "1日10単語"）。自由進行型では未使用。
     pace_unit_description = Column(String(255), nullable=True)
+    # ペース管理型コースの30日カレンダー(Layer1)AI生成の進行状況: generating / completed / failed
+    days_generation_status = Column(String(20), nullable=True)
+    days_generation_error = Column(Text, nullable=True)
     # --- カリキュラム（v2.0: 章/カード構造に移行） ---
     personality_profile_id = Column(Integer, ForeignKey("personality_profiles.id"), nullable=True, index=True)
     # カリキュラム作成時の入力（外部AIとの壁打ち用プロンプト生成に使用）
@@ -51,5 +54,5 @@ class Course(Base):
     materials = relationship("CourseMaterial", back_populates="course")
     subscriptions = relationship("CourseSubscription", back_populates="course")
     textbooks = relationship("CourseTextbook", back_populates="course", cascade="all, delete-orphan")
-    diagnosis_questions = relationship("CourseDiagnosisQuestion", back_populates="course", cascade="all, delete-orphan", order_by="CourseDiagnosisQuestion.order")
     chapters = relationship("CourseChapter", back_populates="course", order_by="CourseChapter.order", cascade="all, delete-orphan")
+    days = relationship("CourseDay", order_by="CourseDay.day_number", cascade="all, delete-orphan")

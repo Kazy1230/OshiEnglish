@@ -23,6 +23,10 @@ def validate_image_content(contents: bytes, ext: str) -> None:
             fmt = img.format
     except (UnidentifiedImageError, OSError):
         raise HTTPException(status_code=400, detail="画像ファイルとして読み込めません")
+    except Exception:
+        # Pillowはverify()/open()で DecompressionBombError 等 OSError 以外の例外も
+        # 投げうるため、想定外の画像でも素の500ではなく制御された400を返す
+        raise HTTPException(status_code=400, detail="画像ファイルとして読み込めません")
 
     if fmt not in _PIL_FORMAT_TO_EXT or ext not in _PIL_FORMAT_TO_EXT[fmt]:
         raise HTTPException(status_code=400, detail="ファイルの内容が拡張子と一致しません")

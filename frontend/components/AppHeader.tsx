@@ -1,7 +1,7 @@
 "use client";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationBell } from "@/components/NotificationBell";
-import { CreatorBreadcrumb } from "@/components/CreatorBreadcrumb";
+import { CreatorBreadcrumb, BreadcrumbBar, type Crumb } from "@/components/CreatorBreadcrumb";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -22,12 +22,14 @@ export function AppHeader({
   backLabel,
   title,
   overdueCount = 0,
+  breadcrumb,
 }: {
   role?: Role;
   backHref?: string;
   backLabel?: string;
   title?: string;
   overdueCount?: number;
+  breadcrumb?: Crumb[];
 }) {
   const pathname = usePathname();
   const homeHref = role === "creator" ? "/dashboard" : "/";
@@ -76,6 +78,7 @@ export function AppHeader({
         </div>
       </header>
       {role === "creator" && pathname !== "/dashboard" && <CreatorBreadcrumb />}
+      {breadcrumb && <BreadcrumbBar crumbs={breadcrumb} />}
     </>
   );
 }

@@ -17,16 +17,9 @@ from app.models.purchase import Purchase
 from app.models.course_subscription import CourseSubscription
 from app.models.favorite import Favorite
 from app.models.notification import Notification
-from app.models.notification_setting import NotificationSetting
 from app.models.lesson_progress import LessonProgress
 from app.models.day_log import DayLog
 from app.models.daily_summary import DailySummary
-from app.models.learner_review import LearnerReview
-from app.models.learner_profile import LearnerProfile
-from app.models.learner_roadmap import LearnerRoadmap
-from app.models.learner_course_day import LearnerCourseDay
-from app.models.learner_textbook_progress import LearnerTextbookProgress
-from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
@@ -154,16 +147,6 @@ def reissue_password(customer_id: int, admin=Depends(get_current_admin), db: Ses
 def _cascade_delete_learner_data(db: Session, user_id: int) -> None:
     """学習者の活動履歴（購入・質問・進捗など）をCustomer削除前に削除する。
     外部キー制約のためCustomer単体のdb.delete()ではIntegrityErrorになるのを防ぐ。"""
-    learner_profile_ids = [
-        r[0] for r in db.query(LearnerProfile.id).filter(LearnerProfile.user_id == user_id).all()
-    ]
-    if learner_profile_ids:
-        db.query(LearnerRoadmap).filter(LearnerRoadmap.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
-        db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
-        db.query(LearnerTextbookProgress).filter(LearnerTextbookProgress.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
-        db.query(LearnerDiagnosisAnswer).filter(LearnerDiagnosisAnswer.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
-    db.query(LearnerProfile).filter(LearnerProfile.user_id == user_id).delete(synchronize_session=False)
-
     question_ids = [r[0] for r in db.query(Question.id).filter(Question.user_id == user_id).all()]
     if question_ids:
         db.query(Answer).filter(Answer.question_id.in_(question_ids)).delete(synchronize_session=False)
@@ -173,13 +156,11 @@ def _cascade_delete_learner_data(db: Session, user_id: int) -> None:
     db.query(CourseSubscription).filter(CourseSubscription.user_id == user_id).delete(synchronize_session=False)
     db.query(Favorite).filter(Favorite.user_id == user_id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
-    db.query(NotificationSetting).filter(NotificationSetting.user_id == user_id).delete(synchronize_session=False)
     db.query(CardProgress).filter(CardProgress.user_id == user_id).delete(synchronize_session=False)
     db.query(CourseReview).filter(CourseReview.user_id == user_id).delete(synchronize_session=False)
     db.query(LessonProgress).filter(LessonProgress.user_id == user_id).delete(synchronize_session=False)
     db.query(DayLog).filter(DayLog.user_id == user_id).delete(synchronize_session=False)
     db.query(DailySummary).filter(DailySummary.user_id == user_id).delete(synchronize_session=False)
-    db.query(LearnerReview).filter(LearnerReview.user_id == user_id).delete(synchronize_session=False)
     db.query(Report).filter(Report.reporter_id == user_id).delete(synchronize_session=False)
 
 

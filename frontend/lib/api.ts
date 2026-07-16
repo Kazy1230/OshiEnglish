@@ -108,8 +108,6 @@ export const api = {
   // 分野・カテゴリ
   getSubjectChoices: (): Promise<{ subjects: { key: string; label: string }[]; category_map: Record<string, string[]> }> =>
     apiFetch("/subjects"),
-  getDefaultDiagnosisQuestions: (subject: string): Promise<{ questions: unknown[] }> =>
-    apiFetch(`/subjects/${subject}/default-diagnosis-questions`),
 
   // マーケットプレイス：コース・レッスン
   listCourses: (category?: string) => apiFetch(`/courses${category ? `?category=${encodeURIComponent(category)}` : ""}`),
@@ -142,16 +140,6 @@ export const api = {
   addCourseMaterial: (courseId: number, data: object) =>
     apiFetch(`/courses/${courseId}/materials`, { method: "POST", body: JSON.stringify(data) }),
   deleteCourseMaterial: (materialId: number) => apiFetch(`/materials/${materialId}`, { method: "DELETE" }),
-
-  // Day1診断：カスタム質問
-  listDiagnosisQuestions: (courseId: number) => apiFetch(`/courses/${courseId}/diagnosis-questions`),
-  addDiagnosisQuestion: (courseId: number, data: object) =>
-    apiFetch(`/courses/${courseId}/diagnosis-questions`, { method: "POST", body: JSON.stringify(data) }),
-  addDiagnosisQuestionsBulk: (courseId: number, questions: object[]) =>
-    apiFetch(`/courses/${courseId}/diagnosis-questions/bulk`, { method: "POST", body: JSON.stringify({ questions }) }),
-  updateDiagnosisQuestion: (questionId: number, data: object) =>
-    apiFetch(`/diagnosis-questions/${questionId}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteDiagnosisQuestion: (questionId: number) => apiFetch(`/diagnosis-questions/${questionId}`, { method: "DELETE" }),
 
   // 教材ベースのコース作成：プリセット教材検索・コースへの紐付け・日程割り当て
   searchTextbooks: (query?: string) => apiFetch(`/textbooks${query ? `?query=${encodeURIComponent(query)}` : ""}`),
@@ -242,18 +230,6 @@ export const api = {
   getMyPurchasedCourses: () => apiFetch("/courses/me/purchased"),
   getCourseProgress: (courseId: number) => apiFetch(`/courses/${courseId}/progress`),
   completeLesson: (lessonId: number) => apiFetch(`/lessons/${lessonId}/complete`, { method: "PUT" }),
-
-  // Day1初回診断・ロードマップ生成
-  getDiagnosisQuestions: (courseId: number) => apiFetch(`/diagnosis/${courseId}/questions`),
-  getWelcomeMessage: (courseId: number) => apiFetch(`/diagnosis/${courseId}/welcome`, { method: "POST" }),
-  submitDiagnosis: (courseId: number, data: object) =>
-    apiFetch(`/diagnosis/${courseId}/submit`, { method: "POST", body: JSON.stringify(data) }),
-  getRoadmap: (courseId: number) => apiFetch(`/diagnosis/${courseId}/roadmap`),
-  listLearnerCourseDays: (courseId: number) => apiFetch(`/diagnosis/${courseId}/learner-days`),
-  getNotificationSettings: (courseId: number) => apiFetch(`/diagnosis/${courseId}/notification-settings`),
-  updateNotificationSettings: (courseId: number, data: object) =>
-    apiFetch(`/diagnosis/${courseId}/notification-settings`, { method: "PUT", body: JSON.stringify(data) }),
-  getReviews: (courseId: number) => apiFetch(`/diagnosis/${courseId}/reviews`),
 
   // 30日伴走コース：日次学習ログ
   listDayLogs: (courseId: number) => apiFetch(`/courses/${courseId}/day-logs`),

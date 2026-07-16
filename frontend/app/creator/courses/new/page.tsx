@@ -11,6 +11,12 @@ type CharacterSummary = { id: number; name: string };
 
 const STEPS = ["基本情報", "壁打ち相談", "プロンプト確認"] as const;
 
+const AI_SITES = [
+  { label: "ChatGPT", url: "https://chatgpt.com/" },
+  { label: "Claude", url: "https://claude.ai/" },
+  { label: "Gemini", url: "https://gemini.google.com/" },
+] as const;
+
 export default function NewCoursePage() {
   const router = useRouter();
   const { me, loading } = useRoleGuard(["creator", "admin"]);
@@ -32,7 +38,6 @@ export default function NewCoursePage() {
   const [purpose, setPurpose] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
   const [topics, setTopics] = useState("");
-  const [duration, setDuration] = useState("");
   const [style, setStyle] = useState("");
   const [concerns, setConcerns] = useState("");
   const [existingVideos, setExistingVideos] = useState("");
@@ -65,6 +70,29 @@ export default function NewCoursePage() {
       toast("Tier AまたはTier Bのどちらかは提供する必要があります", "error");
       return;
     }
+
+    if (courseType === "pace_based") {
+      // ペース管理型は壁打ちフローをスキップし、コースを即作成して教材登録へ直行する
+      setSubmitting(true);
+      try {
+        const course = await api.createCourse({
+          title,
+          subject,
+          price: 0,
+          is_free: isFree,
+          tier_a_price: !isFree && enableTierA ? Number(tierAPrice) : null,
+          tier_b_price: !isFree && enableTierB ? Number(tierBPrice) : null,
+          course_type: courseType,
+        });
+        router.push(`/creator/courses/${course.id}/textbooks`);
+      } catch (err: unknown) {
+        toast(err instanceof Error ? err.message : "作成に失敗しました", "error");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     setStep(1);
   }
 
@@ -80,7 +108,7 @@ export default function NewCoursePage() {
           price: 0,
           is_free: isFree,
           tier_a_price: !isFree && enableTierA ? Number(tierAPrice) : null,
-          tier_b_price: enableTierB ? Number(tierBPrice) : null,
+          tier_b_price: !isFree && enableTierB ? Number(tierBPrice) : null,
           course_type: courseType,
         });
         id = course.id;
@@ -90,7 +118,6 @@ export default function NewCoursePage() {
         purpose,
         target_audience: targetAudience,
         topics,
-        duration,
         style,
         concerns,
         existing_videos: existingVideos,
@@ -202,7 +229,7 @@ export default function NewCoursePage() {
               <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text)" }}>料金設定</h3>
               <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
                 {isFree
-                  ? "無料コースは、必要であればTier B（AI＋クリエイター添削）のみを有料オプションとして追加できます。"
+                  ? "無料コースは、すべての学習者が料金なしでアクセスできます。"
                   : "有料コースは「Tier Aのみ」「Tier A＋Tier B」「Tier Bのみ」の3パターンから選べます。"}
               </p>
 
@@ -214,8 +241,8 @@ export default function NewCoursePage() {
                 <input type="checkbox" checked={isFree} onChange={e => setIsFree(e.target.checked)} />
               </label>
 
-              <div className="flex flex-col gap-3">
-                {!isFree && (
+              {!isFree && (
+                <div className="flex flex-col gap-3">
                   <PriceTierCard
                     label="Tier A"
                     description="AIのみが伴走"
@@ -226,18 +253,18 @@ export default function NewCoursePage() {
                     min={980}
                     max={20000}
                   />
-                )}
-                <PriceTierCard
-                  label="Tier B"
-                  description="AI＋クリエイター添削"
-                  enabled={enableTierB}
-                  onToggle={v => setEnableTierB(v)}
-                  price={tierBPrice}
-                  onPriceChange={setTierBPrice}
-                  min={2980}
-                  max={100000}
-                />
-              </div>
+                  <PriceTierCard
+                    label="Tier B"
+                    description="AI＋クリエイター添削"
+                    enabled={enableTierB}
+                    onToggle={v => setEnableTierB(v)}
+                    price={tierBPrice}
+                    onPriceChange={setTierBPrice}
+                    min={2980}
+                    max={100000}
+                  />
+                </div>
+              )}
 
               {!isFree && !enableTierA && !enableTierB && (
                 <p className="text-xs mt-2" style={{ color: "#dc2626" }}>Tier AまたはTier Bのどちらかは提供する必要があります</p>
@@ -246,8 +273,8 @@ export default function NewCoursePage() {
 
             <div className="flex gap-3">
               <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>戻る</button>
-              <button type="submit" className="btn-primary flex-1" disabled={!character}>
-                次へ：カリキュラムの壁打ち
+              <button type="submit" className="btn-primary flex-1" disabled={!character || submitting}>
+                {submitting ? "作成中…" : courseType === "pace_based" ? "次へ：教材を登録する" : "次へ：カリキュラムの壁打ち"}
               </button>
             </div>
           </form>
@@ -274,10 +301,6 @@ export default function NewCoursePage() {
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>扱いたいトピック・要素</label>
               <textarea rows={2} value={topics} onChange={e => setTopics(e.target.value)} placeholder="例：リスニング強化、文法パターン、語彙1000語" className="w-full" />
-            </div>
-            <div>
-              <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>期間感の目安</label>
-              <input value={duration} onChange={e => setDuration(e.target.value)} placeholder="例：30日間、12週間、3ヶ月" />
             </div>
             <div>
               <label className="text-xs font-medium block mb-1" style={{ color: "var(--muted)" }}>講師としてのスタイル・こだわり</label>
@@ -322,7 +345,7 @@ export default function NewCoursePage() {
                 onClick={handleCopy}
                 className="absolute top-3 right-3 text-xs px-3 py-1.5 rounded-lg font-medium transition"
                 style={{
-                  background: copied ? "var(--accent)" : "var(--primary)",
+                  background: copied ? "var(--accent)" : "var(--ink)",
                   color: "#fff",
                 }}
               >
@@ -333,9 +356,24 @@ export default function NewCoursePage() {
             <div className="rounded-xl p-4" style={{ background: "rgba(245,158,11,0.16)", color: "#fbbf24" }}>
               <p className="text-sm font-semibold mb-1">次のステップ</p>
               <ol className="text-xs space-y-1 list-decimal list-inside">
-                <li>上のプロンプトをChatGPT / Claude などにコピーして壁打ちする</li>
+                <li>上のプロンプトをコピーして、下のリンクからAIサービスを開いて貼り付け、壁打ちする</li>
                 <li>章立てが決まったら「次へ」を押して章を入力する</li>
               </ol>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {AI_SITES.map(site => (
+                <a
+                  key={site.url}
+                  href={site.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold px-3 py-2 rounded-lg transition"
+                  style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  {site.label} を開く ↗
+                </a>
+              ))}
             </div>
 
             <div className="flex gap-3">

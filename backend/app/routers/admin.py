@@ -24,16 +24,8 @@ from app.models.course_day import CourseDay
 from app.models.course_material import CourseMaterial
 from app.models.day_log import DayLog
 from app.models.daily_summary import DailySummary
-from app.models.learner_review import LearnerReview
-from app.models.learner_profile import LearnerProfile
-from app.models.learner_roadmap import LearnerRoadmap
-from app.models.learner_course_day import LearnerCourseDay
-from app.models.notification_setting import NotificationSetting
 from app.models.course_textbook import CourseTextbook
 from app.models.textbook_day_assignment import TextbookDayAssignment
-from app.models.learner_textbook_progress import LearnerTextbookProgress
-from app.models.course_diagnosis_question import CourseDiagnosisQuestion
-from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.textbook import Textbook
 from app.models.course_chapter import CourseChapter
 from app.models.chapter_card import ChapterCard
@@ -180,12 +172,6 @@ def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> N
     if active_subscriptions > 0 and not force:
         raise HTTPException(status_code=409, detail=f"在籍中の学習者が{active_subscriptions}名います。先にコースを停止し、退会・返金対応の完了後に削除してください。")
 
-    learner_profile_ids = [r[0] for r in db.query(LearnerProfile.id).filter(LearnerProfile.course_id == course_id).all()]
-    if learner_profile_ids:
-        db.query(LearnerRoadmap).filter(LearnerRoadmap.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
-        db.query(LearnerCourseDay).filter(LearnerCourseDay.learner_profile_id.in_(learner_profile_ids)).delete(synchronize_session=False)
-    db.query(LearnerProfile).filter(LearnerProfile.course_id == course_id).delete(synchronize_session=False)
-
     question_ids = [r[0] for r in db.query(Question.id).filter(Question.course_id == course_id).all()]
     if question_ids:
         db.query(Answer).filter(Answer.question_id.in_(question_ids)).delete(synchronize_session=False)
@@ -199,13 +185,7 @@ def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> N
     course_textbook_ids = [r[0] for r in db.query(CourseTextbook.id).filter(CourseTextbook.course_id == course_id).all()]
     if course_textbook_ids:
         db.query(TextbookDayAssignment).filter(TextbookDayAssignment.course_textbook_id.in_(course_textbook_ids)).delete(synchronize_session=False)
-        db.query(LearnerTextbookProgress).filter(LearnerTextbookProgress.course_textbook_id.in_(course_textbook_ids)).delete(synchronize_session=False)
     db.query(CourseTextbook).filter(CourseTextbook.course_id == course_id).delete(synchronize_session=False)
-
-    diagnosis_question_ids = [r[0] for r in db.query(CourseDiagnosisQuestion.id).filter(CourseDiagnosisQuestion.course_id == course_id).all()]
-    if diagnosis_question_ids:
-        db.query(LearnerDiagnosisAnswer).filter(LearnerDiagnosisAnswer.question_id.in_(diagnosis_question_ids)).delete(synchronize_session=False)
-    db.query(CourseDiagnosisQuestion).filter(CourseDiagnosisQuestion.course_id == course_id).delete(synchronize_session=False)
 
     chapter_ids = [r[0] for r in db.query(CourseChapter.id).filter(CourseChapter.course_id == course_id).all()]
     if chapter_ids:
@@ -219,8 +199,6 @@ def delete_course_cascade(db: Session, course_id: int, force: bool = False) -> N
     db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete(synchronize_session=False)
     db.query(DayLog).filter(DayLog.course_id == course_id).delete(synchronize_session=False)
     db.query(DailySummary).filter(DailySummary.course_id == course_id).delete(synchronize_session=False)
-    db.query(LearnerReview).filter(LearnerReview.course_id == course_id).delete(synchronize_session=False)
-    db.query(NotificationSetting).filter(NotificationSetting.course_id == course_id).delete(synchronize_session=False)
     db.query(Purchase).filter(Purchase.course_id == course_id).delete(synchronize_session=False)
     db.query(CourseSubscription).filter(CourseSubscription.course_id == course_id).delete(synchronize_session=False)
     db.query(CourseReview).filter(CourseReview.course_id == course_id).delete(synchronize_session=False)

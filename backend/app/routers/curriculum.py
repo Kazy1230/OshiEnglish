@@ -51,7 +51,10 @@ def _get_owned_course(db: Session, course_id: int, current_user) -> Course:
     return course
 
 
-def _require_purchase(db: Session, user_id: int, course_id: int) -> Purchase:
+def _require_purchase(db: Session, user_id: int, course_id: int) -> Purchase | None:
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course and course.is_free:
+        return None  # 無料コースは購入不要で全学習者がアクセス可能
     purchase = db.query(Purchase).filter(
         Purchase.user_id == user_id,
         Purchase.course_id == course_id,
@@ -213,7 +216,6 @@ def get_curriculum_prompt(
     purpose = course.curriculum_purpose or "（未入力）"
     target = course.curriculum_target_audience or "（未入力）"
     topics = course.curriculum_topics or "（未入力）"
-    duration = course.curriculum_duration or "（未入力）"
     style = course.curriculum_style or "（未入力）"
     concerns = course.curriculum_concerns or "（未入力）"
     existing_videos = course.curriculum_existing_videos or "（未入力）"
@@ -224,7 +226,6 @@ def get_curriculum_prompt(
 【講座の目的】{purpose}
 【対象者】{target}
 【扱いたいトピック・要素】{topics}
-【期間感の目安】{duration}
 【講師としてのスタイル・こだわり】{style}
 【まだ迷っている・決めきれていない点】{concerns}
 【持っている動画】{existing_videos}"""
@@ -579,24 +580,6 @@ async def get_youtube_meta(
     except Exception:
         return {"available": False}
 
-
-# ── クリエイター: コース審査申請 ─────────────────────────────────
-
-@router.post("/courses/{course_id}/submit-for-review")
-def submit_for_review(
-    course_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    course = _get_owned_course(db, course_id, current_user)
-    if course.status not in ("draft", "unpublished"):
-        raise HTTPException(status_code=400, detail="審査申請できる状態ではありません")
-    card_count = _card_count(db, course_id)
-    if card_count == 0:
-        raise HTTPException(status_code=400, detail="カードが1件もないコースは申請できません")
-    course.status = "under_review"
-    db.commit()
-    return {"ok": True, "status": "under_review"}
 
 
 # ── YouTube oEmbed 可用性チェック ─────────────────────────────────

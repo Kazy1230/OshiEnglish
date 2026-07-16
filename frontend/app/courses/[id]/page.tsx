@@ -13,7 +13,7 @@ type Lesson = {
   id: number; order: number; title: string; content_type: "text" | "video";
   body?: string | null; youtube_url?: string | null; is_preview: boolean;
 };
-type PreviewCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean };
+type PreviewCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean; body?: string | null; youtube_url?: string | null };
 type PreviewChapter = { id: number; order: number; title: string; goal: string | null; cards: PreviewCard[] };
 const CARD_TYPE_LABEL: Record<string, string> = { video: "動画", build_task: "課題", quiz: "クイズ", message: "メッセージ" };
 const CARD_TYPE_ICON: Record<string, string> = { video: "▶", build_task: "✏", quiz: "📝", message: "💬" };
@@ -23,20 +23,18 @@ type CourseDetail = {
   id: number; title: string; description?: string | null; thumbnail_url?: string | null;
   category?: string | null; status: string; price: number; is_free: boolean;
   tier_a_price?: number | null; tier_b_price?: number | null;
+  course_type: "self_paced" | "pace_based";
   chapter_count?: number;
   chapters?: PreviewChapter[];
   character: { id: number; name: string; avatar_url?: string | null; creator_id: number | null };
   lessons: Lesson[];
   is_purchased: boolean;
-  has_days: boolean;
-  has_diagnosis: boolean;
   is_suspended?: boolean;
   suspension_reason?: string | null;
   my_subscription?: { id: number; tier: "A" | "B"; status: string } | null;
 };
 type AdjustedTask = { text: string; minutes: number; carryover?: boolean };
-type Day = { day: number; week_number: number; theme: string | null; is_rest_day: boolean };
-type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null; carryover_tasks?: AdjustedTask[] | null; personalize_reason?: string | null };
+type Day = { day: number; week_number: number; theme: string | null; is_rest_day: boolean; checklist_items?: AdjustedTask[] | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
 
 const REST_DAY_TIPS = [
@@ -63,14 +61,13 @@ export default function CourseDetailPage() {
   const [changingTier, setChangingTier] = useState(false);
   const [showContractDetail, setShowContractDetail] = useState(false);
   const [days, setDays] = useState<Day[]>([]);
-  const [learnerTasksByDay, setLearnerTasksByDay] = useState<Record<number, AdjustedTask[]>>({});
-  const [layer3ReasonByDay, setLayer3ReasonByDay] = useState<Record<number, string>>({});
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const [reporting, setReporting] = useState(false);
   const [reportedDay, setReportedDay] = useState<number | null>(null);
   const [memo, setMemo] = useState("");
+  const [previewCard, setPreviewCard] = useState<PreviewCard | null>(null);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
@@ -83,30 +80,15 @@ export default function CourseDetailPage() {
           setCompletedLessonIds(new Set(p.lessons.filter((l: { is_completed: boolean }) => l.is_completed).map((l: { lesson_id: number }) => l.lesson_id)));
         }).catch(() => {});
       }
-      if (unlocked && c.has_days) {
-        const [d, l, learnerDays] = await Promise.all([
+      if (unlocked && c.course_type === "pace_based") {
+        const [d, l] = await Promise.all([
           api.listCourseDays(courseId).catch(() => [] as Day[]),
           api.listDayLogs(courseId).catch(() => [] as DayLog[]),
-          api.listLearnerCourseDays(courseId).catch(() => [] as LearnerDay[]),
         ]);
         setDays(d);
         const byDay: Record<number, DayLog> = {};
         for (const log of l) byDay[log.day_number] = log;
         setLogs(byDay);
-        const tasksByDay: Record<number, AdjustedTask[]> = {};
-        const l3Reasons: Record<number, string> = {};
-        for (const ld of learnerDays) {
-          const adjusted = ld.adjusted_tasks ?? [];
-          const adjustedTexts = new Set(adjusted.map((t: AdjustedTask) => t.text));
-          const carryover = (ld.carryover_tasks ?? [])
-            .filter((t: AdjustedTask) => !adjustedTexts.has(t.text))
-            .map((t: AdjustedTask) => ({ ...t, carryover: true }));
-          tasksByDay[ld.day] = [...adjusted, ...carryover];
-          const l3Match = ld.personalize_reason?.match(/\[Layer3: ([^\]]+)\]/);
-          if (l3Match) l3Reasons[ld.day] = l3Match[1];
-        }
-        setLearnerTasksByDay(tasksByDay);
-        setLayer3ReasonByDay(l3Reasons);
       }
     });
   }
@@ -237,7 +219,7 @@ export default function CourseDetailPage() {
   const derivedDay = Math.min(completedCount + 1, 30);
   const currentDay = reportedDay ?? derivedDay;
   const today = days.find(d => d.day === currentDay) ?? null;
-  const todayTasks = learnerTasksByDay[currentDay] ?? [];
+  const todayTasks = today?.checklist_items ?? [];
   const todayLog = logs[currentDay] ?? null;
   const completedLessonCount = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
   const progressPct = days.length > 0 ? Math.round((completedCount / 30) * 100) : 0;
@@ -394,7 +376,7 @@ export default function CourseDetailPage() {
               </div>
             )}
 
-            {course.chapters && course.chapters.length > 0 && (
+            {course.course_type === "self_paced" && course.chapters && course.chapters.length > 0 && (
               <div className="flex flex-col gap-4">
                 <div className="card overflow-hidden p-0">
                   <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
@@ -426,7 +408,14 @@ export default function CourseDetailPage() {
                             const hasTitle = !!c.title?.trim();
                             const displayTitle = hasTitle ? c.title : (CARD_TYPE_LABEL[c.card_type] ?? c.card_type);
                             return (
-                              <div key={c.id} className="hover-lift flex items-center gap-3 px-3.5 py-3 rounded-xl transition-colors" style={{ background: "var(--card)", border: "1px solid var(--border)", opacity: c.is_preview ? 1 : 0.7 }}>
+                              <div
+                                key={c.id}
+                                role={c.is_preview ? "button" : undefined}
+                                tabIndex={c.is_preview ? 0 : undefined}
+                                onClick={c.is_preview ? () => setPreviewCard(c) : undefined}
+                                className="hover-lift flex items-center gap-3 px-3.5 py-3 rounded-xl transition-colors w-full text-left"
+                                style={{ background: "var(--card)", border: "1px solid var(--border)", opacity: c.is_preview ? 1 : 0.7, cursor: c.is_preview ? "pointer" : "default" }}
+                              >
                                 <span
                                   className="flex items-center justify-center flex-shrink-0"
                                   style={{ width: 32, height: 32, borderRadius: "50%", background: `${typeColor}1a`, color: typeColor, fontSize: 14 }}
@@ -455,7 +444,7 @@ export default function CourseDetailPage() {
               </div>
             )}
 
-            {course.has_days && (
+            {course.course_type === "pace_based" && (
               <div className="card flex flex-col gap-5 overflow-hidden p-0">
                 <div className="px-5 sm:px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
                   <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.75)" }}>Program</p>
@@ -480,7 +469,7 @@ export default function CourseDetailPage() {
                       </div>
                     );
                   })}
-                  <p className="text-xs text-center" style={{ color: "var(--muted)" }}>購入するとDay1の診断からあなた専用のプランが始まります</p>
+                  <p className="text-xs text-center" style={{ color: "var(--muted)" }}>購入すると30日間のプログラムが始まります</p>
                 </div>
               </div>
             )}
@@ -515,21 +504,8 @@ export default function CourseDetailPage() {
           </div>
         )}
 
-        {/* ===== 30日コース：Day1診断 ===== */}
-        {unlocked && course.has_days && !course.has_diagnosis && (
-          <div className="card flex flex-col gap-4 overflow-hidden p-0">
-            <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
-              <p className="text-lg font-black text-white">まずは診断から始めよう</p>
-              <p className="text-sm text-white/80 mt-1">あなた専用の30日プランが作られます</p>
-            </div>
-            <div className="px-6 pb-6">
-              <Link href={`/courses/${courseId}/diagnosis`} className="btn-primary">Day1 診断を始める →</Link>
-            </div>
-          </div>
-        )}
-
         {/* ===== 30日コース：学習UI ===== */}
-        {unlocked && course.has_days && course.has_diagnosis && today && (
+        {unlocked && course.course_type === "pace_based" && today && (
           <>
             {/* 進捗バー */}
             <div className="flex flex-col gap-2">
@@ -569,12 +545,6 @@ export default function CourseDetailPage() {
                       <span className="text-xs text-white">⏱</span>
                       <span className="text-xs font-bold text-white">合計 {totalTaskMinutes} 分</span>
                     </div>
-                    {layer3ReasonByDay[currentDay] && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
-                        <span className="text-xs text-white">✦</span>
-                        <span className="text-xs font-bold text-white">{layer3ReasonByDay[currentDay]}</span>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -715,12 +685,12 @@ export default function CourseDetailPage() {
         )}
 
         {/* ===== v2.0コース：学習UI（コース詳細に統合） ===== */}
-        {unlocked && !course.has_days && (course.chapter_count ?? 0) > 0 && (
+        {unlocked && course.course_type === "self_paced" && (course.chapter_count ?? 0) > 0 && (
           <ChapterCurriculumPanel courseId={courseId} />
         )}
 
         {/* ===== 非30日コース：レッスン閲覧 ===== */}
-        {unlocked && !course.has_days && course.lessons.length > 0 && (
+        {unlocked && course.course_type === "self_paced" && course.lessons.length > 0 && (
           <div className="flex flex-col gap-4">
             {/* 進捗バー */}
             <div className="flex flex-col gap-2">
@@ -807,11 +777,15 @@ export default function CourseDetailPage() {
         <DayDetailPanel
           courseId={courseId}
           day={selectedDay}
-          tasks={learnerTasksByDay[selectedDay.day] ?? []}
+          tasks={selectedDay.checklist_items ?? []}
           log={logs[selectedDay.day] ?? null}
           isToday={selectedDay.day === currentDay}
           onClose={() => setSelectedDay(null)}
         />
+      )}
+
+      {previewCard && (
+        <PreviewCardModal card={previewCard} onClose={() => setPreviewCard(null)} />
       )}
     </div>
   );
@@ -871,6 +845,44 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: {
             <button onClick={onClose} className="btn-ghost flex-1">閉じる</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewCardModal({ card, onClose }: { card: PreviewCard; onClose: () => void }) {
+  const displayTitle = card.title?.trim() || (CARD_TYPE_LABEL[card.card_type] ?? card.card_type);
+  const youtubeMatch = card.youtube_url?.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="w-full sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl flex flex-col gap-4 p-5"
+        style={{ background: "var(--card)" }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <span className="pill" style={{ background: "var(--accent)", color: "white" }}>無料プレビュー</span>
+            <h2 className="font-bold text-lg mt-2" style={{ color: "var(--text)" }}>{displayTitle}</h2>
+          </div>
+          <button onClick={onClose} className="text-xl leading-none flex-shrink-0" style={{ color: "var(--muted)" }}>✕</button>
+        </div>
+
+        {card.youtube_url && youtubeMatch && (
+          <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: 8 }}>
+            <iframe
+              src={`https://www.youtube.com/embed/${youtubeMatch[1]}`}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+        {card.body && (
+          <p className="text-sm whitespace-pre-wrap leading-relaxed" style={{ color: "var(--text)" }}>{card.body}</p>
+        )}
+        {!card.youtube_url && !card.body && (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>このカードにはまだ内容がありません。</p>
+        )}
+
+        <button onClick={onClose} className="btn-ghost">閉じる</button>
       </div>
     </div>
   );

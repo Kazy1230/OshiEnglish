@@ -67,6 +67,7 @@ function SortableCard({
   onDelete,
   onDuplicate,
   onUpdate,
+  courseIsFree,
 }: {
   card: Card;
   courseId: number;
@@ -74,6 +75,7 @@ function SortableCard({
   onDelete: (id: number) => void;
   onDuplicate: (id: number) => void;
   onUpdate: (id: number, data: Partial<Card>) => void;
+  courseIsFree: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -133,7 +135,7 @@ function SortableCard({
           </p>
           <p className="text-xs" style={{ color: "var(--muted)" }}>{typeInfo.label}</p>
         </div>
-        {card.is_preview && (
+        {!courseIsFree && card.is_preview && (
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.16)", color: "#60a5fa" }}>無料</span>
         )}
         <button onClick={() => setExpanded(e => !e)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--primary)" }}>
@@ -255,10 +257,12 @@ function SortableCard({
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <input type="checkbox" checked={localCard.is_preview} onChange={e => setLocalCard(c => ({ ...c, is_preview: e.target.checked }))} />
-            <span style={{ color: "var(--text)" }}>無料プレビューとして公開する</span>
-          </label>
+          {!courseIsFree && (
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={localCard.is_preview} onChange={e => setLocalCard(c => ({ ...c, is_preview: e.target.checked }))} />
+              <span style={{ color: "var(--text)" }}>無料プレビューとして公開する</span>
+            </label>
+          )}
 
           <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">
             {saving ? "保存中…" : "保存"}
@@ -280,6 +284,7 @@ export default function ChapterDetailPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [fetching, setFetching] = useState(true);
   const [addingType, setAddingType] = useState<string | null>(null);
+  const [courseIsFree, setCourseIsFree] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -301,6 +306,9 @@ export default function ChapterDetailPage() {
   }, [courseId, chapterId, router]);
 
   useEffect(() => { if (!loading) load(); }, [loading, load]);
+  useEffect(() => {
+    if (!loading) api.getCurriculumMeta(courseId).then(m => setCourseIsFree(!!m.is_free)).catch(() => {});
+  }, [loading, courseId]);
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -418,6 +426,7 @@ export default function ChapterDetailPage() {
                     onDelete={handleDelete}
                     onDuplicate={handleDuplicate}
                     onUpdate={handleUpdate}
+                    courseIsFree={courseIsFree}
                   />
                 ))}
               </div>

@@ -23,18 +23,12 @@ class SubjectConfig:
     course_day_generation_system: str
     classify_system: str
     answer_style_by_type: dict[str, str]
-    diagnosis_welcome_system: str
-    roadmap_generation_system: str
     toc_chat_system_template: str   # {textbook_name} を format() で埋め込む
     quality_check_system: str
     self_intro_system: str
     character_concept_system: str
     tone_profile_system: str
-    personalize_system: str
     daily_adjust_system: str
-
-    # 診断質問デフォルトテンプレート
-    default_diagnosis_questions: list[dict]  # [{question_text, answer_type, options, is_required}]
 
 
 # ===== 英語 ==========================================================
@@ -267,16 +261,12 @@ ENGLISH_CONFIG = SubjectConfig(
     course_day_generation_system=_ENGLISH_COURSE_DAY_SYSTEM,
     classify_system=_ENGLISH_CLASSIFY_SYSTEM,
     answer_style_by_type=_ENGLISH_ANSWER_STYLE,
-    diagnosis_welcome_system=_ENGLISH_DIAGNOSIS_WELCOME,
-    roadmap_generation_system=_ENGLISH_ROADMAP_SYSTEM,
     toc_chat_system_template=_ENGLISH_TOC_TEMPLATE,
     quality_check_system=_ENGLISH_QUALITY_CHECK,
     self_intro_system=_ENGLISH_SELF_INTRO,
     character_concept_system=_ENGLISH_CHARACTER_CONCEPT,
     tone_profile_system=_ENGLISH_TONE_PROFILE,
-    personalize_system=_ENGLISH_PERSONALIZE_SYSTEM,
     daily_adjust_system=_ENGLISH_DAILY_ADJUST_SYSTEM,
-    default_diagnosis_questions=_ENGLISH_DEFAULT_QUESTIONS,
 )
 
 
@@ -506,16 +496,12 @@ IT_CONFIG = SubjectConfig(
     course_day_generation_system=_IT_COURSE_DAY_SYSTEM,
     classify_system=_IT_CLASSIFY_SYSTEM,
     answer_style_by_type=_IT_ANSWER_STYLE,
-    diagnosis_welcome_system=_IT_DIAGNOSIS_WELCOME,
-    roadmap_generation_system=_IT_ROADMAP_SYSTEM,
     toc_chat_system_template=_IT_TOC_TEMPLATE,
     quality_check_system=_IT_QUALITY_CHECK,
     self_intro_system=_IT_SELF_INTRO,
     character_concept_system=_IT_CHARACTER_CONCEPT,
     tone_profile_system=_IT_TONE_PROFILE,
-    personalize_system=_IT_PERSONALIZE_SYSTEM,
     daily_adjust_system=_IT_DAILY_ADJUST_SYSTEM,
-    default_diagnosis_questions=_IT_DEFAULT_QUESTIONS,
 )
 
 
@@ -744,16 +730,12 @@ MUSIC_CONFIG = SubjectConfig(
     course_day_generation_system=_MUSIC_COURSE_DAY_SYSTEM,
     classify_system=_MUSIC_CLASSIFY_SYSTEM,
     answer_style_by_type=_MUSIC_ANSWER_STYLE,
-    diagnosis_welcome_system=_MUSIC_DIAGNOSIS_WELCOME,
-    roadmap_generation_system=_MUSIC_ROADMAP_SYSTEM,
     toc_chat_system_template=_MUSIC_TOC_TEMPLATE,
     quality_check_system=_MUSIC_QUALITY_CHECK,
     self_intro_system=_MUSIC_SELF_INTRO,
     character_concept_system=_MUSIC_CHARACTER_CONCEPT,
     tone_profile_system=_MUSIC_TONE_PROFILE,
-    personalize_system=_MUSIC_PERSONALIZE_SYSTEM,
     daily_adjust_system=_MUSIC_DAILY_ADJUST_SYSTEM,
-    default_diagnosis_questions=_MUSIC_DEFAULT_QUESTIONS,
 )
 
 
@@ -976,16 +958,12 @@ JAPANESE_CONFIG = SubjectConfig(
     course_day_generation_system=_JAPANESE_COURSE_DAY_SYSTEM,
     classify_system=_JAPANESE_CLASSIFY_SYSTEM,
     answer_style_by_type=_JAPANESE_ANSWER_STYLE,
-    diagnosis_welcome_system=_JAPANESE_WELCOME_SYSTEM,
-    roadmap_generation_system=_JAPANESE_ROADMAP_SYSTEM,
     toc_chat_system_template=_JAPANESE_TOC_CHAT_TEMPLATE,
     quality_check_system=_JAPANESE_QUALITY_CHECK_SYSTEM,
     self_intro_system=_JAPANESE_SELF_INTRO_SYSTEM,
     character_concept_system=_JAPANESE_CHARACTER_CONCEPT_SYSTEM,
     tone_profile_system=_JAPANESE_TONE_PROFILE_SYSTEM,
-    personalize_system=_JAPANESE_PERSONALIZE_SYSTEM,
     daily_adjust_system=_JAPANESE_DAILY_ADJUST_SYSTEM,
-    default_diagnosis_questions=_JAPANESE_DEFAULT_QUESTIONS,
 )
 
 
@@ -1063,26 +1041,6 @@ def _make_generic_config(subject: str) -> SubjectConfig:
             "content": "結論を最初に伝え、具体例を1つ挙げ、次にとるべき学習アクションを示す",
             "report": "学習の取り組みを労い、翌日の学習への橋渡しになる一言で締める",
         },
-        diagnosis_welcome_system=f"""あなたは以下の人格プロファイルを持つ{label}コーチです。
-この口調・励まし方の特徴を忠実に再現して、初回診断チャットの最初のメッセージを生成してください。
-
-メッセージの要件:
-- 学習者への温かい歓迎
-- これから一緒に学ぶことへの期待感
-- 学習者のことをもっと知りたいという姿勢
-- 100〜150文字程度の自然な会話文
-- 絵文字は使わない
-
-本文のみを出力してください（JSON形式不要）。""",
-        roadmap_generation_system=f"""あなたは{label}の専門コーチです。
-学習者の診断回答と30日コース構造をもとに、その学習者専用の30日ロードマップを作成してください。
-
-以下のJSON形式のみで出力してください（説明文は不要）:
-{{
-  "level_analysis": {{"current": "現在のレベル", "target": "目標レベル", "gap": "ギャップの説明"}},
-  "roadmap_reason": "このロードマップを組んだ理由（2〜3文）",
-  "week_focus": [{{"week": 1, "focus": "週のフォーカス", "key_action": "具体的なアクション"}}]
-}}""",
         toc_chat_system_template=f"あなたは{label}教材の専門家です。{{textbook_name}}の目次を正確に把握し、学習者の質問に答えてください。",
         quality_check_system=f"""あなたは{label}コースの設計アドバイザーです。
 コースの骨格を評価し、以下のJSON形式のみで出力してください:
@@ -1123,29 +1081,11 @@ def _make_generic_config(subject: str) -> SubjectConfig:
   "reaction_patterns": "感情・リアクションパターン",
   "speaking_samples": ["{label}指導の場面でのメッセージ例1", "例2", "例3"]
 }}""",
-        personalize_system=f"""あなたは{label}の個別コーチです。
-学習者の診断回答とコース骨格をもとに、その学習者専用の30日チェックリストを生成してください。
-
-必ず以下のJSON形式のみで出力してください:
-{{
-  "days": [
-    {{
-      "day": 1,
-      "adjusted_checklist_items": [{{"text": "具体的なタスク", "minutes": 15}}],
-      "personalize_reason": "調整理由（20文字以内）"
-    }}
-  ]
-}}""",
         daily_adjust_system=f"""あなたは{label}コースの日次タスク調整AIです。
 学習者の前日の学習報告をもとに、今日のチェックリストを微調整してください。
 
 以下のJSON形式のみで返してください:
 {{"adjusted_checklist_items": [{{"text": "...", "minutes": ...}}], "reason": "調整理由（20文字以内）"}}""",
-        default_diagnosis_questions=[
-            {"question_text": "現在のレベルや経験を教えてください。", "answer_type": "text", "options": None, "is_required": True},
-            {"question_text": "1日に確保できる学習時間はどのくらいですか？", "answer_type": "single", "options": ["15分以内", "30分", "1時間", "1時間以上"], "is_required": True},
-            {"question_text": "特に強化したい点や苦手な部分はありますか？", "answer_type": "text", "options": None, "is_required": False},
-        ],
     )
 
 

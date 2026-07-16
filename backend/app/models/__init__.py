@@ -15,11 +15,7 @@ from app.models.lesson_progress import LessonProgress
 from app.models.favorite import Favorite
 from app.models.notification import Notification
 from app.models.content_draft import ContentDraft
-from app.models.learner_profile import LearnerProfile
-from app.models.learner_roadmap import LearnerRoadmap
-from app.models.learner_course_day import LearnerCourseDay
 from app.models.daily_summary import DailySummary
-from app.models.notification_setting import NotificationSetting
 from app.models.day_log import DayLog
 from app.models.course_subscription import CourseSubscription
 from app.models.question_category import QuestionCategory
@@ -27,13 +23,9 @@ from app.models.category_content import CategoryContent
 from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
-from app.models.learner_review import LearnerReview
 from app.models.textbook import Textbook
 from app.models.course_textbook import CourseTextbook
 from app.models.textbook_day_assignment import TextbookDayAssignment
-from app.models.learner_textbook_progress import LearnerTextbookProgress
-from app.models.course_diagnosis_question import CourseDiagnosisQuestion
-from app.models.learner_diagnosis_answer import LearnerDiagnosisAnswer
 from app.models.creator_content import CreatorContent
 from app.models.content_like import ContentLike
 from app.models.marketing_strategy import MarketingStrategy

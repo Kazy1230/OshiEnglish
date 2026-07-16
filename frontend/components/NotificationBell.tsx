@@ -85,7 +85,7 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-72 rounded-lg shadow-lg z-50" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+        <div className="absolute right-0 mt-2 w-72 max-w-[85vw] rounded-lg shadow-lg z-50" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
           <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: "1px solid var(--border)" }}>
             <p className="text-sm font-bold" style={{ color: "var(--primary)" }}>通知</p>
             {unreadCount > 0 && (

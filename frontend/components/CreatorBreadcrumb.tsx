@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type Crumb = { label: string; href?: string };
+export type Crumb = { label: string; href?: string };
 
 const COURSES_ROOT: Crumb = { label: "コース一覧", href: "/creator/courses" };
 
@@ -50,7 +50,7 @@ export function CreatorBreadcrumb() {
   return <BreadcrumbBar crumbs={crumbs} />;
 }
 
-function BreadcrumbBar({ crumbs }: { crumbs: Crumb[] }) {
+export function BreadcrumbBar({ crumbs }: { crumbs: Crumb[] }) {
   return (
     <nav style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center gap-1.5 flex-wrap" style={{ fontSize: 12, paddingTop: 8, paddingBottom: 8 }}>

@@ -160,6 +160,7 @@ export default function CourseChatPage() {
                 id: `a-${evt.question_id}`,
                 role: "assistant",
                 body: evt.answer || accumulated,
+                is_draft: !!evt.pending_instructor,
               };
               setMessages(prev => [...prev, assistantMsg]);
               if (evt.frustration_signal) setUpgradeCta({ topic: evt.frustration_signal.topic });

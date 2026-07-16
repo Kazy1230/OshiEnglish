@@ -52,6 +52,7 @@ type CourseMeta = {
   id: number;
   title: string;
   status: string;
+  is_free: boolean;
   enrollment_count: number;
   thumbnail_url: string | null;
   subject: string | null;
@@ -88,7 +89,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 // ---- SortableCard ----
 function SortableCard({
-  card, courseId, chapterId, onDelete, onDuplicate, onUpdate, locked,
+  card, courseId, chapterId, onDelete, onDuplicate, onUpdate, locked, courseIsFree,
 }: {
   card: Card;
   courseId: number;
@@ -97,6 +98,7 @@ function SortableCard({
   onDuplicate: (id: number) => void;
   onUpdate: (id: number, data: Partial<Card>) => void;
   locked: boolean;
+  courseIsFree: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -141,7 +143,7 @@ function SortableCard({
           <p className="text-sm font-medium truncate" style={{ color: "var(--text)" }}>{card.title || typeInfo.label}</p>
           <p className="text-xs" style={{ color: "var(--muted)" }}>{typeInfo.label}</p>
         </div>
-        {card.is_preview && (
+        {!courseIsFree && card.is_preview && (
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.16)", color: "#60a5fa" }}>無料</span>
         )}
         <button onClick={() => setExpanded(e => !e)} className="text-xs px-2 py-1 rounded" style={{ background: "var(--bg)", color: "var(--primary)" }}>
@@ -203,10 +205,12 @@ function SortableCard({
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <input type="checkbox" checked={localCard.is_preview} onChange={e => setLocalCard(c => ({ ...c, is_preview: e.target.checked }))} />
-            <span style={{ color: "var(--text)" }}>無料プレビューとして公開する</span>
-          </label>
+          {!courseIsFree && (
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={localCard.is_preview} onChange={e => setLocalCard(c => ({ ...c, is_preview: e.target.checked }))} />
+              <span style={{ color: "var(--text)" }}>無料プレビューとして公開する</span>
+            </label>
+          )}
 
           <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">
             {saving ? "保存中…" : "保存"}
@@ -219,13 +223,14 @@ function SortableCard({
 
 // ---- ChapterSection（1章分のカードビルダー） ----
 function ChapterSection({
-  chapter, courseId, onDeleteChapter, onChapterUpdate, locked,
+  chapter, courseId, onDeleteChapter, onChapterUpdate, locked, courseIsFree,
 }: {
   chapter: Chapter;
   courseId: number;
   onDeleteChapter: (id: number) => void;
   onChapterUpdate: (chapterId: number, cards: Card[]) => void;
   locked: boolean;
+  courseIsFree: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [cards, setCards] = useState<Card[]>([...chapter.cards].sort((a, b) => a.order - b.order));
@@ -387,6 +392,7 @@ function ChapterSection({
                       onDuplicate={handleDuplicate}
                       onUpdate={handleUpdate}
                       locked={locked}
+                      courseIsFree={courseIsFree}
                     />
                   ))}
                 </div>
@@ -562,6 +568,7 @@ export default function CurriculumHubPage() {
                 courseId={courseId}
                 onDeleteChapter={handleDeleteChapter}
                 onChapterUpdate={handleChapterUpdate}
+                courseIsFree={meta?.is_free ?? false}
               />
             ))}
           </div>

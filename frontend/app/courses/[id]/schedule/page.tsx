@@ -12,8 +12,8 @@ type Day = {
   week_number: number;
   theme: string | null;
   is_rest_day: boolean;
+  checklist_items?: AdjustedTask[] | null;
 };
-type LearnerDay = { day: number; adjusted_tasks?: AdjustedTask[] | null };
 type DayLog = { day_number: number; is_completed: boolean; completed_at: string | null; memo: string | null };
 
 const REST_DAY_TIPS = [
@@ -34,7 +34,6 @@ export default function CourseSchedulePage() {
   const courseId = Number(params.id);
 
   const [days, setDays] = useState<Day[]>([]);
-  const [learnerTasksByDay, setLearnerTasksByDay] = useState<Record<number, AdjustedTask[]>>({});
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
@@ -48,18 +47,14 @@ export default function CourseSchedulePage() {
           router.replace(`/courses/${courseId}`);
           return;
         }
-        const [d, l, learnerDays] = await Promise.all([
+        const [d, l] = await Promise.all([
           api.listCourseDays(courseId).catch(() => [] as Day[]),
           api.listDayLogs(courseId).catch(() => [] as DayLog[]),
-          api.listLearnerCourseDays(courseId).catch(() => [] as LearnerDay[]),
         ]);
         setDays(d);
         const byDay: Record<number, DayLog> = {};
         for (const log of l) byDay[log.day_number] = log;
         setLogs(byDay);
-        const tasksByDay: Record<number, AdjustedTask[]> = {};
-        for (const ld of learnerDays) tasksByDay[ld.day] = ld.adjusted_tasks ?? [];
-        setLearnerTasksByDay(tasksByDay);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
       } finally {
@@ -74,7 +69,7 @@ export default function CourseSchedulePage() {
   const completedCount = Object.values(logs).filter(l => l.is_completed).length;
   const currentDay = Math.min(completedCount + 1, 30);
   const today = days.find(d => d.day === currentDay) ?? null;
-  const todayTasks = learnerTasksByDay[currentDay] ?? [];
+  const todayTasks = today?.checklist_items ?? [];
   const todayLog = logs[currentDay] ?? null;
 
   // ペース表示：completed_atの実績のみから算出する（架空の判定はしない）
@@ -204,7 +199,7 @@ export default function CourseSchedulePage() {
         <DayDetailPanel
           courseId={courseId}
           day={selectedDay}
-          tasks={learnerTasksByDay[selectedDay.day] ?? []}
+          tasks={selectedDay.checklist_items ?? []}
           log={logs[selectedDay.day] ?? null}
           isToday={selectedDay.day === currentDay}
           onClose={() => setSelectedDay(null)}

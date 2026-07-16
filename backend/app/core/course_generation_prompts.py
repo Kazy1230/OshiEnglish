@@ -27,19 +27,19 @@ def phase_label_for_week(week_number: int) -> str:
 def build_course_day_generation_messages(
     personality_profile: dict,
     course_title: str,
-    goal: str,
-    target_learner: str,
-    intensity: str,
+    purpose: str,
+    target_audience: str,
+    topics: str,
+    style: str,
+    pace_unit_description: str | None = None,
     subject: str = "english",
-    study_materials: str | None = None,
-    pace: str | None = None,
     day_textbook_plan: dict[int, list[dict]] | None = None,
 ) -> list[dict]:
     from app.core.subject_config import get_subject_config
     config = get_subject_config(subject)
     system = config.course_day_generation_system
 
-    plan_text = "指定なし（人格プロファイルとゴールに基づき自由に設計してください）"
+    plan_text = "指定なし（人格プロファイルと目的に基づき自由に設計してください）"
     if day_textbook_plan:
         lines = []
         for day in sorted(day_textbook_plan):
@@ -57,11 +57,11 @@ def build_course_day_generation_messages(
         f"【人格プロファイル】\n{json.dumps(personality_profile, ensure_ascii=False, indent=2)}\n\n"
         f"【コース情報】\n"
         f"コース名: {course_title}\n"
-        f"ゴール: {goal}\n"
-        f"対象者: {target_learner}\n"
-        f"1日の標準学習時間: {intensity}\n"
-        f"使用する教材: {study_materials or '指定なし'}\n"
-        f"進行速度: {pace or '標準'}\n\n"
+        f"講座の目的・ゴール: {purpose or '指定なし'}\n"
+        f"対象者: {target_audience or '指定なし'}\n"
+        f"扱いたいトピック・要素: {topics or '指定なし'}\n"
+        f"講師としてのスタイル・こだわり: {style or '指定なし'}\n"
+        f"1回あたりの分量の目安: {pace_unit_description or '標準'}\n\n"
         f"【日程割り当て（クリエイターが指定した、教材の各章をどの日にやるか）】\n{plan_text}\n\n"
         f"上記のコース情報で30日分のコース骨格を生成してください。"
         f"checklist_itemsは自然な日本語で具体的なタスクを書いてください。"

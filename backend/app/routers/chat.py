@@ -23,8 +23,6 @@ from app.models.category_content import CategoryContent
 from app.models.creator_profile import CreatorProfile
 from app.models.customer import Customer
 from app.models.character import Character
-from app.models.learner_profile import LearnerProfile
-from app.models.learner_course_day import LearnerCourseDay
 from app.models.daily_summary import DailySummary
 from app.models.day_log import DayLog
 from app.models.card_progress import CardProgress
@@ -216,20 +214,9 @@ def _build_curriculum_progress_text(db: Session, course: Course, user_id: int) -
 
 
 def _get_today_context(db: Session, user_id: int, course_id: int) -> tuple[int, list, list[str]]:
-    """今日のタスク(Layer2)と直近3日分の圧縮サマリー(Layer3用コンテキスト)を取得する。"""
+    """今日の日番号と直近3日分の圧縮サマリー(Layer3用コンテキスト)を取得する。"""
     day_number = _get_current_day_number(db, user_id, course_id)
-    profile = db.query(LearnerProfile).filter(
-        LearnerProfile.user_id == user_id, LearnerProfile.course_id == course_id
-    ).first()
     today_tasks: list = []
-    if profile:
-        learner_day = db.query(LearnerCourseDay).filter(
-            LearnerCourseDay.learner_profile_id == profile.id, LearnerCourseDay.day_number == day_number,
-        ).first()
-        if learner_day:
-            today_tasks = (learner_day.adjusted_tasks or []) + [
-                {**t, "carryover": True} for t in (learner_day.carryover_tasks or [])
-            ]
     summaries = db.query(DailySummary).filter(
         DailySummary.user_id == user_id, DailySummary.course_id == course_id,
         DailySummary.day_number >= max(1, day_number - 3), DailySummary.day_number < day_number,
@@ -419,6 +406,8 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
 
     tier = _get_tier(db, course, current_user)
     creator_id = course.character.creator_id if course.character else None
+    # Tier Bは1日1回まで講師へ届く。2回目以降はAIが自動回答（Tier Aと同じフロー）
+    route_to_instructor = tier == "B" and not _today_questions_used_by_tier_b(db, current_user.id, course_id)
     personality = _get_personality_profile(db, course) or {}
     tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
@@ -456,7 +445,8 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
 
     question = Question(
         user_id=current_user.id, course_id=course_id, tier=tier, body=data.body,
-        category_id=category.id if category else None, status="pending",
+        category_id=category.id if category else None,
+        status="pending_instructor" if route_to_instructor else "pending",
     )
     db.add(question)
     db.commit()
@@ -489,10 +479,15 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
         with SessionLocal() as gen_db:
             q = gen_db.query(Question).filter(Question.id == question_id).first()
             if q:
-                q.status = "answered_by_ai"
-                gen_db.add(Answer(question_id=question_id, answered_by="ai", body=full_text, is_draft=False,
+                q.status = "pending_instructor" if route_to_instructor else "answered_by_ai"
+                gen_db.add(Answer(question_id=question_id, answered_by="ai", body=full_text, is_draft=route_to_instructor,
                                   linked_content_url=linked_content.url if linked_content else None))
                 gen_db.commit()
+            if route_to_instructor:
+                # Tier B: 講師の代理回答（下書き）のため講師に通知する（承認UIはPhase6で実装）
+                course_for_notify = gen_db.query(Course).filter(Course.id == course_id).first()
+                if course_for_notify:
+                    _notify_creator_of_pending_question(gen_db, course_for_notify, data.body)
             if is_daily_close:
                 _generate_and_save_daily_summary(gen_db, user_id, course_id, day_number)
             if category_id_for_frustration:
@@ -500,7 +495,7 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
                 if cat:
                     frustration_signal = _detect_frustration(gen_db, user_id, course_id, cat)
 
-        yield f"data: {json_lib.dumps({'done': True, 'question_id': question_id, 'answer': full_text, 'frustration_signal': frustration_signal})}\n\n"
+        yield f"data: {json_lib.dumps({'done': True, 'question_id': question_id, 'answer': full_text, 'frustration_signal': frustration_signal, 'pending_instructor': route_to_instructor})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
