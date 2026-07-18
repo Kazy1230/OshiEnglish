@@ -19,8 +19,12 @@ class CreatorProfile(Base):
     sns_instagram = Column(String(500), nullable=True)
     sns_twitter = Column(String(500), nullable=True)
     status = Column(String(20), nullable=False, default="pending")  # pending / active / suspended
-    # 30日カレンダー相談AIチャット用の残高。メッセージ送信のたびに1消費し、0になると送信不可（外部AIツールへの誘導のみ）
-    ai_chat_balance = Column(Integer, nullable=False, default=20)
+    # 30日カレンダー相談AIチャット用の残高。クリエイター審査承認の瞬間に初期値20を付与し、
+    # メッセージ送信のたびに1消費、0になると送信不可（外部AIツールへの誘導のみ）
+    ai_chat_balance = Column(Integer, nullable=False, default=0)
+    # 売上利益からai_chat_balanceへ変換済みの累計額（円）。1円=1クレジットで変換。
+    # 生涯収益から差し引くことで「まだチャージに使っていない収益」を算出する
+    ai_credit_transferred_yen = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

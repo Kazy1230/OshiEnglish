@@ -1096,16 +1096,6 @@ def _build_existing_days_text(course: Course) -> str:
     return "\n".join(lines)
 
 
-@router.get("/creator/ai-balance")
-def get_creator_ai_balance(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """30日カレンダー相談AIチャットの残高。要(クリエイター本人)"""
-    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
-    if not profile:
-        raise HTTPException(status_code=403, detail="クリエイタープロフィールが見つかりません")
-    from app.core.creator_balance import get_ai_balance
-    return {"balance": get_ai_balance(db, profile.id)}
-
-
 class CalendarChatRequest(BaseModel):
     message: str
     history: List[dict] = []

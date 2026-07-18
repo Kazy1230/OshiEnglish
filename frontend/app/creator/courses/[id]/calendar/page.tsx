@@ -464,7 +464,9 @@ function CalendarChatSidebar({ courseId, onApplied }: { courseId: number; onAppl
 
         <form onSubmit={handleSend} className="flex flex-col gap-1.5 px-4 py-3 flex-shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
           {noBalance && (
-            <p className="text-[11px]" style={{ color: "#e53e3e" }}>AIチャットの残高がありません。下の外部AIツールをご利用ください。</p>
+            <p className="text-[11px]" style={{ color: "#e53e3e" }}>
+              AIチャットの残高がありません。<Link href="/creator/revenue" className="underline">売上からチャージする →</Link>{" "}または下の外部AIツールをご利用ください。
+            </p>
           )}
           <div className="flex gap-2">
             <input

@@ -270,8 +270,9 @@ _ensure_column("courses", "pace_unit_description", "VARCHAR(255) NULL")
 _ensure_column("courses", "days_generation_status", "VARCHAR(20) NULL")
 _ensure_column("courses", "days_generation_error", "TEXT NULL")
 
-# --- 30日カレンダー相談AIチャットの残高 ---
-_ensure_column("creator_profiles", "ai_chat_balance", "INT NOT NULL DEFAULT 20")
+# --- 30日カレンダー相談AIチャットの残高（審査承認時に20付与） ---
+_ensure_column("creator_profiles", "ai_chat_balance", "INT NOT NULL DEFAULT 0")
+_ensure_column("creator_profiles", "ai_credit_transferred_yen", "INT NOT NULL DEFAULT 0")
 
 # --- Day1診断機能の完全廃止（LearnerProfileベースの個人化レイヤー・週次/月次レビューを含む） ---
 with engine.connect() as _conn:

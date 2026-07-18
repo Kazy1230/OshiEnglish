@@ -136,7 +136,9 @@ export const api = {
     apiFetch(`/courses/${courseId}/days/${dayNumber}`, { method: "PUT", body: JSON.stringify(data) }),
 
   // 30日カレンダー相談AIチャット
-  getCreatorAiBalance: () => apiFetch("/creator/ai-balance"),
+  getCreatorAiBalance: () => apiFetch("/creators/me/ai-balance"),
+  transferRevenueToAiBalance: (amount: number) =>
+    apiFetch("/creators/me/ai-balance/transfer", { method: "POST", body: JSON.stringify({ amount }) }),
   calendarChat: (courseId: number, message: string, history: { role: string; content: string }[]) =>
     apiFetch(`/courses/${courseId}/calendar-chat`, { method: "POST", body: JSON.stringify({ message, history }) }),
   applyCalendarChatChanges: (courseId: number, dayChanges: object[]) =>

@@ -60,6 +60,7 @@ def approve_creator_application(profile_id: int, admin=Depends(get_current_admin
     if not profile:
         raise HTTPException(status_code=404, detail="申請が見つかりません")
     profile.status = "active"
+    profile.ai_chat_balance = 20  # 30日カレンダー相談AIチャットの初期残高を承認と同時に付与
     db.commit()
     user = db.query(Customer).filter(Customer.id == profile.user_id).first()
     if user and user.email:

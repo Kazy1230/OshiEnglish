@@ -175,7 +175,8 @@ def update_my_profile(data: CreatorProfileUpdate, current_user=Depends(get_curre
 
 @router.get("/me/revenue")
 def get_my_revenue(current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
-    """クリエイターの収益ダッシュボード（要件定義書5.9節：ユーザー課金→手数料控除→クリエイター残高）。要(本人)"""
+    """クリエイターの収益ダッシュボード（要件定義書5.9節：ユーザー課金→手数料控除→クリエイター残高）。
+    AIチャット残高へチャージ済みの額は振込予定額から差し引く。要(本人)"""
     profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
@@ -201,14 +202,81 @@ def get_my_revenue(current_user=Depends(get_current_creator_or_admin), db: Sessi
 
     gross_revenue = one_time_total + subscription_mrr
     platform_fee = round(gross_revenue * settings.PLATFORM_FEE_RATE)
-    net_balance = gross_revenue - platform_fee
+    net_balance = (gross_revenue - platform_fee) - profile.ai_credit_transferred_yen
 
     return {
         "gross_revenue": gross_revenue,
         "platform_fee": platform_fee,
-        "net_balance": net_balance,
+        "net_balance": max(0, net_balance),
         "active_subscriptions": len(active_subs),
         "fee_rate": settings.PLATFORM_FEE_RATE,
+    }
+
+
+def _compute_net_balance(db: Session, profile: CreatorProfile) -> int:
+    """get_my_revenueと同じロジックで生涯の売上利益(net_balance)を計算する。"""
+    course_ids = [c.id for c in db.query(Course).filter(Course.character_id == profile.character.id).all()] if profile.character else []
+    if not course_ids:
+        return 0
+    one_time_total = sum(
+        p.amount for p in db.query(Purchase).filter(
+            Purchase.course_id.in_(course_ids), Purchase.status == "succeeded"
+        ).all()
+    )
+    active_subs = db.query(CourseSubscription).filter(
+        CourseSubscription.course_id.in_(course_ids), CourseSubscription.status == "active"
+    ).all()
+    subscription_mrr = 0
+    for sub in active_subs:
+        course = db.query(Course).filter(Course.id == sub.course_id).first()
+        if not course:
+            continue
+        subscription_mrr += (course.tier_a_price if sub.tier == "A" else course.tier_b_price) or 0
+    gross_revenue = one_time_total + subscription_mrr
+    platform_fee = round(gross_revenue * settings.PLATFORM_FEE_RATE)
+    return gross_revenue - platform_fee
+
+
+@router.get("/me/ai-balance")
+def get_my_ai_balance(current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    """30日カレンダー相談AIチャットの残高と、売上利益からチャージ可能な額を返す。要(本人)"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
+    net_balance = _compute_net_balance(db, profile)
+    available_to_transfer = max(0, net_balance - profile.ai_credit_transferred_yen)
+    return {
+        "balance": profile.ai_chat_balance,
+        "available_to_transfer": available_to_transfer,
+        "transferred_total": profile.ai_credit_transferred_yen,
+    }
+
+
+class AiBalanceTransferRequest(BaseModel):
+    amount: int
+
+
+@router.post("/me/ai-balance/transfer")
+def transfer_revenue_to_ai_balance(data: AiBalanceTransferRequest, current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
+    """売上利益をAIチャット残高にチャージする（1円=1クレジット。追加のStripe決済は不要）。要(本人)"""
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="1以上の金額を指定してください")
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
+
+    net_balance = _compute_net_balance(db, profile)
+    available_to_transfer = max(0, net_balance - profile.ai_credit_transferred_yen)
+    if data.amount > available_to_transfer:
+        raise HTTPException(status_code=400, detail=f"チャージ可能な額（¥{available_to_transfer}）を超えています")
+
+    profile.ai_chat_balance += data.amount
+    profile.ai_credit_transferred_yen += data.amount
+    db.commit()
+    return {
+        "balance": profile.ai_chat_balance,
+        "available_to_transfer": available_to_transfer - data.amount,
+        "transferred_total": profile.ai_credit_transferred_yen,
     }
 
 
