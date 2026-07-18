@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useRoleGuard } from "@/lib/useRoleGuard";
@@ -38,8 +38,6 @@ export default function CourseCalendarPage() {
 
   const [days, setDays] = useState<Day[]>([]);
   const [fetching, setFetching] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [genProgress, setGenProgress] = useState<{ days_done: number; days_total: number; status: string; error?: string | null } | null>(null);
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -52,8 +50,6 @@ export default function CourseCalendarPage() {
   const [checkingQuality, setCheckingQuality] = useState(false);
   const [qualityCheck, setQualityCheck] = useState<QualityCheckResult | null>(null);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   function reloadDays() {
     return api.listCourseDays(courseId).then(setDays).catch(() => {});
   }
@@ -65,8 +61,6 @@ export default function CourseCalendarPage() {
       api.listCourseMaterials(courseId).then(setMaterials).catch(() => {}),
       api.getCourseDetail(courseId).then(c => { setCourseStatus(c.status); }).catch(() => {}),
     ]).finally(() => setFetching(false));
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   async function handleSubmitForReview() {
@@ -91,31 +85,6 @@ export default function CourseCalendarPage() {
       toast(err instanceof Error ? err.message : "品質チェックに失敗しました", "error");
     } finally {
       setCheckingQuality(false);
-    }
-  }
-
-  async function handleGenerate() {
-    setGenerating(true);
-    setGenProgress(null);
-    try {
-      await api.generateCourseDays(courseId);
-      pollRef.current = setInterval(async () => {
-        const s = await api.getCourseGenerationStatus(courseId);
-        setGenProgress(s);
-        if (s.status === "completed") {
-          clearInterval(pollRef.current!);
-          setGenerating(false);
-          await reloadDays();
-          toast("30日分のコンテンツを生成しました ✅", "success");
-        } else if (s.status === "failed") {
-          clearInterval(pollRef.current!);
-          setGenerating(false);
-          toast(s.error || "生成に失敗しました", "error");
-        }
-      }, 4000);
-    } catch (err: unknown) {
-      setGenerating(false);
-      toast(err instanceof Error ? err.message : "生成の開始に失敗しました", "error");
     }
   }
 
@@ -198,11 +167,6 @@ export default function CourseCalendarPage() {
           <div className="flex items-center gap-2">
             <Link href={`/creator/courses/${courseId}/textbooks`} className="btn-ghost text-xs">教材を編集</Link>
             {courseStatus === "draft" && (
-              <button className="btn-ghost text-xs" disabled={generating} onClick={handleGenerate}>
-                {generating ? "生成中…" : days.length > 0 ? "↻ 全日を再生成" : "✨ AIで一括生成"}
-              </button>
-            )}
-            {courseStatus === "draft" && (
               <button
                 className="btn-primary text-sm"
                 disabled={checkingQuality || days.length === 0}
@@ -217,27 +181,13 @@ export default function CourseCalendarPage() {
           </div>
         </div>
 
-        {/* AI一括生成の進行状況（生成中のみ表示） */}
-        {generating && genProgress && (
-          <div className="card flex flex-col gap-1.5">
-            <div className="flex justify-between text-xs mb-0.5" style={{ color: "var(--muted)" }}>
-              <span>生成中… {genProgress.days_done}/{genProgress.days_total}日</span>
-              <span>{Math.round((genProgress.days_done / genProgress.days_total) * 100)}%</span>
-            </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-              <div className="h-full rounded-full transition-all duration-700"
-                style={{ background: "linear-gradient(90deg, var(--accent), #38b2ac)", width: `${Math.round((genProgress.days_done / genProgress.days_total) * 100)}%` }} />
-            </div>
-          </div>
-        )}
-
         {/* Calendar */}
         {displayDays.length > 0 && (
           <>
             {/* Legend + progress */}
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: "var(--muted)" }}>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--ink)" }} />AI生成</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--ink)" }} />未設定</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--accent)" }} />編集済み</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--border)" }} />休息日</span>
                 {unsetDays > 0 && <span className="font-bold" style={{ color: "#e53e3e" }}>⚠ {unsetDays}日 タスク未設定</span>}

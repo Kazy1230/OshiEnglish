@@ -3,7 +3,7 @@ import os
 import re
 import uuid
 from typing import Optional, List
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, model_validator
@@ -948,96 +948,6 @@ def _build_day_textbook_plan(db: Session, course_id: int) -> dict[int, list[dict
                 "review_words": ct.review_words,
             })
     return plan
-
-
-def _run_course_days_generation(course_id: int):
-    """Layer1（概念コース骨格）の生成本体。1回のAI呼び出しで30日分をまとめて生成する（目安15秒）。
-    requestのDBセッションが閉じた後も動くようバックグラウンドタスクとして実行し、自前でSessionLocal()を開く。"""
-    from app.core.database import SessionLocal
-
-    db = SessionLocal()
-    try:
-        course = db.query(Course).filter(Course.id == course_id).first()
-        if not course:
-            return
-        personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
-        day_textbook_plan = _build_day_textbook_plan(db, course.id)
-
-        try:
-            messages = gen_prompts.build_course_day_generation_messages(
-                personality.profile, course.title,
-                course.curriculum_purpose, course.curriculum_target_audience,
-                course.curriculum_topics, course.curriculum_style,
-                pace_unit_description=course.pace_unit_description,
-                subject=course.subject or "english",
-                day_textbook_plan=day_textbook_plan,
-            )
-            system_msg = messages[0]["content"]
-            user_messages = messages[1:]
-            text = generate_text(system_msg, user_messages, max_tokens=4000, json_mode=True)
-            days_data = gen_prompts.extract_json_array(text)
-            if len(days_data) != 30:
-                raise LLMError(f"30日分のはずが{len(days_data)}日分でした")
-        except LLMError as e:
-            course.days_generation_status = "failed"
-            course.days_generation_error = f"コース骨格の生成に失敗しました: {e}"
-            db.commit()
-            return
-
-        for day_data in days_data:
-            day_number = day_data.get("day")
-            checklist_items = day_data.get("checklist_items") or []
-            db.add(CourseDay(
-                course_id=course.id,
-                day_number=day_number,
-                week_number=day_data.get("week") or ((day_number - 1) // 7 + 1),
-                theme=day_data.get("theme"),
-                checklist_items=checklist_items,
-                is_rest_day=bool(day_data.get("is_rest_day", False)),
-            ))
-        course.days_generation_status = "completed"
-        db.commit()
-    finally:
-        db.close()
-
-
-@router.post("/courses/{course_id}/generate-days", status_code=status.HTTP_202_ACCEPTED)
-def generate_course_days(course_id: int, background_tasks: BackgroundTasks, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """人格プロファイル＋教材プランをもとに30日分のコース骨格(Layer1)をAI生成する。要(本人)。
-    1回のAI呼び出しで完結するため目安15秒。バックグラウンドで実行し即座に202を返す。
-    進行状況は GET /courses/{course_id}/generation-status をポーリングして確認する。"""
-    course = _get_owned_course(db, course_id, current_user)
-    if course.days_generation_status == "generating":
-        raise HTTPException(status_code=409, detail="すでに生成処理が進行中です")
-    if not course.personality_profile_id:
-        raise HTTPException(status_code=400, detail="先にAIインタビューを完了し、人格(キャラクター)を作成してください")
-    if not course.textbooks:
-        raise HTTPException(status_code=400, detail="先に教材を1つ以上登録してください")
-
-    personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
-    if not personality or not personality.profile:
-        raise HTTPException(status_code=400, detail="人格プロファイルが見つかりません")
-
-    db.query(CourseDay).filter(CourseDay.course_id == course.id).delete()
-    course.days_generation_status = "generating"
-    course.days_generation_error = None
-    db.commit()
-
-    background_tasks.add_task(_run_course_days_generation, course.id)
-    return {"message": "生成を開始しました", "status": "generating"}
-
-
-@router.get("/courses/{course_id}/generation-status")
-def get_course_generation_status(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """コース骨格(Layer1)生成の進行状況をポーリングするためのエンドポイント。要(本人)"""
-    course = _get_owned_course(db, course_id, current_user)
-    day_count = db.query(CourseDay).filter(CourseDay.course_id == course.id).count()
-    return {
-        "status": course.days_generation_status,
-        "error": course.days_generation_error,
-        "days_done": day_count,
-        "days_total": 30,
-    }
 
 
 @router.get("/courses/{course_id}/days")

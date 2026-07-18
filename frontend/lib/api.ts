@@ -128,9 +128,7 @@ export const api = {
   reorderLessons: (courseId: number, lessonIds: number[]) =>
     apiFetch(`/courses/${courseId}/lessons/reorder`, { method: "PUT", body: JSON.stringify({ lesson_ids: lessonIds }) }),
 
-  // 30日伴走コース：自動生成・日単位編集
-  generateCourseDays: (courseId: number) => apiFetch(`/courses/${courseId}/generate-days`, { method: "POST" }),
-  getCourseGenerationStatus: (courseId: number) => apiFetch(`/courses/${courseId}/generation-status`),
+  // 30日伴走コース：日単位編集
   listCourseDays: (courseId: number) => apiFetch(`/courses/${courseId}/days`),
   updateCourseDay: (courseId: number, dayNumber: number, data: object) =>
     apiFetch(`/courses/${courseId}/days/${dayNumber}`, { method: "PUT", body: JSON.stringify(data) }),
