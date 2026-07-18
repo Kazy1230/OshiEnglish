@@ -25,6 +25,7 @@ from app.models.customer import Customer
 from app.models.character import Character
 from app.models.daily_summary import DailySummary
 from app.models.day_log import DayLog
+from app.models.course_day import CourseDay
 from app.models.card_progress import CardProgress
 from app.models.chat_greeting import ChatGreeting
 from app.models.notification import Notification
@@ -215,9 +216,31 @@ def _build_curriculum_progress_text(db: Session, course: Course, user_id: int) -
 
 
 def _get_today_context(db: Session, user_id: int, course_id: int) -> tuple[int, list, list[str]]:
-    """今日の日番号と直近3日分の圧縮サマリー(Layer3用コンテキスト)を取得する。"""
+    """今日の日番号・今日のタスク（実際の完了状況つき）・直近3日分の圧縮サマリー(Layer3用コンテキスト)を取得する。
+    今日のタスクの実際の完了状況（DayLog）をAIに渡すことで、学習者が「全部終わった」と事実と異なる
+    報告をしても、AIが実際の進捗と矛盾していることに気づけるようにする。"""
     day_number = _get_current_day_number(db, user_id, course_id)
+
     today_tasks: list = []
+    course_day = db.query(CourseDay).filter(
+        CourseDay.course_id == course_id, CourseDay.day_number == day_number,
+    ).first()
+    if course_day and course_day.checklist_items:
+        day_log = db.query(DayLog).filter(
+            DayLog.user_id == user_id, DayLog.course_id == course_id, DayLog.day_number == day_number,
+        ).first()
+        if day_log and day_log.is_completed:
+            completed_indices = (
+                set(day_log.completed_item_indices) if day_log.completed_item_indices is not None
+                else set(range(len(course_day.checklist_items)))
+            )
+        else:
+            completed_indices = set()
+        today_tasks = [
+            {"text": item.get("text", ""), "is_completed": i in completed_indices}
+            for i, item in enumerate(course_day.checklist_items)
+        ]
+
     summaries = db.query(DailySummary).filter(
         DailySummary.user_id == user_id, DailySummary.course_id == course_id,
         DailySummary.day_number >= max(1, day_number - 3), DailySummary.day_number < day_number,

@@ -89,6 +89,9 @@ def build_answer_system(
 学習者と友人のように自然に会話し、絶対に一貫した人格・口調を保ってください。
 返答は短くテンポよく。前後の文脈を踏まえて会話を続けてください。
 このコースの目的・対象者・扱うトピック・指導スタイルを踏まえずに一般論だけで答えることは絶対にしないでください。
+【今日のタスク】に実際の完了状況が渡されている場合、それが唯一の事実です。学習者の発言が実際の完了状況と
+食い違う場合（例:「全部終わった」と言っているのに未完了のタスクがある）は、鵜呑みにせず、優しく事実を
+確認してください（責めるトーンにはしない）。
 
 【人格設定】
 {personality_block}{course_block}"""
@@ -128,7 +131,10 @@ def build_answer_messages(
     if curriculum_progress:
         context_note += f"\n\n{curriculum_progress}"
     if today_tasks:
-        context_note += f"\n\n【今日のタスク】\n{today_tasks}"
+        tasks_text = "\n".join(
+            f"- {t.get('text', '')}（{'完了済み' if t.get('is_completed') else '未完了'}）" for t in today_tasks
+        )
+        context_note += f"\n\n【今日のタスク（実際の完了状況）】\n{tasks_text}"
     if recent_summaries:
         context_note += f"\n\n【直近3日間のサマリー】\n{_format_summaries(recent_summaries)}"
     messages: list[dict] = list(conversation_history) if conversation_history else []
@@ -162,9 +168,12 @@ def build_today_message_user(
     recent_summaries: list[str],
     curriculum_progress: str | None = None,
 ) -> list[dict]:
+    tasks_text = "\n".join(
+        f"- {t.get('text', '')}（{'完了済み' if t.get('is_completed') else '未完了'}）" for t in today_tasks
+    ) if today_tasks else "（タスク未設定）"
     content = (
         f"今日はDay {day_number}です。\n\n"
-        f"【今日のタスク】\n{today_tasks}\n\n"
+        f"【今日のタスク（実際の完了状況）】\n{tasks_text}\n\n"
         f"【直近3日間のサマリー】\n{_format_summaries(recent_summaries)}\n\n"
         + (f"{curriculum_progress}\n\n" if curriculum_progress else "")
         + "上記の文脈を踏まえ、今日のメッセージを生成してください。"
