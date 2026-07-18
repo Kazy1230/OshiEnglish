@@ -70,6 +70,7 @@ export default function CourseDetailPage() {
   const [memo, setMemo] = useState("");
   const [previewCard, setPreviewCard] = useState<PreviewCard | null>(null);
   const [progress, setProgress] = useState<{ total_cards: number; completed_cards: number } | null>(null);
+  const [maxAllowedDay, setMaxAllowedDay] = useState(30);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
@@ -83,14 +84,15 @@ export default function CourseDetailPage() {
         }).catch(() => {});
       }
       if (unlocked && c.course_type === "pace_based") {
-        const [d, l] = await Promise.all([
+        const [d, logsRes] = await Promise.all([
           api.listCourseDays(courseId).catch(() => [] as Day[]),
-          api.listDayLogs(courseId).catch(() => [] as DayLog[]),
+          api.listDayLogs(courseId).catch(() => ({ logs: [] as DayLog[], max_allowed_day: 30 })),
         ]);
         setDays(d);
         const byDay: Record<number, DayLog> = {};
-        for (const log of l) byDay[log.day_number] = log;
+        for (const log of logsRes.logs) byDay[log.day_number] = log;
         setLogs(byDay);
+        setMaxAllowedDay(logsRes.max_allowed_day ?? 30);
       }
       if (unlocked && c.course_type === "self_paced" && (c.chapter_count ?? 0) > 0) {
         api.getLearnerProgress(courseId).then(p => {
@@ -101,6 +103,12 @@ export default function CourseDetailPage() {
   }
 
   useEffect(() => { load().finally(() => setLoading(false)); }, [courseId]);
+
+  // 表示中の日が切り替わるたびに、前の日のチェック状態が残らないようにリセットする
+  useEffect(() => {
+    setCheckedIndices(new Set());
+    setMemo("");
+  }, [reportedDay]);
 
   async function handleCompleteLesson(lessonId: number) {
     setCompleting(true);
@@ -604,7 +612,7 @@ export default function CourseDetailPage() {
                         <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>お疲れさまでした。明日も一緒に頑張りましょう。</p>
                       </div>
                     </div>
-                    {reportedDay !== null && derivedDay > currentDay && (
+                    {reportedDay !== null && derivedDay > currentDay && derivedDay <= maxAllowedDay && (
                       <button onClick={() => setReportedDay(null)} className="btn-ghost text-sm self-start">
                         Day {derivedDay} のタスクを見る →
                       </button>

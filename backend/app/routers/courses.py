@@ -142,6 +142,9 @@ def _serialize_course_detail(db: Session, course: Course, current_user) -> dict:
     data["my_subscription"] = (
         {"id": subscription.id, "tier": subscription.tier, "status": subscription.status} if subscription else None
     )
+    # ペース管理型(30日カレンダー)コースの日次データ。管理者の審査画面で内容を確認できるようにする
+    data["days"] = [_serialize_course_day(d) for d in course.days] if (unlocked and course.course_type == "pace_based") else []
+
     chapters = sorted(course.chapters, key=lambda ch: ch.order)
     data["chapters"] = [
         {
@@ -1076,15 +1079,49 @@ def update_course_day(course_id: int, day_number: int, data: CourseDayUpdate, cu
 
 # ----- ペース管理型コース：学習者の日次学習ログ -----
 
+def _pace_course_start_date(db: Session, user_id: int, course_id: int):
+    """ペース管理型コースの学習開始日時（購入または契約開始のうち最も古いもの）を返す。
+    カレンダー進行のゲート（勝手に翌日以降へ進めないようにする）の起点として使う。"""
+    purchase = db.query(Purchase).filter(
+        Purchase.user_id == user_id, Purchase.course_id == course_id, Purchase.status == "succeeded",
+    ).order_by(Purchase.purchased_at).first()
+    subscription = db.query(CourseSubscription).filter(
+        CourseSubscription.user_id == user_id, CourseSubscription.course_id == course_id,
+        CourseSubscription.status.in_(["active", "past_due", "incomplete"]),
+    ).order_by(CourseSubscription.created_at).first()
+    candidates = [d for d in (
+        purchase.purchased_at if purchase else None,
+        subscription.created_at if subscription else None,
+    ) if d]
+    return min(candidates) if candidates else None
+
+
+def _max_allowed_day_number(db: Session, user_id: int, course_id: int) -> int:
+    """今日時点で報告してよい最大のDay番号（実際の経過日数+1、30でキャップ）を返す。
+    自己申告のcompleted_countだけに頼ると、購入直後に何日分もまとめて「完了」報告できてしまうため、
+    実際のカレンダー経過日数でも上限をかける（30日伴走コースが1日で終わってしまうのを防ぐ）。"""
+    from datetime import datetime, timezone
+    start = _pace_course_start_date(db, user_id, course_id)
+    if not start:
+        return 30
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    elapsed_days = (datetime.now(timezone.utc) - start).days
+    return min(30, elapsed_days + 1)
+
+
 @router.get("/courses/{course_id}/day-logs")
 def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """自分の日次学習ログ一覧。要(購入済み学習者)"""
+    """自分の日次学習ログ一覧と、今日時点で報告してよい最大Day番号。要(購入済み学習者)"""
     logs = db.query(DayLog).filter(DayLog.user_id == current_user.id, DayLog.course_id == course_id).all()
-    return [
-        {"day_number": l.day_number, "is_completed": l.is_completed, "completed_at": l.completed_at, "memo": l.memo,
-         "completed_item_indices": l.completed_item_indices}
-        for l in logs
-    ]
+    return {
+        "logs": [
+            {"day_number": l.day_number, "is_completed": l.is_completed, "completed_at": l.completed_at, "memo": l.memo,
+             "completed_item_indices": l.completed_item_indices}
+            for l in logs
+        ],
+        "max_allowed_day": _max_allowed_day_number(db, current_user.id, course_id),
+    }
 
 
 class DayLogComplete(BaseModel):
@@ -1094,12 +1131,21 @@ class DayLogComplete(BaseModel):
 
 @router.put("/courses/{course_id}/day-logs/{day_number}/complete")
 def complete_day_log(course_id: int, day_number: int, data: DayLogComplete, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """指定日を完了として記録する（学習者本人）。要(購入済み学習者)"""
+    """指定日を完了として記録する（学習者本人）。要(購入済み学習者)。
+    30日伴走コースは1日1日ペースで進むコースのため、実際のカレンダー経過日数を超えた
+    先の日を勝手に完了報告することはできない（過去の未報告日を後から埋めることは許可する）。"""
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="コースが見つかりません")
     if not _is_accessible(db, course, current_user.id):
         raise HTTPException(status_code=403, detail="このコースを購入していません")
+
+    max_allowed_day = _max_allowed_day_number(db, current_user.id, course_id)
+    if day_number > max_allowed_day:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Day {day_number}はまだ報告できません。現在報告できるのはDay {max_allowed_day}までです。",
+        )
 
     from datetime import datetime, timezone
     log = db.query(DayLog).filter(

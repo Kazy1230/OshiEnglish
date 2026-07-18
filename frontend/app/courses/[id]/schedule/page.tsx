@@ -47,13 +47,13 @@ export default function CourseSchedulePage() {
           router.replace(`/courses/${courseId}`);
           return;
         }
-        const [d, l] = await Promise.all([
+        const [d, logsRes] = await Promise.all([
           api.listCourseDays(courseId).catch(() => [] as Day[]),
-          api.listDayLogs(courseId).catch(() => [] as DayLog[]),
+          api.listDayLogs(courseId).catch(() => ({ logs: [] as DayLog[], max_allowed_day: 30 })),
         ]);
         setDays(d);
         const byDay: Record<number, DayLog> = {};
-        for (const log of l) byDay[log.day_number] = log;
+        for (const log of logsRes.logs) byDay[log.day_number] = log;
         setLogs(byDay);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
@@ -100,7 +100,7 @@ export default function CourseSchedulePage() {
         ) : (
           <>
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
+              <div className="flex-1 h-2 rounded-full" style={{ background: "var(--surface)" }}>
                 <div className="h-2 rounded-full" style={{ background: "var(--accent)", width: `${Math.round((completedCount / 30) * 100)}%` }} />
               </div>
               <span className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--primary)" }}>{completedCount}/30日 完了</span>
@@ -110,7 +110,7 @@ export default function CourseSchedulePage() {
               <p
                 className="text-xs font-bold px-3 py-2 rounded-lg self-start"
                 style={{
-                  background: paceBadge.tone === "good" ? "var(--accent)" : "var(--example-bg, #eee)",
+                  background: paceBadge.tone === "good" ? "var(--accent)" : "var(--surface)",
                   color: paceBadge.tone === "good" ? "white" : "var(--muted)",
                 }}
               >
@@ -146,7 +146,7 @@ export default function CourseSchedulePage() {
                               : isToday
                               ? "var(--ink)"
                               : d.is_rest_day
-                              ? "var(--example-bg, #eee)"
+                              ? "var(--surface)"
                               : "var(--card)",
                             color: isCompleted || isToday ? "white" : d.is_rest_day ? "var(--muted)" : "var(--text)",
                             border: isCompleted || isToday || d.is_rest_day ? "none" : "1px solid var(--border)",
@@ -225,7 +225,7 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { cours
         {day.is_rest_day ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm" style={{ color: "var(--text)" }}>🌿 今日はチャージの日です。明日からまた頑張りましょう！</p>
-            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--example-bg, #eee)", color: "var(--muted)" }}>
+            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--surface)", color: "var(--muted)" }}>
               💡 {restDayTip(day.day)}
             </p>
           </div>
@@ -240,7 +240,7 @@ function DayDetailPanel({ courseId, day, tasks, log, isToday, onClose }: { cours
           </>
         )}
         {log?.memo && (
-          <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--example-bg, #eee)", color: "var(--text)" }}>
+          <div className="text-sm rounded-lg px-3 py-2" style={{ background: "var(--surface)", color: "var(--text)" }}>
             <p className="text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>あなたのメモ</p>
             {log.memo}
           </div>

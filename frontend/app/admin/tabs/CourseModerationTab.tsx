@@ -8,11 +8,14 @@ type AdminCourse = { id: number; title: string; status: string; is_suspended: bo
 type QuizOption = { text: string; is_correct?: boolean };
 type CourseCard = { id: number; order: number; card_type: string; title: string | null; is_preview: boolean; body?: string | null; youtube_url?: string | null; quiz_options?: QuizOption[] | null };
 type CourseChapter = { id: number; order: number; title: string; goal: string | null; cards: CourseCard[] };
+type CourseDay = { id: number; day: number; week_number: number; theme: string | null; checklist_items: { text: string; minutes: number }[] | null; is_rest_day: boolean };
 type CourseDetailForAdmin = {
   id: number; title: string; description: string | null; thumbnail_url: string | null;
   category: string | null; price: number; is_free: boolean;
   tier_a_price: number | null; tier_b_price: number | null;
+  course_type?: string;
   chapters?: CourseChapter[]; chapter_count?: number;
+  days?: CourseDay[];
   character: { name: string } | null;
 };
 
@@ -215,9 +218,36 @@ export function CourseModerationTab() {
                   <span className="admin-badge admin-badge-gray">
                     {detail.is_free ? "無料コース" : `Tier A: ${detail.tier_a_price ? `¥${detail.tier_a_price}/月` : "なし"} / Tier B: ${detail.tier_b_price ? `¥${detail.tier_b_price}/月` : "なし"}`}
                   </span>
-                  <span className="admin-badge admin-badge-gray">{detail.chapter_count ?? 0}章</span>
+                  {detail.course_type === "pace_based" ? (
+                    <span className="admin-badge admin-badge-gray">{(detail.days ?? []).length}日分</span>
+                  ) : (
+                    <span className="admin-badge admin-badge-gray">{detail.chapter_count ?? 0}章</span>
+                  )}
                 </div>
 
+                {detail.course_type === "pace_based" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {(detail.days ?? []).map(day => (
+                      <div key={day.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", margin: 0 }}>Day {day.day}（第{day.week_number}週）</p>
+                          {day.is_rest_day && <span className="admin-badge admin-badge-gray">休息日</span>}
+                        </div>
+                        {day.theme && <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>🎯 {day.theme}</p>}
+                        {(day.checklist_items ?? []).length > 0 && (
+                          <ul style={{ margin: "8px 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                            {(day.checklist_items ?? []).map((item, i) => (
+                              <li key={i} style={{ fontSize: 12, color: "var(--text)" }}>{item.text}（{item.minutes}分）</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                    {(detail.days ?? []).length === 0 && (
+                      <p style={{ fontSize: 13, color: "var(--muted)" }}>まだ30日分のカレンダーが生成されていません。</p>
+                    )}
+                  </div>
+                ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {(detail.chapters ?? []).map(ch => (
                     <div key={ch.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
@@ -256,6 +286,7 @@ export function CourseModerationTab() {
                     <p style={{ fontSize: 13, color: "var(--muted)" }}>章がまだ登録されていません。</p>
                   )}
                 </div>
+                )}
               </div>
             )}
           </div>
