@@ -128,7 +128,10 @@ export default function MyPage() {
         <div className="pointer-events-none absolute -top-12 -right-12 w-56 h-56 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />
         <div className="relative max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div>
-            <span className="pill mb-3" style={{ background: "rgba(255,255,255,0.16)", color: "white" }}>👋 ようこそ</span>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="pill" style={{ background: "rgba(255,255,255,0.16)", color: "white" }}>👋 ようこそ</span>
+              <Link href="/change-password" className="text-xs text-white/80 hover:text-white hover:underline">🔒 パスワードを変更</Link>
+            </div>
             <h2 className="text-white text-2xl sm:text-3xl font-black tracking-tight">
               {me?.display_name || me?.username} さん
             </h2>
@@ -151,8 +154,6 @@ export default function MyPage() {
       </section>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
-        <Link href="/change-password" className="btn-ghost text-xs self-end">🔒 パスワードを変更</Link>
-
         {/* キャラクターからの呼び戻しメッセージ */}
         {reengagementNotifs.length > 0 && (
           <div className="flex flex-col gap-3">

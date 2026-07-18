@@ -72,7 +72,7 @@ export function AppHeader({
             </nav>
           )}
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
           {role && <NotificationBell />}
           <LogoutButton variant="onColor" />
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { LogoutButton } from "@/components/LogoutButton";
+import { NotificationBell } from "@/components/NotificationBell";
 import { api } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import Link from "next/link";
@@ -122,6 +123,7 @@ export default function Home() {
             {loggedIn ? (
               <>
                 <Link href="/mypage" className="text-sm font-bold" style={{ color: "var(--primary)" }}>マイページ</Link>
+                <NotificationBell />
                 <LogoutButton variant="onSurface" />
               </>
             ) : (

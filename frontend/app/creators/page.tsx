@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { getToken } from "@/lib/auth";
+import { AppHeader } from "@/components/AppHeader";
 import { PublicHeader } from "@/components/PublicHeader";
 import { SampleChatPreview } from "@/components/SampleChatPreview";
 
@@ -20,9 +22,14 @@ export default function CreatorsPage() {
   const [creators, setCreators] = useState<CreatorCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchSubject, setSearchSubject] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     api.listCreators().then(setCreators).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setLoggedIn(!!getToken());
   }, []);
 
   const filtered = searchSubject.trim()
@@ -31,7 +38,7 @@ export default function CreatorsPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <PublicHeader />
+      {loggedIn ? <AppHeader role="learner" /> : <PublicHeader />}
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {/* 分野検索 */}
