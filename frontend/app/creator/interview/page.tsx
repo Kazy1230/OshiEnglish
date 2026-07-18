@@ -75,7 +75,9 @@ export default function CreatorInterviewPage() {
       if (res.status === "completed") {
         setCompleted(true);
       } else {
-        setHistory(h => [...h, { role: "learner", text: res.question }]);
+        // 次の質問に移ったら、それまでの会話表示をリセットして混乱を防ぐ
+        // （回答データは既にAPIへ送信済みのため、表示をリセットしても保存内容には影響しない）
+        setHistory([{ role: "learner", text: res.question }]);
       }
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "送信に失敗しました", "error");
@@ -106,7 +108,7 @@ export default function CreatorInterviewPage() {
   if (step === "done") {
     return (
       <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
-        <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
+        <AppHeader role="creator" title="AIインタビュー（人格収集）" />
         <main className="max-w-2xl mx-auto px-4 sm:px-6 py-10 flex flex-col gap-4 items-center text-center">
           <span className="text-4xl">✅</span>
           <h1 className="text-xl font-black" style={{ color: "var(--text)" }}>AIインタビューは完了済みです</h1>
@@ -122,7 +124,7 @@ export default function CreatorInterviewPage() {
   if (step === "gender") {
     return (
       <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
-        <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
+        <AppHeader role="creator" title="AIインタビュー（人格収集）" />
 
         <section className="gradient-hero relative overflow-hidden px-4 sm:px-6 py-10 sm:py-12 text-center">
           <div className="pointer-events-none absolute -top-10 -right-10 w-48 h-48 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />
@@ -156,7 +158,7 @@ export default function CreatorInterviewPage() {
   if (step === "preset") {
     return (
       <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
-        <AppHeader role="creator" backHref="/dashboard" backLabel="ダッシュボード" title="AIインタビュー（人格収集）" />
+        <AppHeader role="creator" title="AIインタビュー（人格収集）" />
 
         <section className="gradient-hero relative overflow-hidden px-4 sm:px-6 py-10 sm:py-12 text-center">
           <div className="pointer-events-none absolute -top-10 -right-10 w-48 h-48 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />

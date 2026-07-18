@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -61,6 +61,7 @@ export default function CourseDetailPage() {
   const [canceling, setCanceling] = useState(false);
   const [changingTier, setChangingTier] = useState(false);
   const [showContractDetail, setShowContractDetail] = useState(false);
+  const contractDetailRef = useRef<HTMLDivElement>(null);
   const [days, setDays] = useState<Day[]>([]);
   const [logs, setLogs] = useState<Record<number, DayLog>>({});
   const [selectedDay, setSelectedDay] = useState<Day | null>(null);
@@ -72,6 +73,7 @@ export default function CourseDetailPage() {
   const [progress, setProgress] = useState<{ total_cards: number; completed_cards: number } | null>(null);
   const [maxAllowedDay, setMaxAllowedDay] = useState(30);
   const [paceInteractionExpired, setPaceInteractionExpired] = useState(false);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
@@ -111,6 +113,17 @@ export default function CourseDetailPage() {
     setCheckedIndices(new Set());
     setMemo("");
   }, [reportedDay]);
+
+  // 契約管理パネルの外側をクリックしたら閉じる
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (contractDetailRef.current && !contractDetailRef.current.contains(e.target as Node)) {
+        setShowContractDetail(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function handleCompleteLesson(lessonId: number) {
     setCompleting(true);
@@ -351,7 +364,7 @@ export default function CourseDetailPage() {
           {unlocked && (course.my_subscription || progress) && (
             <div className="flex items-stretch gap-3 mt-1">
               {course.my_subscription && (
-                <div className="relative flex-1 rounded-xl px-4 py-3 flex flex-col gap-1 justify-center" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }}>
+                <div ref={contractDetailRef} className="relative flex-1 rounded-xl px-4 py-3 flex flex-col gap-1 justify-center" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold text-white">Tier {course.my_subscription.tier} 受講中</span>
                     <button onClick={() => setShowContractDetail(v => !v)} className="text-[11px] underline text-white/70 flex-shrink-0">
@@ -359,7 +372,7 @@ export default function CourseDetailPage() {
                     </button>
                   </div>
                   {showContractDetail && (
-                    <div className="absolute top-full left-0 right-0 mt-1 card flex flex-col gap-2 z-10">
+                    <div className="absolute top-full left-0 right-0 mt-1 card flex flex-col gap-2 z-20 shadow-lg">
                       {(() => {
                         const otherTier = course.my_subscription!.tier === "A" ? "B" : "A";
                         const otherPrice = otherTier === "A" ? course.tier_a_price : course.tier_b_price;
@@ -736,11 +749,21 @@ export default function CourseDetailPage() {
 
         {/* ===== v2.0コース：学習UI（コース詳細に統合） ===== */}
         {unlocked && course.course_type === "self_paced" && (course.chapter_count ?? 0) > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
-            <ChapterCurriculumPanel courseId={courseId} />
-            <div className="lg:sticky lg:top-6">
-              <CompactChatCard courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
+          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
+            <div className="lg:sticky lg:top-6 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setMobileChatOpen(v => !v)}
+                className="lg:hidden btn-ghost text-sm flex items-center justify-between"
+              >
+                <span>💬 メンターとチャット</span>
+                <span>{mobileChatOpen ? "閉じる ▲" : "開く ▼"}</span>
+              </button>
+              <div className={mobileChatOpen ? "block" : "hidden lg:block"}>
+                <CompactChatCard courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
+              </div>
             </div>
+            <ChapterCurriculumPanel courseId={courseId} />
           </div>
         )}
 
