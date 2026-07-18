@@ -30,6 +30,7 @@ from app.models.card_progress import CardProgress
 from app.models.chat_greeting import ChatGreeting
 from app.models.notification import Notification
 from app.routers.courses import _is_accessible
+from app.core.access_control import is_interaction_expired, get_interaction_deadline
 
 # チャット入力は1メッセージ単位の文字数制限を撤廃し、1日の合計入力文字数で制限する（DAILY_CHARACTER_LIMIT文字/日）
 DAILY_CHARACTER_LIMIT = 2000
@@ -93,6 +94,12 @@ def _today_questions_used_by_tier_b(db: Session, user_id: int, course_id: int) -
         Question.status == "pending_instructor",
         Question.created_at >= today_start,
     ).first() is not None
+
+
+def _interaction_expired_message(course: Course) -> str:
+    if course.course_type == "pace_based":
+        return "このコースは30日間のプログラムが終了したため、チャット・日次記録は利用できません。カリキュラムの閲覧は引き続き可能です。"
+    return "チャット・AI相談のご利用期間（90日）が終了しました。延長するとまた使えるようになります。"
 
 
 def _detect_frustration(db: Session, user_id: int, course_id: int, category: Optional[QuestionCategory]) -> Optional[dict]:
@@ -298,8 +305,11 @@ def _serialize_question(q: Question, frustration_signal: Optional[dict] = None) 
 
 @router.post("/{course_id}/ask")
 def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """学習者からの質問・相談を送信する（事業検証ポイント①の前段：質問ログ蓄積とAI回答）。要(購入済み学習者)"""
+    """学習者からの質問・相談をAIに送信する（事業検証ポイント①の前段：質問ログ蓄積とAI回答）。
+    講師への直接質問はTier B専用の/ask-instructorを使う。要(購入済み学習者)"""
     course = _get_accessible_course(db, course_id, current_user)
+    if is_interaction_expired(db, current_user.id, course_id, course):
+        raise HTTPException(status_code=403, detail=_interaction_expired_message(course))
     if not data.body.strip():
         raise HTTPException(status_code=400, detail="質問内容を入力してください")
     if prompts.check_injection(data.body):
@@ -310,9 +320,6 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
 
     tier = _get_tier(db, course, current_user)
     creator_id = course.character.creator_id if course.character else None
-
-    # Tier Bは1日1回まで講師へ届く。2回目以降はAIが自動回答（Tier Aと同じフロー）
-    route_to_instructor = tier == "B" and not _today_questions_used_by_tier_b(db, current_user.id, course_id)
 
     personality = _get_personality_profile(db, course) or {}
     tone_profile = (course.character.tone_profile if course.character else None) or {}
@@ -357,36 +364,11 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
         tier=tier,
         body=data.body,
         category_id=category.id if category else None,
-        status="pending_instructor" if route_to_instructor else "pending",
+        status="pending",
     )
     db.add(question)
     db.flush()
 
-    if route_to_instructor:
-        # Tier B: AIが下書きを生成し、講師の承認を待つ（承認UIはPhase6で実装）。
-        # 講師の代理回答のため品質を優先し、常にSonnetで生成する（設計書2.5節）
-        linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
-        try:
-            draft_body = generate_text(
-                prompts.build_answer_system(personality, message_type, tone_profile, subject=course.subject or "english", course_overview=course_overview),
-                prompts.build_answer_messages(
-                    data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
-                    today_tasks, recent_summaries, conversation_history, curriculum_progress=curriculum_progress,
-                ),
-                max_tokens=400,
-                model=settings.DEEPSEEK_MODEL,
-            )
-        except LLMError as e:
-            raise HTTPException(status_code=500, detail=f"下書き回答の生成に失敗しました: {e}") from e
-        db.add(Answer(question_id=question.id, answered_by="ai", body=draft_body, linked_content_url=linked_content.url if linked_content else None, is_draft=True))
-        db.commit()
-        db.refresh(question)
-        _notify_creator_of_pending_question(db, course, data.body)
-        if prompts.is_daily_close_signal(data.body):
-            _generate_and_save_daily_summary(db, current_user.id, course_id, day_number)
-        return _serialize_question(question)
-
-    # Tier A（またはTier Bの2回目以降）：AIが自動回答。
     # 学習内容・感情系の相談はSonnet、状況報告等の定型応答はHaiku（設計書2.5節のモデル使い分け方針）
     linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
     answer_model = prompts.select_answer_model(message_type, data.body, settings.DEEPSEEK_MODEL_LITE, settings.DEEPSEEK_MODEL)
@@ -418,8 +400,10 @@ def ask_question(course_id: int, data: AskRequest, current_user=Depends(get_curr
 
 @router.post("/{course_id}/ask-stream")
 def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """チャット回答をSSEストリームで返す。Tier B講師ルート以外に使用。"""
+    """AIとのチャット回答をSSEストリームで返す。講師への直接質問はTier B専用の/ask-instructorを使う。"""
     course = _get_accessible_course(db, course_id, current_user)
+    if is_interaction_expired(db, current_user.id, course_id, course):
+        raise HTTPException(status_code=403, detail=_interaction_expired_message(course))
     if not data.body.strip():
         raise HTTPException(status_code=400, detail="質問内容を入力してください")
     if prompts.check_injection(data.body):
@@ -430,8 +414,6 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
 
     tier = _get_tier(db, course, current_user)
     creator_id = course.character.creator_id if course.character else None
-    # Tier Bは1日1回まで講師へ届く。2回目以降はAIが自動回答（Tier Aと同じフロー）
-    route_to_instructor = tier == "B" and not _today_questions_used_by_tier_b(db, current_user.id, course_id)
     personality = _get_personality_profile(db, course) or {}
     tone_profile = (course.character.tone_profile if course.character else None) or {}
     day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
@@ -470,7 +452,7 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
     question = Question(
         user_id=current_user.id, course_id=course_id, tier=tier, body=data.body,
         category_id=category.id if category else None,
-        status="pending_instructor" if route_to_instructor else "pending",
+        status="pending",
     )
     db.add(question)
     db.commit()
@@ -503,15 +485,10 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
         with SessionLocal() as gen_db:
             q = gen_db.query(Question).filter(Question.id == question_id).first()
             if q:
-                q.status = "pending_instructor" if route_to_instructor else "answered_by_ai"
-                gen_db.add(Answer(question_id=question_id, answered_by="ai", body=full_text, is_draft=route_to_instructor,
+                q.status = "answered_by_ai"
+                gen_db.add(Answer(question_id=question_id, answered_by="ai", body=full_text, is_draft=False,
                                   linked_content_url=linked_content.url if linked_content else None))
                 gen_db.commit()
-            if route_to_instructor:
-                # Tier B: 講師の代理回答（下書き）のため講師に通知する（承認UIはPhase6で実装）
-                course_for_notify = gen_db.query(Course).filter(Course.id == course_id).first()
-                if course_for_notify:
-                    _notify_creator_of_pending_question(gen_db, course_for_notify, data.body)
             if is_daily_close:
                 _generate_and_save_daily_summary(gen_db, user_id, course_id, day_number)
             if category_id_for_frustration:
@@ -519,9 +496,123 @@ def ask_question_stream(course_id: int, data: AskRequest, current_user=Depends(g
                 if cat:
                     frustration_signal = _detect_frustration(gen_db, user_id, course_id, cat)
 
-        yield f"data: {json_lib.dumps({'done': True, 'question_id': question_id, 'answer': full_text, 'frustration_signal': frustration_signal, 'pending_instructor': route_to_instructor})}\n\n"
+        yield f"data: {json_lib.dumps({'done': True, 'question_id': question_id, 'answer': full_text, 'frustration_signal': frustration_signal})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/{course_id}/instructor-question-status")
+def get_instructor_question_status(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Tier B学習者が「直接質問」を今日まだ使えるかどうかを返す。"""
+    course = _get_accessible_course(db, course_id, current_user)
+    tier = _get_tier(db, course, current_user)
+    expired = is_interaction_expired(db, current_user.id, course_id, course)
+    return {
+        "tier": tier,
+        "available": tier == "B" and not expired and not _today_questions_used_by_tier_b(db, current_user.id, course_id),
+        "interaction_expired": expired,
+    }
+
+
+@router.get("/{course_id}/access-status")
+def get_chat_access_status(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """このコースのチャット・AI機能がまだ利用可能かどうかを返す（自由進行型は90日、ペース管理型は30日）。"""
+    course = _get_accessible_course(db, course_id, current_user)
+    deadline = get_interaction_deadline(db, current_user.id, course_id, course)
+    return {
+        "interaction_expired": is_interaction_expired(db, current_user.id, course_id, course),
+        "interaction_deadline": deadline,
+        "can_extend": course.course_type != "pace_based",
+    }
+
+
+class AskInstructorRequest(BaseModel):
+    body: str
+
+
+@router.post("/{course_id}/ask-instructor")
+def ask_instructor_question(course_id: int, data: AskInstructorRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Tier B学習者が「直接質問」ボタンから講師宛に質問を送る（1日1回まで）。
+    通常のチャット(AIのみ)とは別経路で、ここから送った質問だけが講師への回答依頼として通知される。"""
+    course = _get_accessible_course(db, course_id, current_user)
+    if is_interaction_expired(db, current_user.id, course_id, course):
+        raise HTTPException(status_code=403, detail=_interaction_expired_message(course))
+    if not data.body.strip():
+        raise HTTPException(status_code=400, detail="質問内容を入力してください")
+    if prompts.check_injection(data.body):
+        raise HTTPException(status_code=400, detail="このメッセージは送信できません")
+
+    tier = _get_tier(db, course, current_user)
+    if tier != "B":
+        raise HTTPException(status_code=403, detail="直接質問はTier Bのみ利用できます")
+    if _today_questions_used_by_tier_b(db, current_user.id, course_id):
+        raise HTTPException(status_code=429, detail="直接質問は1日1回までです。また明日お試しください")
+
+    enforce_daily_character_limit(current_user.id, course_id, len(data.body), limit=DAILY_CHARACTER_LIMIT)
+
+    creator_id = course.character.creator_id if course.character else None
+    personality = _get_personality_profile(db, course) or {}
+    tone_profile = (course.character.tone_profile if course.character else None) or {}
+    day_number, today_tasks, recent_summaries = _get_today_context(db, current_user.id, course_id)
+    course_overview = _build_course_overview(course)
+    curriculum_progress = _build_curriculum_progress_text(db, course, current_user.id)
+    existing_category_names = [
+        c.name for c in db.query(QuestionCategory).filter(QuestionCategory.creator_id == creator_id).all()
+    ] if creator_id else []
+
+    recent_questions = db.query(Question).filter(
+        Question.user_id == current_user.id, Question.course_id == course_id,
+    ).order_by(Question.created_at.desc()).limit(5).all()
+    recent_questions = list(reversed(recent_questions))
+    conversation_history: list[dict] = []
+    for rq in recent_questions:
+        conversation_history.append({"role": "user", "content": rq.body})
+        if rq.answers:
+            conversation_history.append({"role": "assistant", "content": rq.answers[-1].body})
+
+    try:
+        _classify_msgs = prompts.build_classify_messages(data.body, existing_category_names, subject=course.subject or "")
+        classify_raw = generate_text(
+            _classify_msgs[0]["content"], _classify_msgs[1:],
+            max_tokens=200, model=settings.DEEPSEEK_MODEL_LITE, json_mode=True,
+        )
+        classified = extract_json(classify_raw)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"質問の分類に失敗しました: {e}") from e
+
+    category = _resolve_category(db, creator_id, classified.get("category_name", ""))
+    message_type = classified.get("message_type", "content")
+
+    question = Question(
+        user_id=current_user.id, course_id=course_id, tier="B", body=data.body,
+        category_id=category.id if category else None,
+        status="pending_instructor",
+    )
+    db.add(question)
+    db.flush()
+
+    # 講師がすぐに確認・編集できるよう、AIが下書きを生成しておく（品質を優先し常にSonnetで生成、設計書2.5節）
+    linked_content = db.query(CategoryContent).filter(CategoryContent.category_id == category.id).first() if category and category.status == "approved" else None
+    try:
+        draft_body = generate_text(
+            prompts.build_answer_system(personality, message_type, tone_profile, subject=course.subject or "english", course_overview=course_overview),
+            prompts.build_answer_messages(
+                data.body, linked_content.title if linked_content else None, linked_content.url if linked_content else None,
+                today_tasks, recent_summaries, conversation_history, curriculum_progress=curriculum_progress,
+            ),
+            max_tokens=400,
+            model=settings.DEEPSEEK_MODEL,
+        )
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=f"下書き回答の生成に失敗しました: {e}") from e
+
+    db.add(Answer(question_id=question.id, answered_by="ai", body=draft_body, linked_content_url=linked_content.url if linked_content else None, is_draft=True))
+    db.commit()
+    db.refresh(question)
+    _notify_creator_of_pending_question(db, course, data.body)
+    if prompts.is_daily_close_signal(data.body):
+        _generate_and_save_daily_summary(db, current_user.id, course_id, day_number)
+    return _serialize_question(question)
 
 
 @router.get("/{course_id}/history")

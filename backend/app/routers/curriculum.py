@@ -28,6 +28,7 @@ from app.models.course_review import CourseReview
 from app.models.character import Character
 from app.models.personality_profile import PersonalityProfile
 from app.models.customer import Customer
+from app.core.access_control import is_interaction_expired
 
 router = APIRouter(tags=["カリキュラム"])
 
@@ -747,6 +748,8 @@ def _generate_card_followup_message(user_id: int, card_id: int):
         course = db.query(Course).filter(Course.id == course_id).first()
         if not course:
             return
+        if is_interaction_expired(db, user_id, course_id, course):
+            return
         personality = db.query(PersonalityProfile).filter(PersonalityProfile.id == course.personality_profile_id).first()
         personality_profile = personality.profile if personality and personality.profile else {}
         tone_profile = (course.character.tone_profile if course.character else None) or {}
@@ -904,17 +907,21 @@ def submit_assignment(
     tone_profile = (course.character.tone_profile if course.character else None) or {}
     course_overview = _build_course_overview(course)
 
-    try:
-        ai_feedback = generate_text(
-            prompts.build_assignment_feedback_system(personality_profile, tone_profile, course_overview),
-            prompts.build_assignment_feedback_user(
-                card.body, card.chapter.assessment_criteria, submission_format, data.text, data.url,
-            ),
-            max_tokens=300,
-            model=settings.DEEPSEEK_MODEL_LITE,
-        )
-    except LLMError as e:
-        raise HTTPException(status_code=500, detail=f"AIコメントの生成に失敗しました: {e}") from e
+    # AI利用期限（自由進行型は90日）を過ぎている場合、AIコメントは生成しない（提出・完了自体は引き続き可能）
+    interaction_expired = is_interaction_expired(db, current_user.id, course_id, course)
+    ai_feedback = None
+    if not interaction_expired:
+        try:
+            ai_feedback = generate_text(
+                prompts.build_assignment_feedback_system(personality_profile, tone_profile, course_overview),
+                prompts.build_assignment_feedback_user(
+                    card.body, card.chapter.assessment_criteria, submission_format, data.text, data.url,
+                ),
+                max_tokens=300,
+                model=settings.DEEPSEEK_MODEL_LITE,
+            )
+        except LLMError as e:
+            raise HTTPException(status_code=500, detail=f"AIコメントの生成に失敗しました: {e}") from e
 
     now = datetime.now(timezone.utc)
     prog = db.query(CardProgress).filter(
@@ -933,18 +940,19 @@ def submit_assignment(
 
     _notify_creator_of_submission(db, course, card, current_user)
 
-    # 課題提出は既にAIフィードバックを生成済みなので、それをそのままLINE風にチャットへも差し込む（二重生成しない）
-    db.add(Notification(
-        user_id=current_user.id,
-        type="card_completion_followup",
-        payload={
-            "course_id": course_id,
-            "message": ai_feedback,
-            "character_name": course.character.name if course.character else None,
-            "character_image": course.character.image_url if course.character else None,
-        },
-    ))
-    db.commit()
+    if ai_feedback:
+        # 課題提出は既にAIフィードバックを生成済みなので、それをそのままLINE風にチャットへも差し込む（二重生成しない）
+        db.add(Notification(
+            user_id=current_user.id,
+            type="card_completion_followup",
+            payload={
+                "course_id": course_id,
+                "message": ai_feedback,
+                "character_name": course.character.name if course.character else None,
+                "character_image": course.character.image_url if course.character else None,
+            },
+        ))
+        db.commit()
 
     total = _card_count(db, course_id)
     completed = _completed_card_count(db, current_user.id, course_id)

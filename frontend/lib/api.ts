@@ -248,6 +248,16 @@ export const api = {
   getGreeting: (courseId: number) => apiFetch(`/chat/${courseId}/greeting`),
   postDailySummary: (courseId: number) => apiFetch(`/chat/${courseId}/daily-summary`, { method: "POST" }),
 
+  // Tier B: 講師への直接質問（1日1回）
+  getInstructorQuestionStatus: (courseId: number) => apiFetch(`/chat/${courseId}/instructor-question-status`),
+  askInstructor: (courseId: number, body: string) =>
+    apiFetch(`/chat/${courseId}/ask-instructor`, { method: "POST", body: JSON.stringify({ body }) }),
+
+  // チャット・AI利用期限
+  getChatAccessStatus: (courseId: number) => apiFetch(`/chat/${courseId}/access-status`),
+  extendCourseAccess: (courseId: number) =>
+    apiFetch("/payments/extend-access", { method: "POST", body: JSON.stringify({ course_id: courseId }) }),
+
   // クリエイター向け：Tier B未回答質問の承認
   listPendingQuestions: () => apiFetch("/chat/creator/pending"),
   respondToQuestion: (questionId: number, body?: string) =>

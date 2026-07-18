@@ -71,6 +71,7 @@ export default function CourseDetailPage() {
   const [previewCard, setPreviewCard] = useState<PreviewCard | null>(null);
   const [progress, setProgress] = useState<{ total_cards: number; completed_cards: number } | null>(null);
   const [maxAllowedDay, setMaxAllowedDay] = useState(30);
+  const [paceInteractionExpired, setPaceInteractionExpired] = useState(false);
 
   function load() {
     return api.getCourseDetail(courseId).then(async (raw: CourseDetail) => {
@@ -86,13 +87,14 @@ export default function CourseDetailPage() {
       if (unlocked && c.course_type === "pace_based") {
         const [d, logsRes] = await Promise.all([
           api.listCourseDays(courseId).catch(() => [] as Day[]),
-          api.listDayLogs(courseId).catch(() => ({ logs: [] as DayLog[], max_allowed_day: 30 })),
+          api.listDayLogs(courseId).catch(() => ({ logs: [] as DayLog[], max_allowed_day: 30, interaction_expired: false })),
         ]);
         setDays(d);
         const byDay: Record<number, DayLog> = {};
         for (const log of logsRes.logs) byDay[log.day_number] = log;
         setLogs(byDay);
         setMaxAllowedDay(logsRes.max_allowed_day ?? 30);
+        setPaceInteractionExpired(!!logsRes.interaction_expired);
       }
       if (unlocked && c.course_type === "self_paced" && (c.chapter_count ?? 0) > 0) {
         api.getLearnerProgress(courseId).then(p => {
@@ -593,7 +595,12 @@ export default function CourseDetailPage() {
               </div>
 
               <div className="p-5 flex flex-col gap-4">
-                {today.is_rest_day ? (
+                {paceInteractionExpired ? (
+                  <div className="flex flex-col items-center gap-2 py-4 text-center" style={{ color: "var(--muted)" }}>
+                    <p className="text-sm font-bold">もう使えませんよ〜</p>
+                    <p className="text-xs max-w-xs">このコースは30日間のプログラムが終了したため、日次記録・メンターへの相談は利用できません。</p>
+                  </div>
+                ) : today.is_rest_day ? (
                   <div className="flex items-start gap-4 py-2">
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style={{ background: "color-mix(in srgb, var(--accent) 12%, var(--bg))" }}>
                       🌿

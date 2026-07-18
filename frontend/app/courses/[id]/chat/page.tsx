@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 import { useCourseChat } from "@/lib/useCourseChat";
+import { DirectQuestionModal } from "@/components/DirectQuestionModal";
+import { ExtendAccessModal } from "@/components/ExtendAccessModal";
 
 type Character = { id: number; name: string; avatar_url?: string | null };
 
@@ -26,6 +28,12 @@ export default function CourseChatPage() {
     completed: 0, total: 0, currentChapterTitle: null,
   });
   const [access, setAccess] = useState<"checking" | "granted" | "denied">("checking");
+  const [accessStatus, setAccessStatus] = useState<{ interaction_expired: boolean; can_extend: boolean } | null>(null);
+  const [instructorStatus, setInstructorStatus] = useState<{ available: boolean } | null>(null);
+  const [showDirectQuestion, setShowDirectQuestion] = useState(false);
+  const [showExtend, setShowExtend] = useState(false);
+  const [extendClientSecret, setExtendClientSecret] = useState<string | null>(null);
+  const [extending, setExtending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
   const textInputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +70,10 @@ export default function CourseChatPage() {
           });
         }
         setAccess("granted");
+        api.getChatAccessStatus(courseId).then(setAccessStatus).catch(() => {});
+        if (detail.my_subscription?.tier === "B") {
+          api.getInstructorQuestionStatus(courseId).then(setInstructorStatus).catch(() => {});
+        }
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "読み込みに失敗しました", "error");
         setAccess("denied");
@@ -69,6 +81,25 @@ export default function CourseChatPage() {
     }
     init();
   }, [courseId, router]);
+
+  async function handleExtend() {
+    if (extending) return;
+    setExtending(true);
+    try {
+      const res = await api.extendCourseAccess(courseId);
+      if (!res.client_secret) {
+        toast("90日延長しました！", "success");
+        setAccessStatus(prev => prev ? { ...prev, interaction_expired: false } : prev);
+        return;
+      }
+      setExtendClientSecret(res.client_secret);
+      setShowExtend(true);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "延長処理の開始に失敗しました", "error");
+    } finally {
+      setExtending(false);
+    }
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -119,8 +150,35 @@ export default function CourseChatPage() {
             </div>
           )}
         </div>
+        {tier === "B" && !accessStatus?.interaction_expired && (
+          <button
+            onClick={() => setShowDirectQuestion(true)}
+            className="text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0"
+            style={
+              instructorStatus?.available
+                ? { background: "rgba(255,255,255,0.25)", color: "white" }
+                : { background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)" }
+            }
+          >
+            💬 直接質問
+          </button>
+        )}
       </div>
 
+      {accessStatus?.interaction_expired ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 text-center" style={{ background: "var(--surface)" }}>
+          <p className="text-base font-bold" style={{ color: "var(--muted)" }}>もう使えませんよ〜</p>
+          <p className="text-sm max-w-xs" style={{ color: "var(--muted)" }}>
+            チャット・AI相談のご利用期間が終了しました。延長するとまた使えるようになります。
+          </p>
+          {accessStatus.can_extend && (
+            <button onClick={handleExtend} disabled={extending} className="btn-primary disabled:opacity-50">
+              {extending ? "処理中…" : "延長する（¥400 / 90日）"}
+            </button>
+          )}
+        </div>
+      ) : (
+      <>
       {/* 現在地（伴走感の起点：今どこに取り組んでいるかを常に表示） */}
       {progress.currentChapterTitle && (
         <div className="flex items-center gap-2 px-4 sm:px-6 py-2 flex-shrink-0 text-xs" style={{ background: "var(--card)", borderBottom: "1px solid var(--border)", color: "var(--muted)" }}>
@@ -218,6 +276,28 @@ export default function CourseChatPage() {
           送信
         </button>
       </form>
+      </>
+      )}
+
+      {showDirectQuestion && (
+        <DirectQuestionModal
+          courseId={courseId}
+          available={!!instructorStatus?.available}
+          onClose={() => setShowDirectQuestion(false)}
+        />
+      )}
+
+      {showExtend && extendClientSecret && (
+        <ExtendAccessModal
+          clientSecret={extendClientSecret}
+          onClose={() => setShowExtend(false)}
+          onSuccess={() => {
+            setShowExtend(false);
+            toast("延長しました！", "success");
+            setAccessStatus(prev => prev ? { ...prev, interaction_expired: false } : prev);
+          }}
+        />
+      )}
     </div>
   );
 }

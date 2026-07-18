@@ -1,6 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { useCourseChat } from "@/lib/useCourseChat";
+import { DirectQuestionModal } from "@/components/DirectQuestionModal";
+import { ExtendAccessModal } from "@/components/ExtendAccessModal";
 
 type Character = { name: string; avatar_url?: string | null } | null | undefined;
 
@@ -17,6 +21,23 @@ export function CompactChatCard({ courseId, character, tier }: { courseId: numbe
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledOnceRef = useRef(false);
 
+  const [accessStatus, setAccessStatus] = useState<{ interaction_expired: boolean; can_extend: boolean } | null>(null);
+  const [instructorStatus, setInstructorStatus] = useState<{ available: boolean } | null>(null);
+  const [showDirectQuestion, setShowDirectQuestion] = useState(false);
+  const [showExtend, setShowExtend] = useState(false);
+  const [extendClientSecret, setExtendClientSecret] = useState<string | null>(null);
+  const [extending, setExtending] = useState(false);
+
+  useEffect(() => {
+    api.getChatAccessStatus(courseId).then(setAccessStatus).catch(() => {});
+  }, [courseId]);
+
+  useEffect(() => {
+    if (tier === "B") {
+      api.getInstructorQuestionStatus(courseId).then(setInstructorStatus).catch(() => {});
+    }
+  }, [courseId, tier, showDirectQuestion]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto", block: "nearest" });
     hasScrolledOnceRef.current = true;
@@ -30,11 +51,32 @@ export function CompactChatCard({ courseId, character, tier }: { courseId: numbe
     await sendMessage(body);
   }
 
+  async function handleExtend() {
+    if (extending) return;
+    setExtending(true);
+    try {
+      const res = await api.extendCourseAccess(courseId);
+      if (!res.client_secret) {
+        toast("90日延長しました！", "success");
+        setAccessStatus(prev => prev ? { ...prev, interaction_expired: false } : prev);
+        return;
+      }
+      setExtendClientSecret(res.client_secret);
+      setShowExtend(true);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "延長処理の開始に失敗しました", "error");
+    } finally {
+      setExtending(false);
+    }
+  }
+
   const avatarEl = character?.avatar_url ? (
     <img src={character.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
   ) : (
     <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0" style={{ background: "var(--ink)", color: "white" }}>🎭</div>
   );
+
+  const expired = !!accessStatus?.interaction_expired;
 
   return (
     <div className="card overflow-hidden p-0 flex flex-col">
@@ -53,84 +95,135 @@ export function CompactChatCard({ courseId, character, tier }: { courseId: numbe
             </span>
           )}
         </div>
-      </div>
-
-      {/* メッセージ一覧 */}
-      <div className="flex flex-col gap-2.5 px-4 py-3 overflow-y-auto" style={{ height: "min(60vh, 520px)" }}>
-        {loading ? (
-          <p className="text-xs text-center py-8" style={{ color: "var(--muted)" }}>読み込み中…</p>
-        ) : (
-          messages.map(msg => (
-            <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              {msg.role === "assistant" && avatarEl}
-              <div
-                className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed ${
-                  msg.role === "user" ? "rounded-br-md" : "rounded-bl-md"
-                }`}
-                style={
-                  msg.role === "user"
-                    ? { background: "var(--ink)", color: "white" }
-                    : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
-                }
-              >
-                {msg.is_draft && (
-                  <p className="text-[10px] font-bold mb-1" style={{ color: "var(--muted)" }}>講師が確認中（下書き）</p>
-                )}
-                {msg.body}
-              </div>
-            </div>
-          ))
-        )}
-
-        {streamingText !== null && (
-          <div className="flex gap-2 justify-start">
-            {avatarEl}
-            <div
-              className="max-w-[80%] rounded-2xl rounded-bl-md px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed"
-              style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }}
-            >
-              {streamingText || (
-                <span className="flex items-center gap-1">
-                  {[0, 1, 2].map(i => (
-                    <span key={i} className="w-1 h-1 rounded-full animate-bounce inline-block" style={{ background: "var(--muted)", animationDelay: `${i * 0.15}s` }} />
-                  ))}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* クイックアクション */}
-      <div className="flex gap-2 px-4 pt-1 flex-shrink-0 overflow-x-auto">
-        {QUICK_ACTIONS.map(action => (
+        {tier === "B" && !expired && (
           <button
-            key={action.id}
-            type="button"
-            onClick={() => sendMessage(action.label)}
-            disabled={sending}
-            className="text-[11px] whitespace-nowrap px-2.5 py-1 rounded-full disabled:opacity-40 transition-opacity"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+            onClick={() => setShowDirectQuestion(true)}
+            className="text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 transition-opacity"
+            style={
+              instructorStatus?.available
+                ? { background: "rgba(255,255,255,0.25)", color: "white" }
+                : { background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)" }
+            }
           >
-            {action.icon} {action.label}
+            💬 直接質問
           </button>
-        ))}
+        )}
       </div>
 
-      {/* 入力フォーム */}
-      <form onSubmit={handleSend} className="flex gap-2 px-4 py-3 flex-shrink-0">
-        <input
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          placeholder="メッセージを送る…"
-          className="flex-1 text-sm"
-          disabled={sending}
+      {expired ? (
+        <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center" style={{ background: "var(--surface)", height: "min(60vh, 520px)" }}>
+          <p className="text-sm font-bold" style={{ color: "var(--muted)" }}>
+            もう使えませんよ〜
+          </p>
+          <p className="text-xs max-w-xs" style={{ color: "var(--muted)" }}>
+            チャット・AI相談のご利用期間が終了しました。延長するとまた使えるようになります。
+          </p>
+          {accessStatus?.can_extend && (
+            <button onClick={handleExtend} disabled={extending} className="btn-primary text-sm disabled:opacity-50">
+              {extending ? "処理中…" : "延長する（¥400 / 90日）"}
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* メッセージ一覧 */}
+          <div className="flex flex-col gap-2.5 px-4 py-3 overflow-y-auto" style={{ height: "min(60vh, 520px)" }}>
+            {loading ? (
+              <p className="text-xs text-center py-8" style={{ color: "var(--muted)" }}>読み込み中…</p>
+            ) : (
+              messages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && avatarEl}
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed ${
+                      msg.role === "user" ? "rounded-br-md" : "rounded-bl-md"
+                    }`}
+                    style={
+                      msg.role === "user"
+                        ? { background: "var(--ink)", color: "white" }
+                        : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
+                    }
+                  >
+                    {msg.is_draft && (
+                      <p className="text-[10px] font-bold mb-1" style={{ color: "var(--muted)" }}>講師が確認中（下書き）</p>
+                    )}
+                    {msg.body}
+                  </div>
+                </div>
+              ))
+            )}
+
+            {streamingText !== null && (
+              <div className="flex gap-2 justify-start">
+                {avatarEl}
+                <div
+                  className="max-w-[80%] rounded-2xl rounded-bl-md px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed"
+                  style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  {streamingText || (
+                    <span className="flex items-center gap-1">
+                      {[0, 1, 2].map(i => (
+                        <span key={i} className="w-1 h-1 rounded-full animate-bounce inline-block" style={{ background: "var(--muted)", animationDelay: `${i * 0.15}s` }} />
+                      ))}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* クイックアクション */}
+          <div className="flex gap-2 px-4 pt-1 flex-shrink-0 overflow-x-auto">
+            {QUICK_ACTIONS.map(action => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => sendMessage(action.label)}
+                disabled={sending}
+                className="text-[11px] whitespace-nowrap px-2.5 py-1 rounded-full disabled:opacity-40 transition-opacity"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                {action.icon} {action.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 入力フォーム */}
+          <form onSubmit={handleSend} className="flex gap-2 px-4 py-3 flex-shrink-0">
+            <input
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder="メッセージを送る…"
+              className="flex-1 text-sm"
+              disabled={sending}
+            />
+            <button type="submit" disabled={sending || !draft.trim()} className="btn-primary text-sm disabled:opacity-40">
+              送信
+            </button>
+          </form>
+        </>
+      )}
+
+      {showDirectQuestion && (
+        <DirectQuestionModal
+          courseId={courseId}
+          available={!!instructorStatus?.available}
+          onClose={() => setShowDirectQuestion(false)}
         />
-        <button type="submit" disabled={sending || !draft.trim()} className="btn-primary text-sm disabled:opacity-40">
-          送信
-        </button>
-      </form>
+      )}
+
+      {showExtend && extendClientSecret && (
+        <ExtendAccessModal
+          clientSecret={extendClientSecret}
+          onClose={() => setShowExtend(false)}
+          onSuccess={() => {
+            setShowExtend(false);
+            toast("延長しました！", "success");
+            setAccessStatus(prev => prev ? { ...prev, interaction_expired: false } : prev);
+          }}
+        />
+      )}
     </div>
   );
 }

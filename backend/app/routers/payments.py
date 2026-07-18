@@ -14,6 +14,9 @@ from app.models.lesson import Lesson
 from app.models.purchase import Purchase
 from app.models.lesson_progress import LessonProgress
 from app.models.course_subscription import CourseSubscription
+from app.models.access_extension import AccessExtension
+from app.core.access_control import EXTENSION_DAYS, EXTENSION_PRICE_JPY
+from app.routers.courses import _is_purchased
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +112,67 @@ def checkout_course(
         "currency": "jpy",
         "course_title": course.title,
     }
+
+
+class ExtendAccessRequest(BaseModel):
+    course_id: int
+
+
+@router.post("/extend-access")
+def checkout_access_extension(
+    data: ExtendAccessRequest,
+    current_user: Customer = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """自由進行型コースのAI/チャット利用期限を90日延長する単発課金(400円)のStripe Payment Intentを作成する。"""
+    course = db.query(Course).filter(Course.id == data.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="コースが見つかりません")
+    if course.course_type == "pace_based":
+        raise HTTPException(status_code=400, detail="ペース管理型コースは延長できません")
+    if not _is_purchased(db, current_user.id, course.id):
+        raise HTTPException(status_code=403, detail="このコースを購入していません")
+
+    if settings.PAYMENTS_TEST_MODE:
+        ext = AccessExtension(
+            user_id=current_user.id,
+            course_id=course.id,
+            days=EXTENSION_DAYS,
+            amount=EXTENSION_PRICE_JPY,
+            stripe_payment_intent_id=f"test_ext_{current_user.id}_{course.id}_{int(datetime.utcnow().timestamp())}",
+            status="succeeded",
+        )
+        db.add(ext)
+        db.commit()
+        return {"client_secret": None, "test_mode": True, "amount": EXTENSION_PRICE_JPY, "currency": "jpy", "days": EXTENSION_DAYS}
+
+    if not _stripe_key_configured():
+        raise HTTPException(status_code=503, detail="決済機能は現在準備中です")
+
+    stripe = _get_stripe()
+    idempotency_key = f"ext_{current_user.id}_{course.id}_{int(datetime.utcnow().timestamp())}"
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=EXTENSION_PRICE_JPY,
+            currency="jpy",
+            metadata={"user_id": str(current_user.id), "course_id": str(course.id), "type": "access_extension"},
+            idempotency_key=idempotency_key,
+        )
+    except Exception as e:
+        logger.exception("[Stripe] 利用期限延長用Payment Intentの作成に失敗しました")
+        raise HTTPException(status_code=502, detail="決済処理の作成に失敗しました") from e
+
+    db.add(AccessExtension(
+        user_id=current_user.id,
+        course_id=course.id,
+        days=EXTENSION_DAYS,
+        amount=EXTENSION_PRICE_JPY,
+        stripe_payment_intent_id=intent.id,
+        status="pending",
+    ))
+    db.commit()
+
+    return {"client_secret": intent.client_secret, "amount": EXTENSION_PRICE_JPY, "currency": "jpy", "days": EXTENSION_DAYS}
 
 
 class CourseSubscribeRequest(BaseModel):
@@ -351,6 +415,29 @@ def _handle_course_payment_failed(db: Session, payment_intent: dict):
     db.commit()
 
 
+def _handle_extension_payment_succeeded(db: Session, payment_intent: dict):
+    """payment_intent.succeeded を処理し、利用期限延長を確定させる（冪等）"""
+    ext = db.query(AccessExtension).filter(
+        AccessExtension.stripe_payment_intent_id == payment_intent.get("id")
+    ).first()
+    if not ext or ext.status == "succeeded":
+        return
+    ext.status = "succeeded"
+    db.commit()
+    logger.info(f"[Stripe] 利用期限延長が完了しました: extension_id={ext.id}, course_id={ext.course_id}")
+
+
+def _handle_extension_payment_failed(db: Session, payment_intent: dict):
+    """payment_intent.payment_failed を処理する（冪等）"""
+    ext = db.query(AccessExtension).filter(
+        AccessExtension.stripe_payment_intent_id == payment_intent.get("id")
+    ).first()
+    if not ext or ext.status != "pending":
+        return
+    ext.status = "failed"
+    db.commit()
+
+
 def _handle_subscription_updated(db: Session, subscription: dict):
     """customer.subscription.updated / invoice.payment_succeeded を処理する（冪等）"""
     sub = db.query(CourseSubscription).filter(
@@ -400,8 +487,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
     if event["type"] == "payment_intent.succeeded":
         _handle_course_payment_succeeded(db, event["data"]["object"])
+        _handle_extension_payment_succeeded(db, event["data"]["object"])
     elif event["type"] == "payment_intent.payment_failed":
         _handle_course_payment_failed(db, event["data"]["object"])
+        _handle_extension_payment_failed(db, event["data"]["object"])
     elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
         _handle_subscription_updated(db, event["data"]["object"])
     elif event["type"] == "customer.subscription.deleted":

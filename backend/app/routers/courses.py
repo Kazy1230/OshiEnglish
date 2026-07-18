@@ -30,6 +30,7 @@ from app.models.course_day import CourseDay
 from app.models.day_log import DayLog
 from app.core.llm import generate_text, LLMError
 from app.core import course_generation_prompts as gen_prompts
+from app.core.access_control import is_interaction_expired
 
 router = APIRouter(tags=["コース・レッスン"])
 
@@ -1112,7 +1113,8 @@ def _max_allowed_day_number(db: Session, user_id: int, course_id: int) -> int:
 
 @router.get("/courses/{course_id}/day-logs")
 def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """自分の日次学習ログ一覧と、今日時点で報告してよい最大Day番号。要(購入済み学習者)"""
+    """自分の日次学習ログ一覧・今日時点で報告してよい最大Day番号・インタラクション利用期限の状態。要(購入済み学習者)"""
+    course = db.query(Course).filter(Course.id == course_id).first()
     logs = db.query(DayLog).filter(DayLog.user_id == current_user.id, DayLog.course_id == course_id).all()
     return {
         "logs": [
@@ -1121,6 +1123,7 @@ def list_day_logs(course_id: int, current_user=Depends(get_current_user), db: Se
             for l in logs
         ],
         "max_allowed_day": _max_allowed_day_number(db, current_user.id, course_id),
+        "interaction_expired": is_interaction_expired(db, current_user.id, course_id, course) if course else False,
     }
 
 
@@ -1139,6 +1142,8 @@ def complete_day_log(course_id: int, day_number: int, data: DayLogComplete, curr
         raise HTTPException(status_code=404, detail="コースが見つかりません")
     if not _is_accessible(db, course, current_user.id):
         raise HTTPException(status_code=403, detail="このコースを購入していません")
+    if is_interaction_expired(db, current_user.id, course_id, course):
+        raise HTTPException(status_code=403, detail="このコースは30日間のプログラムが終了したため、日次記録は利用できません。")
 
     max_allowed_day = _max_allowed_day_number(db, current_user.id, course_id)
     if day_number > max_allowed_day:
