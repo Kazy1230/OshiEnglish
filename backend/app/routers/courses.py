@@ -1063,11 +1063,14 @@ class CourseDayUpdate(BaseModel):
 
 @router.put("/courses/{course_id}/days/{day_number}")
 def update_course_day(course_id: int, day_number: int, data: CourseDayUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """特定日の内容を更新（クリエイターによる日単位編集）。要(本人)"""
+    """特定日の内容を更新（クリエイターによる日単位編集）。まだ存在しない日は新規作成する。要(本人)"""
     course = _get_owned_course(db, course_id, current_user)
+    if not (1 <= day_number <= 30):
+        raise HTTPException(status_code=400, detail="dayは1〜30で指定してください")
     day = db.query(CourseDay).filter(CourseDay.course_id == course.id, CourseDay.day_number == day_number).first()
     if not day:
-        raise HTTPException(status_code=404, detail="指定された日のコンテンツが見つかりません")
+        day = CourseDay(course_id=course.id, day_number=day_number, week_number=(day_number - 1) // 7 + 1)
+        db.add(day)
 
     for key, val in data.model_dump(exclude_none=True).items():
         setattr(day, key, val)

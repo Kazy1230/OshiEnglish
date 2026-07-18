@@ -158,15 +158,26 @@ export default function CourseCalendarPage() {
     }
   }
 
+  // まだ1日も設定されていない場合は、空の30日分をその場で生成して表示する（AI一括生成を必須にしない）
+  const displayDays: Day[] = days.length > 0 ? days : Array.from({ length: 30 }, (_, i) => ({
+    id: -(i + 1),
+    day: i + 1,
+    week_number: Math.floor(i / 7) + 1,
+    theme: null,
+    checklist_items: [],
+    is_rest_day: false,
+    is_edited_by_creator: false,
+  }));
+
   // Week grouping: days 1-7 = week1, 8-14 = week2, etc.
   const weeks: Day[][] = [];
   for (let w = 0; w < 5; w++) {
-    const slice = days.filter(d => d.day > w * 7 && d.day <= (w + 1) * 7);
+    const slice = displayDays.filter(d => d.day > w * 7 && d.day <= (w + 1) * 7);
     if (slice.length > 0) weeks.push(slice);
   }
 
-  const unsetDays = days.filter(d => !d.is_rest_day && (!d.checklist_items || d.checklist_items.length === 0)).length;
-  const completedPct = days.length > 0 ? Math.round(((days.length - unsetDays) / days.length) * 100) : 0;
+  const unsetDays = displayDays.filter(d => !d.is_rest_day && (!d.checklist_items || d.checklist_items.length === 0)).length;
+  const completedPct = displayDays.length > 0 ? Math.round(((displayDays.length - unsetDays) / displayDays.length) * 100) : 0;
 
   if (loading || fetching) return <Skeleton />;
 
@@ -186,9 +197,9 @@ export default function CourseCalendarPage() {
           <StatusBadge status={courseStatus} />
           <div className="flex items-center gap-2">
             <Link href={`/creator/courses/${courseId}/textbooks`} className="btn-ghost text-xs">教材を編集</Link>
-            {courseStatus === "draft" && days.length > 0 && (
+            {courseStatus === "draft" && (
               <button className="btn-ghost text-xs" disabled={generating} onClick={handleGenerate}>
-                {generating ? "再生成中…" : "↻ 全日を再生成"}
+                {generating ? "生成中…" : days.length > 0 ? "↻ 全日を再生成" : "✨ AIで一括生成"}
               </button>
             )}
             {courseStatus === "draft" && (
@@ -206,35 +217,22 @@ export default function CourseCalendarPage() {
           </div>
         </div>
 
-        {/* Generate card (no days yet) */}
-        {days.length === 0 && (
-          <div className="card flex flex-col gap-4" style={{ borderColor: "var(--accent)", borderWidth: 1.5 }}>
-            <div>
-              <p className="font-black text-base" style={{ color: "var(--primary)" }}>30日カリキュラムを生成する</p>
-              <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-                教材プランと人格プロファイルをもとに、AIが30日分のテーマ・タスク構成を自動生成します。目安は数十秒〜数分です。
-              </p>
+        {/* AI一括生成の進行状況（生成中のみ表示） */}
+        {generating && genProgress && (
+          <div className="card flex flex-col gap-1.5">
+            <div className="flex justify-between text-xs mb-0.5" style={{ color: "var(--muted)" }}>
+              <span>生成中… {genProgress.days_done}/{genProgress.days_total}日</span>
+              <span>{Math.round((genProgress.days_done / genProgress.days_total) * 100)}%</span>
             </div>
-            {generating && genProgress && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-xs mb-0.5" style={{ color: "var(--muted)" }}>
-                  <span>生成中… {genProgress.days_done}/{genProgress.days_total}日</span>
-                  <span>{Math.round((genProgress.days_done / genProgress.days_total) * 100)}%</span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                  <div className="h-full rounded-full transition-all duration-700"
-                    style={{ background: "linear-gradient(90deg, var(--accent), #38b2ac)", width: `${Math.round((genProgress.days_done / genProgress.days_total) * 100)}%` }} />
-                </div>
-              </div>
-            )}
-            <button className="btn-primary self-start" disabled={generating} onClick={handleGenerate}>
-              {generating ? "生成中…" : "✨ 生成する"}
-            </button>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+              <div className="h-full rounded-full transition-all duration-700"
+                style={{ background: "linear-gradient(90deg, var(--accent), #38b2ac)", width: `${Math.round((genProgress.days_done / genProgress.days_total) * 100)}%` }} />
+            </div>
           </div>
         )}
 
         {/* Calendar */}
-        {days.length > 0 && (
+        {displayDays.length > 0 && (
           <>
             {/* Legend + progress */}
             <div className="flex items-center justify-between gap-4 flex-wrap">
