@@ -1078,6 +1078,130 @@ def update_course_day(course_id: int, day_number: int, data: CourseDayUpdate, cu
     return _serialize_course_day(day)
 
 
+# ----- 30日カレンダー相談AIチャット -----
+
+def _build_existing_days_text(course: Course) -> str:
+    days = sorted(course.days, key=lambda d: d.day_number)
+    if not days:
+        return "（まだ何も設定されていません。空の30日カレンダーです）"
+    lines = []
+    for d in days:
+        if d.is_rest_day:
+            lines.append(f"Day{d.day_number}: 休息日")
+        elif d.theme or d.checklist_items:
+            items_text = "、".join(i.get("text", "") for i in (d.checklist_items or []))
+            lines.append(f"Day{d.day_number}: {d.theme or ''}（{items_text or 'タスク未設定'}）")
+        else:
+            lines.append(f"Day{d.day_number}: 未設定")
+    return "\n".join(lines)
+
+
+@router.get("/creator/ai-balance")
+def get_creator_ai_balance(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """30日カレンダー相談AIチャットの残高。要(クリエイター本人)"""
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=403, detail="クリエイタープロフィールが見つかりません")
+    from app.core.creator_balance import get_ai_balance
+    return {"balance": get_ai_balance(db, profile.id)}
+
+
+class CalendarChatRequest(BaseModel):
+    message: str
+    history: List[dict] = []
+
+
+@router.post("/courses/{course_id}/calendar-chat")
+def calendar_chat(course_id: int, data: CalendarChatRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """30日カレンダーの内容をAIと相談しながら組み立てる。メッセージ送信ごとにクリエイターの
+    ai_chat_balanceを1消費する（提案のみでカレンダーへの反映は/calendar-chat/applyで行う）。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    if course.course_type != "pace_based":
+        raise HTTPException(status_code=400, detail="ペース管理型コースのみ利用できます")
+    if not data.message.strip():
+        raise HTTPException(status_code=400, detail="メッセージを入力してください")
+
+    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=403, detail="クリエイタープロフィールが見つかりません")
+
+    from app.core.creator_balance import try_consume_ai_balance, get_ai_balance
+    from app.core.llm import generate_text, LLMError, extract_json
+
+    if get_ai_balance(db, profile.id) <= 0:
+        raise HTTPException(status_code=402, detail="AIチャットの残高がありません。外部のAIツールをご利用ください。")
+
+    day_textbook_plan = _build_day_textbook_plan(db, course_id)
+    plan_text = "指定なし"
+    if day_textbook_plan:
+        lines = []
+        for day in sorted(day_textbook_plan):
+            entries = day_textbook_plan[day]
+            entry_descriptions = [f"「{e['textbook_name']}」{e['item']}" for e in entries]
+            lines.append(f"  Day{day}: " + " / ".join(entry_descriptions))
+        plan_text = "\n".join(lines)
+
+    system = gen_prompts.build_calendar_chat_system(
+        course.title, course.curriculum_purpose, course.curriculum_target_audience,
+        course.curriculum_topics, course.curriculum_style, course.pace_unit_description,
+        plan_text, _build_existing_days_text(course),
+    )
+    messages = list(data.history) + [{"role": "user", "content": data.message}]
+
+    try:
+        raw = generate_text(system, messages, max_tokens=2000, json_mode=True)
+        result = extract_json(raw)
+    except (LLMError, ValueError) as e:
+        raise HTTPException(status_code=502, detail=f"AI応答の解析に失敗しました: {e}")
+
+    if not try_consume_ai_balance(db, profile.id):
+        raise HTTPException(status_code=402, detail="AIチャットの残高がありません。外部のAIツールをご利用ください。")
+
+    return {
+        "ai_message": result.get("ai_message", ""),
+        "day_changes": result.get("day_changes", []),
+        "remaining_balance": get_ai_balance(db, profile.id),
+    }
+
+
+class DayChangeItem(BaseModel):
+    day: int
+    theme: Optional[str] = None
+    checklist_items: Optional[List[dict]] = None
+    is_rest_day: Optional[bool] = None
+
+
+class CalendarChatApplyRequest(BaseModel):
+    day_changes: List[DayChangeItem]
+
+
+@router.post("/courses/{course_id}/calendar-chat/apply")
+def apply_calendar_chat_changes(course_id: int, data: CalendarChatApplyRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """AIチャットが提案したday_changesをカレンダーに反映する（存在しない日は新規作成）。要(本人)"""
+    course = _get_owned_course(db, course_id, current_user)
+    existing_days = {d.day_number: d for d in course.days}
+
+    for change in data.day_changes:
+        if not (1 <= change.day <= 30):
+            continue
+        day = existing_days.get(change.day)
+        if not day:
+            day = CourseDay(course_id=course.id, day_number=change.day, week_number=(change.day - 1) // 7 + 1)
+            db.add(day)
+            existing_days[change.day] = day
+        if change.theme is not None:
+            day.theme = change.theme
+        if change.checklist_items is not None:
+            day.checklist_items = change.checklist_items
+        if change.is_rest_day is not None:
+            day.is_rest_day = change.is_rest_day
+        day.is_edited_by_creator = True
+
+    db.commit()
+    days = sorted(course.days, key=lambda d: d.day_number)
+    return [_serialize_course_day(d) for d in days]
+
+
 # ----- ペース管理型コース：学習者の日次学習ログ -----
 
 def _pace_course_start_date(db: Session, user_id: int, course_id: int):

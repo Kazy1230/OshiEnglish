@@ -270,6 +270,9 @@ _ensure_column("courses", "pace_unit_description", "VARCHAR(255) NULL")
 _ensure_column("courses", "days_generation_status", "VARCHAR(20) NULL")
 _ensure_column("courses", "days_generation_error", "TEXT NULL")
 
+# --- 30日カレンダー相談AIチャットの残高 ---
+_ensure_column("creator_profiles", "ai_chat_balance", "INT NOT NULL DEFAULT 20")
+
 # --- Day1診断機能の完全廃止（LearnerProfileベースの個人化レイヤー・週次/月次レビューを含む） ---
 with engine.connect() as _conn:
     _conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))

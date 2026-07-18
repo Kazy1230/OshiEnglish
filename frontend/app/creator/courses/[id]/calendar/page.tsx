@@ -25,6 +25,12 @@ type QualityCheckResult = { score: number; max_score: number; recommendation: "p
 
 const MINUTE_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90];
 
+const AI_SITES = [
+  { label: "ChatGPT", url: "https://chatgpt.com/" },
+  { label: "Claude", url: "https://claude.ai/" },
+  { label: "Gemini", url: "https://gemini.google.com/" },
+] as const;
+
 export default function CourseCalendarPage() {
   const params = useParams();
   const courseId = Number(params.id);
@@ -168,7 +174,12 @@ export default function CourseCalendarPage() {
     <div className="creator-theme min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader role="creator" title="30日カレンダー" />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
+        <div className="lg:sticky lg:top-6">
+          <CalendarChatSidebar courseId={courseId} onApplied={reloadDays} />
+        </div>
+
+        <div className="flex flex-col gap-6">
 
         {/* Status bar */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -328,6 +339,7 @@ export default function CourseCalendarPage() {
             <button type="submit" className="btn-ghost px-4 text-sm">追加</button>
           </form>
         </section>
+        </div>
       </main>
 
       {/* Day drawer */}
@@ -347,6 +359,145 @@ export default function CourseCalendarPage() {
           onImprove={() => setQualityCheck(null)}
         />
       )}
+    </div>
+  );
+}
+
+/* ── 30日カレンダー相談AIチャット（サイドバー） ──────────── */
+type CalendarChatMessage = { role: "user" | "assistant"; content: string; dayChanges?: DayChangeProposal[] };
+type DayChangeProposal = { day: number; theme?: string; checklist_items?: ChecklistItem[]; is_rest_day?: boolean };
+
+function CalendarChatSidebar({ courseId, onApplied }: { courseId: number; onApplied: () => void }) {
+  const [balance, setBalance] = useState<number | null>(null);
+  const [messages, setMessages] = useState<CalendarChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.getCreatorAiBalance().then(res => setBalance(res.balance)).catch(() => {});
+  }, []);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft.trim() || sending || !balance) return;
+    const body = draft.trim();
+    const history = messages.map(m => ({ role: m.role, content: m.content }));
+    setMessages(prev => [...prev, { role: "user", content: body }]);
+    setDraft("");
+    setSending(true);
+    try {
+      const res = await api.calendarChat(courseId, body, history);
+      setMessages(prev => [...prev, { role: "assistant", content: res.ai_message, dayChanges: res.day_changes }]);
+      setBalance(res.remaining_balance);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "送信に失敗しました", "error");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleApply(messageIndex: number, dayChanges: DayChangeProposal[]) {
+    setApplyingIndex(messageIndex);
+    try {
+      await api.applyCalendarChatChanges(courseId, dayChanges);
+      await onApplied();
+      toast("カレンダーに反映しました", "success");
+      setMessages(prev => prev.map((m, i) => i === messageIndex ? { ...m, dayChanges: [] } : m));
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "反映に失敗しました", "error");
+    } finally {
+      setApplyingIndex(null);
+    }
+  }
+
+  const noBalance = balance !== null && balance <= 0;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="card overflow-hidden p-0 flex flex-col">
+        <div className="px-4 py-3 flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--ink), var(--accent))" }}>
+          <p className="text-sm font-bold text-white">🗓 カレンダー相談AI</p>
+          <p className="text-xs text-white/80 mt-0.5">
+            {balance === null ? "残高を確認中…" : `残り ${balance} 回`}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2.5 px-4 py-3 overflow-y-auto" style={{ height: "min(50vh, 420px)" }}>
+          {messages.length === 0 && (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              使う教材や1日の分量、進め方の相談ができます。「Day1〜3は基礎の単語、週末は休息日にして」のように伝えてください。
+            </p>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
+              <div
+                className="max-w-[90%] rounded-2xl px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed"
+                style={
+                  m.role === "user"
+                    ? { background: "var(--ink)", color: "white" }
+                    : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
+                }
+              >
+                {m.content}
+              </div>
+              {m.dayChanges && m.dayChanges.length > 0 && (
+                <div className="w-full rounded-xl p-2.5 flex flex-col gap-1.5" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                  <p className="text-[11px] font-bold" style={{ color: "var(--muted)" }}>提案された変更</p>
+                  {m.dayChanges.map((dc, di) => (
+                    <p key={di} className="text-[11px]" style={{ color: "var(--text)" }}>
+                      Day{dc.day}: {dc.is_rest_day ? "休息日" : (dc.theme || (dc.checklist_items ?? []).map(c => c.text).join("、"))}
+                    </p>
+                  ))}
+                  <button
+                    className="btn-primary text-xs self-start mt-1"
+                    disabled={applyingIndex === i}
+                    onClick={() => handleApply(i, m.dayChanges!)}
+                  >
+                    {applyingIndex === i ? "反映中…" : "この内容をカレンダーに反映する"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <form onSubmit={handleSend} className="flex flex-col gap-1.5 px-4 py-3 flex-shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
+          {noBalance && (
+            <p className="text-[11px]" style={{ color: "#e53e3e" }}>AIチャットの残高がありません。下の外部AIツールをご利用ください。</p>
+          )}
+          <div className="flex gap-2">
+            <input
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder={noBalance ? "残高がありません" : "AIに相談する…"}
+              className="flex-1 text-sm"
+              disabled={sending || noBalance}
+            />
+            <button type="submit" disabled={sending || noBalance || !draft.trim()} className="btn-primary text-sm disabled:opacity-40">
+              送信
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* 外部AIツールへの導線 */}
+      <div className="card flex flex-col gap-2 p-3">
+        <p className="text-xs font-bold" style={{ color: "var(--muted)" }}>他のAIツールで相談する</p>
+        <div className="flex gap-2 flex-wrap">
+          {AI_SITES.map(site => (
+            <a
+              key={site.label}
+              href={site.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-ghost text-xs px-3 py-1.5"
+            >
+              {site.label} ↗
+            </a>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

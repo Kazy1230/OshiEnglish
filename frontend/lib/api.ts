@@ -135,6 +135,13 @@ export const api = {
   updateCourseDay: (courseId: number, dayNumber: number, data: object) =>
     apiFetch(`/courses/${courseId}/days/${dayNumber}`, { method: "PUT", body: JSON.stringify(data) }),
 
+  // 30日カレンダー相談AIチャット
+  getCreatorAiBalance: () => apiFetch("/creator/ai-balance"),
+  calendarChat: (courseId: number, message: string, history: { role: string; content: string }[]) =>
+    apiFetch(`/courses/${courseId}/calendar-chat`, { method: "POST", body: JSON.stringify({ message, history }) }),
+  applyCalendarChatChanges: (courseId: number, dayChanges: object[]) =>
+    apiFetch(`/courses/${courseId}/calendar-chat/apply`, { method: "POST", body: JSON.stringify({ day_changes: dayChanges }) }),
+
   // 30日伴走コース：参考資料
   listCourseMaterials: (courseId: number) => apiFetch(`/courses/${courseId}/materials`),
   addCourseMaterial: (courseId: number, data: object) =>

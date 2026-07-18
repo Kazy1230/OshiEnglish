@@ -72,7 +72,7 @@ export default function NewCoursePage() {
     }
 
     if (courseType === "pace_based") {
-      // ペース管理型は壁打ちフローをスキップし、コースを即作成して教材登録へ直行する
+      // ペース管理型は壁打ちフローをスキップし、コースを即作成して30日カレンダー(AI相談チャットつき)へ直行する
       setSubmitting(true);
       try {
         const course = await api.createCourse({
@@ -84,7 +84,7 @@ export default function NewCoursePage() {
           tier_b_price: !isFree && enableTierB ? Number(tierBPrice) : null,
           course_type: courseType,
         });
-        router.push(`/creator/courses/${course.id}/textbooks`);
+        router.push(`/creator/courses/${course.id}/calendar`);
       } catch (err: unknown) {
         toast(err instanceof Error ? err.message : "作成に失敗しました", "error");
       } finally {
