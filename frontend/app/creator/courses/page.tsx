@@ -23,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_BADGE_STYLE: Record<string, { background: string; color: string }> = {
-  draft: { background: "var(--example-bg, #eee)", color: "var(--muted)" },
+  draft: { background: "var(--surface)", color: "var(--muted)" },
   review: { background: "#f5a623", color: "white" },
   published: { background: "var(--accent)", color: "white" },
   unpublished: { background: "#8a8a8a", color: "white" },

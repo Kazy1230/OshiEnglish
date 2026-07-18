@@ -57,7 +57,7 @@ export default function FavoritesPage() {
                   {f.character?.avatar_url ? (
                     <img src={f.character.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
                   ) : (
-                    <span className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🎭</span>
+                    <span className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0" style={{ background: "var(--surface)" }}>🎭</span>
                   )}
                   <span className="font-bold truncate" style={{ color: "var(--primary)" }}>{f.display_name}</span>
                 </Link>

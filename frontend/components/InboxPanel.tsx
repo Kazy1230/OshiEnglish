@@ -62,7 +62,7 @@ export function InboxPanel({ onOverdueCountChange }: { onOverdueCountChange?: (c
         questions.map(q => (
           <div key={q.id} className="card flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--surface)", color: "var(--accent)" }}>
                 {q.category || "未分類"}
               </span>
               {q.is_overdue && (

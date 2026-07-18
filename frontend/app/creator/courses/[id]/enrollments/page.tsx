@@ -67,7 +67,7 @@ export default function CourseEnrollmentsPage() {
                 <span
                   className="text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap"
                   style={{
-                    background: e.status === "succeeded" || e.status === "active" ? "var(--accent)" : "var(--example-bg, #eee)",
+                    background: e.status === "succeeded" || e.status === "active" ? "var(--accent)" : "var(--surface)",
                     color: e.status === "succeeded" || e.status === "active" ? "white" : "var(--muted)",
                   }}
                 >

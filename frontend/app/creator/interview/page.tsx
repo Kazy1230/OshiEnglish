@@ -226,7 +226,7 @@ export default function CreatorInterviewPage() {
         {history.map((item, i) => (
           item.role === "learner" ? (
             <div key={i} className="flex items-start gap-2 max-w-[85%] self-start">
-              <span className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🧑‍🎓</span>
+              <span className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0" style={{ background: "var(--surface)" }}>🧑‍🎓</span>
               <div className="rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm whitespace-pre-wrap" style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }}>
                 {item.text}
               </div>

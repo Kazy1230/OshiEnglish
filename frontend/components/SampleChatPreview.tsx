@@ -22,7 +22,7 @@ export function SampleChatPreview({
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
           ) : (
-            <span className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🎭</span>
+            <span className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0" style={{ background: "var(--surface)" }}>🎭</span>
           )}
           <div className="rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap" style={{ background: "var(--card)", color: "var(--text)", border: "1px solid var(--border)" }}>
             {sampleReply}

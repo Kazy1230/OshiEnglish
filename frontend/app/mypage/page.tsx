@@ -197,7 +197,7 @@ export default function MyPage() {
                           {c.character.avatar_url ? (
                             <img src={c.character.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
                           ) : (
-                            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ background: "var(--example-bg, #eee)" }}>🎭</span>
+                            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ background: "var(--surface)" }}>🎭</span>
                           )}
                           <span className="text-xs font-bold" style={{ color: "var(--primary)" }}>{c.character.name}</span>
                         </div>
@@ -215,7 +215,7 @@ export default function MyPage() {
                       <span>{c.completed_count}/{c.total_lessons} {unit}完了</span>
                       <span className="font-bold" style={{ color: percent >= 100 ? "#e8b923" : "var(--accent)" }}>{percent}%</span>
                     </div>
-                    <div className="h-2 rounded-full" style={{ background: "var(--example-bg, #eee)" }}>
+                    <div className="h-2 rounded-full" style={{ background: "var(--surface)" }}>
                       <div
                         className="h-2 rounded-full transition-all"
                         style={{ background: percent >= 100 ? "#e8b923" : "var(--accent)", width: `${percent}%` }}

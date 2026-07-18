@@ -161,7 +161,7 @@ export default function EditCharacterPage() {
           {imageUrl ? (
             <img src={imageUrl} alt="" className="w-20 h-20 rounded-full object-cover flex-shrink-0" />
           ) : (
-            <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl flex-shrink-0" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl flex-shrink-0" style={{ background: "var(--surface)" }}>🎭</div>
           )}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold" style={{ color: "var(--primary)" }}>アイコン画像</label>
@@ -242,7 +242,7 @@ export default function EditCharacterPage() {
             {previewing ? "変換中…" : "🔄 プレビュー"}
           </button>
           {previewResult && (
-            <p className="text-sm p-3 rounded-lg" style={{ background: "var(--example-bg, #eee)", color: "var(--text)" }}>{previewResult}</p>
+            <p className="text-sm p-3 rounded-lg" style={{ background: "var(--surface)", color: "var(--text)" }}>{previewResult}</p>
           )}
         </div>
 

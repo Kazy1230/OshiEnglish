@@ -41,13 +41,13 @@ export default function PricingPage() {
               30日間、クリエイターのメソッドに基づいた伴走コーチングを受けられるコースです。2つのTierから選べます。
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="rounded-lg p-3" style={{ background: "var(--example-bg, #eee)", border: "1px solid var(--border)" }}>
+              <div className="rounded-lg p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <p className="text-xs font-black mb-1" style={{ color: "var(--accent)" }}>Tier A（AIのみ）</p>
                 <p className="text-sm" style={{ color: "var(--text)" }}>
                   AIが毎日の声かけ・学習相談に答えます。目安：月額980〜20,000円
                 </p>
               </div>
-              <div className="rounded-lg p-3" style={{ background: "var(--example-bg, #eee)", border: "1px solid var(--border)" }}>
+              <div className="rounded-lg p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <p className="text-xs font-black mb-1" style={{ color: "var(--accent)" }}>Tier B（AI＋クリエイター添削）</p>
                 <p className="text-sm" style={{ color: "var(--text)" }}>
                   AIの回答に加え、クリエイター本人が直接添削・回答します。目安：月額2,980〜100,000円

@@ -59,7 +59,7 @@ export default function CreatorsPage() {
                   {cr.character?.avatar_url ? (
                     <img src={cr.character.avatar_url} alt="" className="w-full aspect-square rounded-full object-cover" />
                   ) : (
-                    <div className="w-full aspect-square rounded-full flex items-center justify-center text-2xl" style={{ background: "var(--example-bg, #eee)" }}>🎭</div>
+                    <div className="w-full aspect-square rounded-full flex items-center justify-center text-2xl" style={{ background: "var(--surface)" }}>🎭</div>
                   )}
                 </div>
 

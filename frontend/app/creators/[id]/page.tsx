@@ -214,7 +214,7 @@ export default function CreatorPage() {
                 <Link href={`/courses/${featured.id}`} className="card hover-lift shadow-soft flex flex-col gap-2" style={{ borderColor: "var(--accent)" }}>
                   <div className="flex items-center gap-2">
                     <span className="pill" style={{ background: "var(--accent)", color: "white" }}>おすすめ</span>
-                    {featured.category && <span className="pill" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{featured.category}</span>}
+                    {featured.category && <span className="pill" style={{ background: "var(--surface)", color: "var(--accent)" }}>{featured.category}</span>}
                   </div>
                   <p className="font-black text-lg" style={{ color: "var(--primary)" }}>{featured.title}</p>
                   {featured.description && <p className="text-sm line-clamp-2" style={{ color: "var(--muted)" }}>{featured.description}</p>}
@@ -229,7 +229,7 @@ export default function CreatorPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {rest.map(c => (
                         <Link key={c.id} href={`/courses/${c.id}`} className="card flex flex-col gap-2 hover-lift shadow-soft">
-                          {c.category && <span className="pill self-start" style={{ background: "var(--example-bg, #eee)", color: "var(--accent)" }}>{c.category}</span>}
+                          {c.category && <span className="pill self-start" style={{ background: "var(--surface)", color: "var(--accent)" }}>{c.category}</span>}
                           <p className="font-bold" style={{ color: "var(--primary)" }}>{c.title}</p>
                           {c.description && <p className="text-xs line-clamp-2" style={{ color: "var(--muted)" }}>{c.description}</p>}
                           <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>

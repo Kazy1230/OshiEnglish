@@ -101,7 +101,7 @@ export function NotificationBell() {
                   key={n.id}
                   onClick={() => handleItemClick(n)}
                   className="w-full text-left px-3 py-2 text-xs flex flex-col gap-0.5"
-                  style={{ background: n.is_read ? "transparent" : "var(--example-bg, #eef)", color: "var(--text)" }}
+                  style={{ background: n.is_read ? "transparent" : "var(--surface)", color: "var(--text)" }}
                 >
                   <span>{describe(n)}</span>
                   <span style={{ color: "var(--muted)" }}>{new Date(n.created_at).toLocaleString("ja-JP")}</span>
