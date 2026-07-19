@@ -1,6 +1,7 @@
 "use client";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationBell } from "@/components/NotificationBell";
+import { AiCreditBadge } from "@/components/AiCreditBadge";
 import { CreatorBreadcrumb, BreadcrumbBar, type Crumb } from "@/components/CreatorBreadcrumb";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -73,6 +74,7 @@ export function AppHeader({
           )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
+          {role === "creator" && <AiCreditBadge />}
           {role && <NotificationBell />}
           <LogoutButton variant="onColor" />
         </div>
