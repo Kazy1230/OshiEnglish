@@ -148,23 +148,6 @@ export const api = {
     apiFetch(`/courses/${courseId}/materials`, { method: "POST", body: JSON.stringify(data) }),
   deleteCourseMaterial: (materialId: number) => apiFetch(`/materials/${materialId}`, { method: "DELETE" }),
 
-  // 教材ベースのコース作成：プリセット教材検索・コースへの紐付け・日程割り当て
-  searchTextbooks: (query?: string) => apiFetch(`/textbooks${query ? `?query=${encodeURIComponent(query)}` : ""}`),
-  listCourseTextbooks: (courseId: number) => apiFetch(`/courses/${courseId}/textbooks`),
-  addCourseTextbook: (courseId: number, data: object) =>
-    apiFetch(`/courses/${courseId}/textbooks`, { method: "POST", body: JSON.stringify(data) }),
-  updateCourseTextbook: (courseTextbookId: number, data: object) =>
-    apiFetch(`/course-textbooks/${courseTextbookId}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteCourseTextbook: (courseTextbookId: number) => apiFetch(`/course-textbooks/${courseTextbookId}`, { method: "DELETE" }),
-  setTextbookDayAssignments: (courseTextbookId: number, assignments: { toc_item: string; day_number: number | null }[]) =>
-    apiFetch(`/course-textbooks/${courseTextbookId}/day-assignments`, { method: "PUT", body: JSON.stringify({ assignments }) }),
-  planCourseTextbooks: (courseId: number, description: string, qaHistory: { question: string; answer: string }[]) =>
-    apiFetch(`/courses/${courseId}/textbooks/plan`, { method: "POST", body: JSON.stringify({ description, qa_history: qaHistory }) }),
-  applyCourseTextbookPlan: (courseId: number, plans: object[]) =>
-    apiFetch(`/courses/${courseId}/textbooks/plan/apply`, { method: "POST", body: JSON.stringify({ plans }) }),
-  parseTocChat: (courseId: number, textbookName: string, message: string, history: { role: string; content: string }[]) =>
-    apiFetch(`/courses/${courseId}/textbooks/parse-toc`, { method: "POST", body: JSON.stringify({ textbook_name: textbookName, message, history }) }),
-
   // マーケットプレイス：コース購入（Stripe Payment Intent）
   checkoutCourse: (courseId: number) =>
     apiFetch("/payments/checkout", { method: "POST", body: JSON.stringify({ course_id: courseId }) }),
@@ -303,10 +286,6 @@ export const api = {
   adminListReports: () => apiFetch("/admin/reports"),
   adminResolveReport: (reportId: number) => apiFetch(`/admin/reports/${reportId}/resolve`, { method: "PUT" }),
   adminListTierBOverdue: () => apiFetch("/admin/tier-b-overdue"),
-  adminListTextbooks: () => apiFetch("/admin/textbooks"),
-  adminCreateTextbook: (data: object) => apiFetch("/admin/textbooks", { method: "POST", body: JSON.stringify(data) }),
-  adminUpdateTextbook: (id: number, data: object) => apiFetch(`/admin/textbooks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  adminDeleteTextbook: (id: number) => apiFetch(`/admin/textbooks/${id}`, { method: "DELETE" }),
   adminListAllCreators: () => apiFetch("/admin/creators"),
   adminSuspendCreator: (profileId: number) => apiFetch(`/admin/creators/${profileId}/suspend`, { method: "PUT" }),
   adminReactivateCreator: (profileId: number) => apiFetch(`/admin/creators/${profileId}/reactivate`, { method: "PUT" }),

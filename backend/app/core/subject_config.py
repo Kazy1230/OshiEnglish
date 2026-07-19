@@ -23,7 +23,6 @@ class SubjectConfig:
     course_day_generation_system: str
     classify_system: str
     answer_style_by_type: dict[str, str]
-    toc_chat_system_template: str   # {textbook_name} を format() で埋め込む
     quality_check_system: str
     self_intro_system: str
     character_concept_system: str
@@ -127,27 +126,6 @@ _ENGLISH_ROADMAP_SYSTEM = """あなたは英語学習の専門コーチです。
 }
 """
 
-_ENGLISH_TOC_TEMPLATE = """あなたは英語教材の専門家です。
-クリエイターが「{textbook_name}」を30日学習カレンダーに組み込むために、
-教材の全章リストと「何日目に何を学習するか」の30日分割り当て計画を作成します。
-
-## 返答形式（JSONのみ）
-{{
-  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
-  "toc_items": ["章名1", "章名2", ...],
-  "day_assignments": [
-    {{"day": 1, "items": ["章名1", "章名2"]}},
-    ...
-  ]
-}}
-
-## Rules
-- toc_itemsは教材の全章・セクションをリストアップ（有名な英語教材はAIの知識から正確な目次を調べる）
-- 有名教材（Distinction2000・公式問題集・速読英熟語等）はAIの知識から実際の目次を調べる
-- day_assignmentsはユーザー指定のペースに従い30日に配分
-- ペース指定がなければ1日1〜2セクションを目安に配分
-- toc_itemsが不明な場合のみ空配列にする
-"""
 
 _ENGLISH_QUALITY_CHECK = """あなたは英語学習コースの設計アドバイザーです。
 クリエイターが設定したコースのゴール・対象者・1日の学習時間・進行速度を見て、
@@ -261,7 +239,6 @@ ENGLISH_CONFIG = SubjectConfig(
     course_day_generation_system=_ENGLISH_COURSE_DAY_SYSTEM,
     classify_system=_ENGLISH_CLASSIFY_SYSTEM,
     answer_style_by_type=_ENGLISH_ANSWER_STYLE,
-    toc_chat_system_template=_ENGLISH_TOC_TEMPLATE,
     quality_check_system=_ENGLISH_QUALITY_CHECK,
     self_intro_system=_ENGLISH_SELF_INTRO,
     character_concept_system=_ENGLISH_CHARACTER_CONCEPT,
@@ -362,27 +339,6 @@ _IT_ROADMAP_SYSTEM = """あなたはITエンジニア育成の専門コーチで
 }
 """
 
-_IT_TOC_TEMPLATE = """あなたはIT技術書・学習コンテンツの専門家です。
-クリエイターが「{textbook_name}」を30日学習カレンダーに組み込むために、
-教材の全章リストと「何日目に何を学習するか」の30日分割り当て計画を作成します。
-
-## 返答形式（JSONのみ）
-{{
-  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
-  "toc_items": ["章名・セクション名1", "章名・セクション名2", ...],
-  "day_assignments": [
-    {{"day": 1, "items": ["章名1", "章名2"]}},
-    ...
-  ]
-}}
-
-## Rules
-- toc_itemsは教材の全章・セクションをリストアップ（有名な技術書はAIの知識から正確に）
-- 有名教材（独習Python・AWS認定本・JavaScript本格入門等）はAIの知識から実際の目次を調べる
-- day_assignmentsはユーザー指定のペースに従い30日に配分
-- 実装・演習系の日は「ハンズオン演習」「コード課題」等のラベルも割り当て可
-- ペース指定がなければ1日1〜2セクションを目安に配分
-"""
 
 _IT_QUALITY_CHECK = """あなたはITプログラミング学習コースの設計アドバイザーです。
 クリエイターが設定したコースのゴール・対象者・1日の学習時間・進行速度を見て、
@@ -496,7 +452,6 @@ IT_CONFIG = SubjectConfig(
     course_day_generation_system=_IT_COURSE_DAY_SYSTEM,
     classify_system=_IT_CLASSIFY_SYSTEM,
     answer_style_by_type=_IT_ANSWER_STYLE,
-    toc_chat_system_template=_IT_TOC_TEMPLATE,
     quality_check_system=_IT_QUALITY_CHECK,
     self_intro_system=_IT_SELF_INTRO,
     character_concept_system=_IT_CHARACTER_CONCEPT,
@@ -596,27 +551,6 @@ _MUSIC_ROADMAP_SYSTEM = """あなたは音楽教育の専門コーチです。
 }
 """
 
-_MUSIC_TOC_TEMPLATE = """あなたは音楽教材・楽譜の専門家です。
-クリエイターが「{textbook_name}」を30日練習カレンダーに組み込むために、
-教材の全章・セクションリストと「何日目に何を練習するか」の30日分割り当て計画を作成します。
-
-## 返答形式（JSONのみ）
-{{
-  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
-  "toc_items": ["章名・曲名・練習項目1", "章名・曲名・練習項目2", ...],
-  "day_assignments": [
-    {{"day": 1, "items": ["練習項目1", "練習項目2"]}},
-    ...
-  ]
-}}
-
-## Rules
-- toc_itemsは教材の全章・曲・練習項目をリストアップ（有名教材はAIの知識から正確に）
-- 有名教材（バイエル・ハノン・メトードローズ等）はAIの知識から実際の曲・練習番号を調べる
-- day_assignmentsはユーザー指定のペースに従い30日に配分
-- 同じ曲・練習を複数日にまたがらせてよい（反復練習が音楽の本質）
-- ペース指定がなければ1日1〜2アイテムを目安に配分
-"""
 
 _MUSIC_QUALITY_CHECK = """あなたは音楽教育コースの設計アドバイザーです。
 クリエイターが設定したコースのゴール・対象者・1日の学習時間・進行速度を見て、
@@ -730,7 +664,6 @@ MUSIC_CONFIG = SubjectConfig(
     course_day_generation_system=_MUSIC_COURSE_DAY_SYSTEM,
     classify_system=_MUSIC_CLASSIFY_SYSTEM,
     answer_style_by_type=_MUSIC_ANSWER_STYLE,
-    toc_chat_system_template=_MUSIC_TOC_TEMPLATE,
     quality_check_system=_MUSIC_QUALITY_CHECK,
     self_intro_system=_MUSIC_SELF_INTRO,
     character_concept_system=_MUSIC_CHARACTER_CONCEPT,
@@ -826,28 +759,6 @@ _JAPANESE_ROADMAP_SYSTEM = """あなたは日本語学習の専門家です。
   ],
   "day1_message": "クリエイター口調の激励メッセージ（50字以内）"
 }
-"""
-
-_JAPANESE_TOC_CHAT_TEMPLATE = """あなたは日本語教材の専門家です。
-クリエイターが「{textbook_name}」を30日学習カレンダーに組み込むために、
-教材の全章リストと「何日目に何を学習するか」の30日分割り当て計画を作成します。
-
-## 返答形式（JSONのみ）
-{{
-  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
-  "toc_items": ["章名1", "章名2", ...],
-  "day_assignments": [
-    {{"day": 1, "items": ["章名1", "章名2"]}},
-    ...
-  ]
-}}
-
-## Rules
-- toc_itemsは教材の全章・セクションをリストアップ（有名な教材はAIの知識から正確な目次を調べる）
-- 有名教材（みんなの日本語・JLPT公式問題集等）はAIの知識から実際の目次を調べる
-- day_assignmentsはユーザー指定のペースに従い30日に配分
-- ペース指定がなければ1日1〜2セクションを目安に配分
-- toc_itemsが不明な場合のみ空配列にする
 """
 
 _JAPANESE_QUALITY_CHECK_SYSTEM = """あなたは日本語学習コースの品質審査員です。
@@ -974,7 +885,6 @@ JAPANESE_CONFIG = SubjectConfig(
     course_day_generation_system=_JAPANESE_COURSE_DAY_SYSTEM,
     classify_system=_JAPANESE_CLASSIFY_SYSTEM,
     answer_style_by_type=_JAPANESE_ANSWER_STYLE,
-    toc_chat_system_template=_JAPANESE_TOC_CHAT_TEMPLATE,
     quality_check_system=_JAPANESE_QUALITY_CHECK_SYSTEM,
     self_intro_system=_JAPANESE_SELF_INTRO_SYSTEM,
     character_concept_system=_JAPANESE_CHARACTER_CONCEPT_SYSTEM,
@@ -1057,25 +967,6 @@ def _make_generic_config(subject: str) -> SubjectConfig:
             "content": "結論を最初に伝え、具体例を1つ挙げ、次にとるべき学習アクションを示す",
             "report": "学習の取り組みを労い、翌日の学習への橋渡しになる一言で締める",
         },
-        toc_chat_system_template=f"""あなたは{label}教材の専門家です。
-クリエイターが「{{textbook_name}}」を30日学習カレンダーに組み込むために、
-教材の全章リストと「何日目に何を学習するか」の30日分割り当て計画を作成します。
-
-## 返答形式（JSONのみ）
-{{{{
-  "ai_message": "ユーザーへの確認・説明（日本語・2〜3文以内）",
-  "toc_items": ["章名1", "章名2", ...],
-  "day_assignments": [
-    {{{{"day": 1, "items": ["章名1", "章名2"]}}}},
-    ...
-  ]
-}}}}
-
-## Rules
-- toc_itemsは教材の全章・セクションをリストアップ（有名な教材はAIの知識から正確な目次を調べる）
-- day_assignmentsはユーザー指定のペースに従い30日に配分
-- ペース指定がなければ1日1〜2セクションを目安に配分
-- toc_itemsが不明な場合のみ空配列にする""",
         quality_check_system=f"""あなたは{label}コースの設計アドバイザーです。
 コースの骨格を評価し、以下のJSON形式のみで出力してください:
 {{"score": 0から100の整数, "feedback": "改善提案コメント（1〜3文）"}}""",

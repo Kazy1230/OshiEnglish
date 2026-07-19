@@ -53,6 +53,5 @@ class Course(Base):
     personality_profile = relationship("PersonalityProfile")
     materials = relationship("CourseMaterial", back_populates="course")
     subscriptions = relationship("CourseSubscription", back_populates="course")
-    textbooks = relationship("CourseTextbook", back_populates="course", cascade="all, delete-orphan")
     chapters = relationship("CourseChapter", back_populates="course", order_by="CourseChapter.order", cascade="all, delete-orphan")
     days = relationship("CourseDay", order_by="CourseDay.day_number", cascade="all, delete-orphan")

@@ -23,9 +23,6 @@ from app.models.category_content import CategoryContent
 from app.models.question import Question
 from app.models.answer import Answer
 from app.models.report import Report
-from app.models.textbook import Textbook
-from app.models.course_textbook import CourseTextbook
-from app.models.textbook_day_assignment import TextbookDayAssignment
 from app.models.creator_content import CreatorContent
 from app.models.content_like import ContentLike
 from app.models.marketing_strategy import MarketingStrategy

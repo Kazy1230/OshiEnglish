@@ -165,7 +165,6 @@ export default function CourseCalendarPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <StatusBadge status={courseStatus} />
           <div className="flex items-center gap-2">
-            <Link href={`/creator/courses/${courseId}/textbooks`} className="btn-ghost text-xs">教材を編集</Link>
             {courseStatus === "draft" && (
               <button
                 className="btn-primary text-sm"

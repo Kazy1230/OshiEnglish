@@ -187,9 +187,6 @@ _ensure_column("course_subscriptions", "past_due_since", "DATETIME NULL")
 # --- クリエイターダッシュボード・紹介ページ再設計（AI生成自己紹介文） ---
 _ensure_column("creator_profiles", "self_intro", "TEXT NULL")
 
-# --- 教材進捗ベースのパーソナライズ（v2.0でstudy_materials/paceはDROPするため_ensure_column不要） ---
-# --- 教材進捗ベースのパーソナライズ（議論サマリー20260626 13節） ---
-_ensure_column("course_textbooks", "target_laps", "INT NOT NULL DEFAULT 1")
 # --- 繰越タスク設計（議論サマリー20260626 15節） ---
 _ensure_column("learner_course_days", "carryover_tasks", "JSON NULL")
 # --- コンテンツスタジオ: content_draftsテーブルのカラム追加 ---
@@ -198,8 +195,6 @@ _ensure_column("content_drafts", "character_id", "INT NULL")
 _ensure_column("content_drafts", "format", "VARCHAR(50) NULL")
 _ensure_column("content_drafts", "is_saved", "TINYINT(1) NOT NULL DEFAULT 0")
 _ensure_column("content_drafts", "memo", "TEXT NULL")
-# --- コンテンツプール ---
-_ensure_column("course_textbooks", "content_id", "INT NULL")
 # --- マルチドメイン拡張（v1.2）: subject・チェックリスト化 ---
 _ensure_column("courses", "subject", "VARCHAR(100) NOT NULL DEFAULT ''")
 _ensure_nullable("courses", "subject", "VARCHAR(100) NULL DEFAULT ''")
@@ -288,6 +283,16 @@ with engine.connect() as _conn:
     _conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
     _conn.commit()
 
+# --- 教材ベースのコース作成機能の完全廃止 ---
+with engine.connect() as _conn:
+    _conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+    _conn.commit()
+for _textbook_table in ("textbook_day_assignments", "course_textbooks", "textbooks"):
+    _drop_table(_textbook_table)
+with engine.connect() as _conn:
+    _conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+    _conn.commit()
+
 
 def _migrate_legacy_characters_to_creator():
     from app.core.creator_migration import migrate_legacy_characters_to_creator
@@ -312,19 +317,6 @@ def _dedupe_characters_per_creator():
         db.close()
 
 
-def _ensure_preset_textbooks():
-    """TOEFL ITP向けプリセット教材が textbooks テーブルに存在することを保証する。"""
-    from app.core.textbook_seeds import seed_textbooks
-
-    db = SessionLocal()
-    try:
-        seed_textbooks(db)
-        db.commit()
-    finally:
-        db.close()
-
-
-_ensure_preset_textbooks()
 _migrate_legacy_characters_to_creator()
 # 1クリエイター=1人格(キャラクター)の制約を追加する前に、既存の重複データを統合しておく
 _dedupe_characters_per_creator()

@@ -11,7 +11,6 @@ import { UsersTab } from "./tabs/UsersTab";
 import { CourseModerationTab } from "./tabs/CourseModerationTab";
 import { ReportsTab } from "./tabs/ReportsTab";
 import { TierBOverdueTab } from "./tabs/TierBOverdueTab";
-import { TextbooksTab } from "./tabs/TextbooksTab";
 
 const tabs: { key: Tab; label: string; icon: string; badge?: string }[] = [
   { key: "creator_applications", label: "クリエイター審査", icon: "📋" },
@@ -20,7 +19,6 @@ const tabs: { key: Tab; label: string; icon: string; badge?: string }[] = [
   { key: "course_moderation",    label: "コース審査",       icon: "📚" },
   { key: "reports",              label: "通報管理",         icon: "🚨" },
   { key: "tier_b_overdue",       label: "Tier B 滞納監視",  icon: "💳" },
-  { key: "textbooks",            label: "教材プリセット",   icon: "📖" },
 ];
 
 export default function AdminPage() {
@@ -168,7 +166,6 @@ export default function AdminPage() {
           {tab === "course_moderation"    && <CourseModerationTab />}
           {tab === "reports"              && <ReportsTab />}
           {tab === "tier_b_overdue"       && <TierBOverdueTab />}
-          {tab === "textbooks"            && <TextbooksTab />}
         </div>
       </main>
     </div>

@@ -274,7 +274,7 @@ export default function NewCoursePage() {
             <div className="flex gap-3">
               <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>戻る</button>
               <button type="submit" className="btn-primary flex-1" disabled={!character || submitting}>
-                {submitting ? "作成中…" : courseType === "pace_based" ? "次へ：教材を登録する" : "次へ：カリキュラムの壁打ち"}
+                {submitting ? "作成中…" : courseType === "pace_based" ? "次へ：30日カレンダーを作成する" : "次へ：カリキュラムの壁打ち"}
               </button>
             </div>
           </form>
