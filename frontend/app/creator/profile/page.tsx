@@ -36,26 +36,12 @@ export default function CreatorProfilePage() {
   const [fetching, setFetching] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selfIntro, setSelfIntro] = useState<string | null>(null);
-  const [generatingIntro, setGeneratingIntro] = useState(false);
 
   useEffect(() => {
     if (loading) return;
     api.getPersonalityProfile().then(res => setProfile(res.profile)).catch(() => {}).finally(() => setFetching(false));
     api.getMyCreatorProfile().then(p => setSelfIntro(p.self_intro ?? null)).catch(() => {});
   }, [loading]);
-
-  async function handleGenerateIntro() {
-    setGeneratingIntro(true);
-    try {
-      const res = await api.generateCreatorIntro();
-      setSelfIntro(res.self_intro);
-      toast("自己紹介文を生成しました。クリエイター紹介ページに表示されます。", "success");
-    } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "生成に失敗しました", "error");
-    } finally {
-      setGeneratingIntro(false);
-    }
-  }
 
   function startEdit() {
     setDraft(JSON.parse(JSON.stringify(profile)));
@@ -123,16 +109,15 @@ export default function CreatorProfilePage() {
               </div>
             )}
 
-            <div className="card flex flex-col gap-3">
-              <h2 className="font-bold" style={{ color: "var(--primary)" }}>クリエイター紹介ページ用の自己紹介文</h2>
-              <p className="text-xs" style={{ color: "var(--muted)" }}>
-                人格プロファイルの口調を反映した自己紹介文をAIが生成します。生成すると紹介ページに表示されます。
-              </p>
-              {selfIntro && <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{selfIntro}</p>}
-              <button className="btn-primary self-start" disabled={generatingIntro} onClick={handleGenerateIntro}>
-                {generatingIntro ? "生成中…" : selfIntro ? "再生成する" : "自己紹介を生成する"}
-              </button>
-            </div>
+            {selfIntro && (
+              <div className="card flex flex-col gap-3">
+                <h2 className="font-bold" style={{ color: "var(--primary)" }}>クリエイター紹介ページ用の自己紹介文</h2>
+                <p className="text-xs" style={{ color: "var(--muted)" }}>
+                  人格プロファイルの口調を反映してAIが自動生成した自己紹介文です。紹介ページに表示されます。
+                </p>
+                <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{selfIntro}</p>
+              </div>
+            )}
 
             {!editing && (
               <Link href="/dashboard" className="btn-cta text-center">完了してダッシュボードへ →</Link>

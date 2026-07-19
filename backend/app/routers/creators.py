@@ -6,7 +6,6 @@ from pydantic import BaseModel, field_validator
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_user_optional, get_current_creator_or_admin, hash_password, create_access_token
 from app.core.rate_limit import enforce_rate_limit
-from app.core.llm import generate_text, LLMError
 from app.core import creator_prompts
 from app.models.customer import Customer
 from app.models.creator_profile import CreatorProfile
@@ -17,7 +16,6 @@ from app.core.config import settings
 from app.models.purchase import Purchase
 from app.models.course_subscription import CourseSubscription
 from app.models.personality_profile import PersonalityProfile
-from app.models.interview_session import InterviewSession
 
 router = APIRouter(prefix="/creators", tags=["クリエイター"])
 
@@ -358,31 +356,3 @@ def get_creator(creator_id: int, db: Session = Depends(get_db), current_user=Dep
     ]
     data["is_favorited"] = is_favorited
     return data
-
-
-@router.post("/me/generate-intro")
-def generate_my_intro(current_user=Depends(get_current_creator_or_admin), db: Session = Depends(get_db)):
-    """人格プロファイルの口調を反映した自己紹介文を生成して保存する（1回生成・保存方式、都度生成はしない）。要(本人)"""
-    profile = db.query(CreatorProfile).filter(CreatorProfile.user_id == current_user.id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="クリエイタープロフィールが見つかりません")
-    personality = db.query(PersonalityProfile).filter(PersonalityProfile.creator_id == profile.id).first()
-    if not personality or not personality.profile:
-        raise HTTPException(status_code=400, detail="先にAIインタビューで人格プロファイルを作成してください")
-
-    interview_session = db.query(InterviewSession).filter(InterviewSession.creator_id == profile.id).first()
-    subject = (interview_session.subject if interview_session else None) or profile.speciality
-
-    try:
-        _intro_msgs = creator_prompts.build_self_intro_messages(personality.profile, profile.speciality, profile.experience, subject=subject)
-        intro = generate_text(
-            _intro_msgs[0]["content"],
-            _intro_msgs[1:],
-            max_tokens=300,
-        )
-    except LLMError as e:
-        raise HTTPException(status_code=500, detail=f"自己紹介文の生成に失敗しました: {e}") from e
-
-    profile.self_intro = intro
-    db.commit()
-    return {"self_intro": profile.self_intro}

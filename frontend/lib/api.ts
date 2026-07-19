@@ -90,7 +90,6 @@ export const api = {
   applyAsCreatorPublic: (data: object) => apiFetch("/creators/apply-public", { method: "POST", body: JSON.stringify(data) }),
   getMyCreatorProfile: () => apiFetch("/creators/me"),
   updateMyCreatorProfile: (data: object) => apiFetch("/creators/me", { method: "PUT", body: JSON.stringify(data) }),
-  generateCreatorIntro: () => apiFetch("/creators/me/generate-intro", { method: "POST" }),
 
   // AIインタビュー（人格収集）
   startInterview: (baseType?: string, gender?: string, subject?: string) =>

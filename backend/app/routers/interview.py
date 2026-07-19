@@ -8,7 +8,9 @@ from app.core.database import get_db
 from app.core.security import get_current_creator_or_admin
 from app.core.llm import generate_text, extract_json, LLMError
 from app.core import personality_prompts as prompts
+from app.core import creator_prompts
 from app.core.character_voice import customer_display_name, sanitize_tone_profile_fields
+from app.core.creator_balance import get_ai_balance, try_consume_ai_balance
 from app.models.creator_profile import CreatorProfile
 from app.models.interview_session import InterviewSession
 from app.models.personality_profile import PersonalityProfile
@@ -195,6 +197,19 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
     if tone_profile_data:
         character.tone_profile = sanitize_tone_profile_fields(tone_profile_data)
 
+    # クリエイター紹介ページ用の自己紹介文も同時に生成する（AIクレジットを1消費。残高が無ければスキップし、
+    # 人格プロファイル生成自体は失敗させない。生成が失敗した場合はクレジットを消費しない）
+    if get_ai_balance(db, profile.id) > 0:
+        try:
+            intro_messages = creator_prompts.build_self_intro_messages(
+                generated, profile.speciality, profile.experience, subject=session.subject,
+            )
+            intro = generate_text(intro_messages[0]["content"], intro_messages[1:], max_tokens=300)
+            if try_consume_ai_balance(db, profile.id):
+                profile.self_intro = intro
+        except LLMError:
+            pass
+
     db.commit()
     db.refresh(personality)
     return {
@@ -204,6 +219,7 @@ def generate_profile(current_user=Depends(get_current_creator_or_admin), db: Ses
         "gender": personality.gender,
         "sample_reply": personality.sample_reply,
         "tone_profile": character.tone_profile if character else None,
+        "self_intro": profile.self_intro,
     }
 
 
