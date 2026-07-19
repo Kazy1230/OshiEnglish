@@ -1,8 +1,10 @@
 "use client";
+import { useEffect, useState } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AiCreditBadge } from "@/components/AiCreditBadge";
 import { CreatorBreadcrumb, BreadcrumbBar, type Crumb } from "@/components/CreatorBreadcrumb";
+import { getToken } from "@/lib/auth";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -34,6 +36,11 @@ export function AppHeader({
 }) {
   const pathname = usePathname();
   const homeHref = role === "creator" ? "/dashboard" : "/";
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setLoggedIn(!!getToken());
+  }, [pathname]);
 
   return (
     <>
@@ -45,7 +52,7 @@ export function AppHeader({
           {backHref && (
             <Link href={backHref} className="text-white/80 text-sm hover:text-white whitespace-nowrap">← {backLabel}</Link>
           )}
-          {role && (
+          {role && loggedIn && (
             <nav className="flex items-center gap-3 flex-wrap">
               {NAV_ITEMS[role].map(item => {
                 const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
@@ -74,12 +81,20 @@ export function AppHeader({
           )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
-          {role === "creator" && <AiCreditBadge />}
-          {role && <NotificationBell />}
-          <LogoutButton variant="onColor" />
+          {loggedIn ? (
+            <>
+              {role === "creator" && <AiCreditBadge />}
+              {role && <NotificationBell />}
+              <LogoutButton variant="onColor" />
+            </>
+          ) : (
+            <Link href="/login" className="text-sm font-bold whitespace-nowrap" style={{ color: "rgba(255,255,255,0.85)" }}>
+              ログイン
+            </Link>
+          )}
         </div>
       </header>
-      {role === "creator" && pathname !== "/dashboard" && <CreatorBreadcrumb />}
+      {role === "creator" && loggedIn && pathname !== "/dashboard" && <CreatorBreadcrumb />}
       {breadcrumb && <BreadcrumbBar crumbs={breadcrumb} />}
     </>
   );

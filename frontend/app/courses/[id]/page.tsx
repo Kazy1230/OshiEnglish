@@ -80,7 +80,7 @@ export default function CourseDetailPage() {
       const c: CourseDetail = { ...raw, lessons: raw.lessons ?? [] };
       setCourse(c);
       if (c.lessons.length > 0) setActiveLessonId(c.lessons[0].id);
-      const unlocked = c.is_purchased || c.is_free;
+      const unlocked = c.is_purchased;
       if (unlocked) {
         api.getCourseProgress(courseId).then(p => {
           setCompletedLessonIds(new Set(p.lessons.filter((l: { is_completed: boolean }) => l.is_completed).map((l: { lesson_id: number }) => l.lesson_id)));
@@ -244,7 +244,7 @@ export default function CourseDetailPage() {
     );
   }
 
-  const unlocked = course.is_purchased || course.is_free;
+  const unlocked = course.is_purchased;
   const completedCount = Object.values(logs).filter(l => l.is_completed).length;
   const derivedDay = Math.min(completedCount + 1, 30);
   const currentDay = reportedDay ?? derivedDay;
@@ -333,13 +333,9 @@ export default function CourseDetailPage() {
                   <p className="text-xl font-black" style={{ color: "#1a1a2e" }}>
                     {course.is_free ? "無料" : `¥${course.price.toLocaleString()}`}
                   </p>
-                  {course.is_free ? (
-                    <span className="text-sm" style={{ color: "#6b7280" }}>無料で受講できます</span>
-                  ) : (
-                    <button onClick={handlePurchase} disabled={purchasing} className="text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--ink)", color: "white" }}>
-                      {purchasing ? "準備中…" : "購入して始める"}
-                    </button>
-                  )}
+                  <button onClick={handlePurchase} disabled={purchasing} className="text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-50" style={{ background: "var(--ink)", color: "white" }}>
+                    {purchasing ? "準備中…" : course.is_free ? "受講する" : "購入して始める"}
+                  </button>
                 </div>
               )}
             </div>
@@ -760,7 +756,7 @@ export default function CourseDetailPage() {
                 <span>{mobileChatOpen ? "閉じる ▲" : "開く ▼"}</span>
               </button>
               <div className={mobileChatOpen ? "block" : "hidden lg:block"}>
-                <CompactChatCard courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
+                <CompactChatCard key={mobileChatOpen ? "open" : "closed"} courseId={courseId} character={course.character} tier={course.my_subscription?.tier ?? null} />
               </div>
             </div>
             <ChapterCurriculumPanel courseId={courseId} />
@@ -784,7 +780,7 @@ export default function CourseDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="sm:col-span-1 flex flex-col gap-1.5">
                 {course.lessons.map(l => {
-                  const isLocked = !unlocked && !l.is_preview && !course.is_free;
+                  const isLocked = !unlocked && !l.is_preview;
                   const isActive = activeLessonId === l.id;
                   const isDone = completedLessonIds.has(l.id);
                   return (
@@ -825,7 +821,7 @@ export default function CourseDetailPage() {
                       ) : (
                         <article className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text)" }}>{activeLesson.body}</article>
                       )}
-                      {(unlocked || course.is_free) && (
+                      {unlocked && (
                         completedLessonIds.has(activeLesson.id) ? (
                           <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>✅ 完了済み</span>
                         ) : (

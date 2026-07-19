@@ -41,16 +41,17 @@ export default function CourseChatPage() {
   const { messages, loading, sending, streamingText, upgradeCta, setUpgradeCta, sendMessage } = useCourseChat(courseId, { enabled: access === "granted" });
 
   useEffect(() => {
+    if (access !== "granted" || loading) return;
     bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto" });
     hasScrolledOnceRef.current = true;
-  }, [messages, streamingText]);
+  }, [messages, streamingText, access, loading]);
 
   useEffect(() => {
     async function init() {
       try {
         const detail = await api.getCourseDetail(courseId);
-        if (!(detail.is_purchased || detail.is_free)) {
-          toast("このコースを購入してからチャットを利用してください", "error");
+        if (!detail.is_purchased) {
+          toast("このコースを受講してからチャットを利用してください", "error");
           router.replace(`/courses/${courseId}`);
           setAccess("denied");
           return;

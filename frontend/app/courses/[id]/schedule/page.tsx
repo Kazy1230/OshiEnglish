@@ -42,8 +42,8 @@ export default function CourseSchedulePage() {
     async function init() {
       try {
         const detail = await api.getCourseDetail(courseId);
-        if (!(detail.is_purchased || detail.is_free)) {
-          toast("このコースを購入してからスケジュールを確認してください", "error");
+        if (!detail.is_purchased) {
+          toast("このコースを受講してからスケジュールを確認してください", "error");
           router.replace(`/courses/${courseId}`);
           return;
         }

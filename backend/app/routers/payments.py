@@ -44,15 +44,13 @@ def checkout_course(
     current_user: Customer = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """コース購入用のStripe Payment Intentを作成する。"""
+    """コース購入用のStripe Payment Intentを作成する。無料コースは「受講する」ボタン押下時に
+    このエンドポイントを呼び、決済なしでamount=0のPurchaseを即時作成する（それまでは未購入扱い）。"""
     if current_user.role == "creator":
         raise HTTPException(status_code=403, detail="クリエイターアカウントはコースを購入できません")
     course = db.query(Course).filter(Course.id == data.course_id).first()
     if not course or course.status != "published":
         raise HTTPException(status_code=404, detail="コースが見つかりません")
-
-    if course.is_free:
-        raise HTTPException(status_code=400, detail="このコースは無料です")
 
     existing = db.query(Purchase).filter(
         Purchase.user_id == current_user.id,
@@ -61,6 +59,25 @@ def checkout_course(
     ).first()
     if existing:
         raise HTTPException(status_code=409, detail="このコースはすでに購入済みです")
+
+    if course.is_free:
+        purchase = Purchase(
+            user_id=current_user.id,
+            course_id=course.id,
+            amount=0,
+            stripe_payment_intent_id=f"free_{current_user.id}_{course.id}_{int(datetime.utcnow().timestamp())}",
+            status="succeeded",
+        )
+        db.add(purchase)
+        db.commit()
+        _grant_lesson_progress(db, purchase)
+        return {
+            "client_secret": None,
+            "test_mode": False,
+            "amount": 0,
+            "currency": "jpy",
+            "course_title": course.title,
+        }
 
     if settings.PAYMENTS_TEST_MODE:
         purchase = Purchase(

@@ -53,9 +53,7 @@ def _get_owned_course(db: Session, course_id: int, current_user) -> Course:
 
 
 def _require_purchase(db: Session, user_id: int, course_id: int) -> Purchase | None:
-    course = db.query(Course).filter(Course.id == course_id).first()
-    if course and course.is_free:
-        return None  # 無料コースは購入不要で全学習者がアクセス可能
+    # 無料コースも「受講する」ボタンでamount=0のPurchaseが作成されるまでは未購入扱いとする
     purchase = db.query(Purchase).filter(
         Purchase.user_id == user_id,
         Purchase.course_id == course_id,

@@ -39,9 +39,10 @@ export function CompactChatCard({ courseId, character, tier }: { courseId: numbe
   }, [courseId, tier, showDirectQuestion]);
 
   useEffect(() => {
+    if (loading) return;
     bottomRef.current?.scrollIntoView({ behavior: hasScrolledOnceRef.current ? "smooth" : "auto", block: "nearest" });
     hasScrolledOnceRef.current = true;
-  }, [messages, streamingText]);
+  }, [messages, streamingText, loading]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();

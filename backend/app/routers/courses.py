@@ -78,10 +78,11 @@ def _is_purchased(db: Session, user_id: Optional[int], course_id: int) -> bool:
 
 
 def _is_accessible(db: Session, course: Course, user_id: Optional[int]) -> bool:
-    """管理者がコースを停止（G-02）した場合、購入済み・無料コースでも利用不可にする。"""
+    """管理者がコースを停止（G-02）した場合、購入済みでも利用不可にする。
+    無料コースも「受講する」ボタンでamount=0のPurchaseが作成されるまでは未購入扱いとする。"""
     if course.is_suspended:
         return False
-    return course.is_free or _is_purchased(db, user_id, course.id)
+    return _is_purchased(db, user_id, course.id)
 
 
 # ----- シリアライズ -----
