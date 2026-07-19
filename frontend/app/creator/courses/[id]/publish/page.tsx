@@ -84,9 +84,9 @@ export default function CoursePublishPage() {
       <AppHeader role="creator" title="公開設定" />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <Link href={`/creator/courses/${courseId}/preview`}>
+          <Link href={`/creator/courses/${courseId}/curriculum`}>
             <button className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "var(--card, #fff)", color: "var(--muted)", border: "1px solid var(--border, #e5e7eb)" }}>
-              ← プレビューに戻る
+              ← 編集に戻る
             </button>
           </Link>
         </div>

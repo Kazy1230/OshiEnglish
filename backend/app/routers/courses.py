@@ -216,6 +216,7 @@ class CourseUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    subject: Optional[str] = None
     category: Optional[str] = None
     price: Optional[int] = None
     is_free: Optional[bool] = None

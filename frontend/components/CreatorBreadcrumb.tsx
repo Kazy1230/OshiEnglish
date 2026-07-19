@@ -9,11 +9,8 @@ const COURSES_ROOT: Crumb = { label: "コース一覧", href: "/creator/courses"
 const ROUTES: { pattern: RegExp; trail: (m: RegExpMatchArray) => Crumb[] }[] = [
   { pattern: /^\/creator\/courses$/, trail: () => [{ label: "コース一覧" }] },
   { pattern: /^\/creator\/courses\/new$/, trail: () => [COURSES_ROOT, { label: "新規コース作成" }] },
-  { pattern: /^\/creator\/courses\/\d+\/curriculum$/, trail: () => [COURSES_ROOT, { label: "カリキュラム編集" }] },
-  { pattern: /^\/creator\/courses\/(\d+)\/chapters$/, trail: () => [COURSES_ROOT, { label: "章立てを入力" }] },
-  { pattern: /^\/creator\/courses\/(\d+)\/chapters\/\d+$/, trail: (m) => [COURSES_ROOT, { label: "章立てを入力", href: `/creator/courses/${m[1]}/chapters` }, { label: "章の編集" }] },
+  { pattern: /^\/creator\/courses\/\d+\/curriculum$/, trail: () => [COURSES_ROOT, { label: "コース編集" }] },
   { pattern: /^\/creator\/courses\/\d+\/publish$/, trail: () => [COURSES_ROOT, { label: "公開設定" }] },
-  { pattern: /^\/creator\/courses\/\d+\/preview$/, trail: () => [COURSES_ROOT, { label: "プレビュー" }] },
   { pattern: /^\/creator\/courses\/\d+\/enrollments$/, trail: () => [COURSES_ROOT, { label: "受講者一覧" }] },
   { pattern: /^\/creator\/courses\/\d+\/submissions$/, trail: () => [COURSES_ROOT, { label: "課題の提出物" }] },
   { pattern: /^\/creator\/courses\/\d+\/calendar$/, trail: () => [COURSES_ROOT, { label: "カレンダー" }] },
