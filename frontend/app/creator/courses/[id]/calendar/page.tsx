@@ -159,7 +159,7 @@ export default function CourseCalendarPage() {
           <CalendarChatSidebar courseId={courseId} onApplied={reloadDays} />
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 max-w-2xl w-full mx-auto">
 
         {/* Status bar */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -506,22 +506,23 @@ function DayDrawer({
   const totalMin = checklistItems.reduce((s, item) => s + item.minutes, 0);
 
   return (
-    <>
-      {/* Backdrop */}
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)" }}
+      onClick={onClose}
+    >
+      {/* ポップアップ */}
       <div
-        className="fixed inset-0 z-40"
-        style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
-        onClick={onClose}
-      />
-      {/* Drawer */}
-      <div
-        className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
+        className="w-full flex flex-col"
         style={{
-          width: "min(440px, 100vw)",
+          maxWidth: 480,
+          maxHeight: "85vh",
           background: "var(--card)",
-          borderLeft: "1px solid var(--border)",
-          boxShadow: "-8px 0 32px rgba(0,0,0,0.15)",
+          borderRadius: 20,
+          border: "1px solid var(--border)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
         }}
+        onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-6 pb-4" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -660,7 +661,7 @@ function DayDrawer({
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
