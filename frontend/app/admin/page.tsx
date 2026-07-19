@@ -8,7 +8,8 @@ import type { Tab } from "./types";
 import { CreatorApplicationsTab } from "./tabs/CreatorApplicationsTab";
 import { CreatorsTab } from "./tabs/CreatorsTab";
 import { UsersTab } from "./tabs/UsersTab";
-import { CourseModerationTab } from "./tabs/CourseModerationTab";
+import { CourseReviewTab } from "./tabs/CourseReviewTab";
+import { CourseManagementTab } from "./tabs/CourseManagementTab";
 import { ReportsTab } from "./tabs/ReportsTab";
 import { TierBOverdueTab } from "./tabs/TierBOverdueTab";
 
@@ -16,7 +17,8 @@ const tabs: { key: Tab; label: string; icon: string; badge?: string }[] = [
   { key: "creator_applications", label: "クリエイター審査", icon: "📋" },
   { key: "creators",             label: "クリエイター管理", icon: "🎭" },
   { key: "users",                label: "ユーザー管理",     icon: "👥" },
-  { key: "course_moderation",    label: "コース審査",       icon: "📚" },
+  { key: "course_review",        label: "コース審査",       icon: "📚" },
+  { key: "course_management",    label: "コース管理",       icon: "🗂️" },
   { key: "reports",              label: "通報管理",         icon: "🚨" },
   { key: "tier_b_overdue",       label: "Tier B 滞納監視",  icon: "💳" },
 ];
@@ -163,7 +165,8 @@ export default function AdminPage() {
           {tab === "creator_applications" && <CreatorApplicationsTab />}
           {tab === "creators"             && <CreatorsTab />}
           {tab === "users"                && <UsersTab />}
-          {tab === "course_moderation"    && <CourseModerationTab />}
+          {tab === "course_review"        && <CourseReviewTab />}
+          {tab === "course_management"    && <CourseManagementTab />}
           {tab === "reports"              && <ReportsTab />}
           {tab === "tier_b_overdue"       && <TierBOverdueTab />}
         </div>
